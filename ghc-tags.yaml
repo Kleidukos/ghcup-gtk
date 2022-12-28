@@ -1,0 +1,25 @@
+source_paths:
+- ./src
+exclude_paths:
+- .stack-work
+- dist
+- dist-newstyle
+- assets
+extensions:
+- BangPatterns
+- BlockArguments
+- CApiFFI
+- ExplicitForAll
+- ExplicitNamespaces
+- GADTSyntax
+- ImportQualifiedPost
+- LambdaCase
+- MultiWayIf
+- NumericUnderscores
+- OverloadedLabels
+- PatternSynonyms
+- TypeApplications
+- UnicodeSyntax
+cpp_includes: []
+cpp_options: []
+

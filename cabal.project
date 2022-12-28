@@ -4,6 +4,6 @@ with-compiler: ghc-9.2.4
 
 tests: True
 
-documentation: True
+documentation: False
 
 test-show-details: direct
