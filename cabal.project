@@ -1,9 +1,13 @@
 packages: ./
 
-with-compiler: ghc-9.2.4
+with-compiler: ghc-9.4.4
 
 tests: True
 
 documentation: False
 
 test-show-details: direct
+
+package ghcup-gtk
+  ghc-options: -Wno-unused-imports
+

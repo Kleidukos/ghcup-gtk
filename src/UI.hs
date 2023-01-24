@@ -1,20 +1,34 @@
 {-# LANGUAGE ImplicitParams #-}
+
 module UI where
 
+import Data.Foldable
+import Data.Functor
 import Data.GI.Base
+import Data.Maybe
+import Data.Text (Text)
+import Data.Text.IO qualified as Text
 import GI.Adw qualified as Adw
 import GI.Adw.Objects.ExpanderRow
+import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
 import System.Environment (getArgs, getProgName)
 
-import Data.Foldable
 import UI.Compiler
 import UI.HeaderBar
-import qualified Data.Text.IO as Text
-import Data.Text (Text)
-import Data.Functor
-import Data.Maybe
-import qualified GI.Gio as Gio
+
+main :: IO ()
+main = do
+    app <-
+        new
+            Adw.Application
+            [ #applicationId := "ghcup.gui"
+            , On #activate (activate ?self)
+            ]
+
+    args <- getArgs
+    progName <- getProgName
+    void (app.run $ Just $ progName : args)
 
 tools :: Adw.ToastOverlay -> IO Gtk.ListBox
 tools toastOverlay = do
@@ -24,15 +38,13 @@ tools toastOverlay = do
         new
             ExpanderRow
             [ #title := "Glasgow Haskell Compiler"
-            , #subtitle := "GHC"
             , #expanded := True
             ]
 
     cabalRow <-
         new
             ExpanderRow
-            [ #title :=> pure "Cabal"
-            , #subtitle :=> pure "Haskell project manager"
+            [ #title :=> pure "Cabal project manager"
             , #expanded := True
             ]
 
@@ -40,7 +52,6 @@ tools toastOverlay = do
         new
             ExpanderRow
             [ #title :=> pure "Haskell Language Server"
-            , #subtitle :=> pure "LSP Server for IDEs"
             , #expanded := True
             ]
 
@@ -72,9 +83,9 @@ activate app = do
     content.append toolsContainer
     content.append toastOverlay
 
-    menuUI <- Text.readFile "./ui/menu.ui"
-    builder <- Gtk.builderNewFromString menuUI (-1)
-    menu <- getCastedObjectFromBuilder builder "menu" Gio.MenuModel
+    -- menuUI <- Text.readFile "./ui/menu.ui"
+    -- builder <- Gtk.builderNewFromString menuUI (-1)
+    -- menu <- getCastedObjectFromBuilder builder "menu" Gio.MenuModel
 
     window <-
         new
@@ -82,25 +93,12 @@ activate app = do
             [ #application := app
             , #content := content
             , #defaultWidth := 400
+            , #title := "Haskell Toolchain Installer"
             ]
+
     window.present
-
-main :: IO ()
-main = do
-    app <-
-        new
-            Adw.Application
-            [ #applicationId := "ghcup.gui"
-            , On #activate (activate ?self)
-            ]
-
-    args <- getArgs
-    progName <- getProgName
-    void (app.run $ Just $ progName : args)
-
-
 castWOMaybe :: forall o o'. (GObject o, GObject o') => (ManagedPtr o' -> o') -> o -> IO o'
 castWOMaybe typeToCast obj = castTo typeToCast obj <&> fromJust
 
-getCastedObjectFromBuilder :: forall a. GObject a => Gtk.Builder -> Text -> (ManagedPtr a -> a) -> IO a
-getCastedObjectFromBuilder builder name typeToCast = #getObject builder name >>= castWOMaybe typeToCast . fromJust
+-- getCastedObjectFromBuilder :: forall a. GObject a => Gtk.Builder -> Text -> (ManagedPtr a -> a) -> IO a
+-- getCastedObjectFromBuilder builder name typeToCast = _-- #getObject builder name >>= castWOMaybe typeToCast . fromJust

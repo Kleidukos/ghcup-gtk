@@ -13,7 +13,7 @@ maintainer:      hecate+github@glitchbra.in
 category:        Distribution
 build-type:      Simple
 extra-doc-files: CHANGELOG.md
-tested-with:     GHC ==9.2.4
+tested-with:     GHC ==9.4.4
 
 -- extra-source-files:
 
@@ -22,7 +22,7 @@ common options
     -Wall -Wcompat -Widentities -Wincomplete-record-updates
     -Wincomplete-uni-patterns -Wpartial-fields -Wredundant-constraints
     -fhide-source-paths -Wno-unused-do-bind -fshow-hole-constraints
-    -Wno-unticked-promoted-constructors -Werror=unused-imports
+    -Wno-unticked-promoted-constructors
 
   default-extensions:
     NoStarIsType
@@ -57,7 +57,7 @@ library
   -- other-modules:
   -- other-extensions:
   build-depends:
-    , base             ^>=4.16.3.0
+    , base             ^>=4.17.0.0
     , gi-adwaita       >=1.0       && <1.1
     , gi-gio           ^>=2.0
     , gi-glib          ^>=2.0
@@ -74,11 +74,11 @@ executable ghcup-gtk
   -- other-modules:
   -- other-extensions:
   build-depends:
-    , base             ^>=4.16.3.0
+    , base
     , ghcup-gtk
-    , gi-adwaita       >=1.0       && <1.1
-    , gi-glib          ^>=2.0
-    , gi-gtk           ^>=4.0
+    , gi-adwaita
+    , gi-glib
+    , gi-gtk
     , haskell-gi-base
 
   hs-source-dirs: app
@@ -92,5 +92,5 @@ test-suite ghcup-gtk-test
   hs-source-dirs: test
   main-is:        Main.hs
   build-depends:
-    , base       ^>=4.16.3.0
+    , base
     , ghcup-gtk

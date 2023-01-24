@@ -1,11 +1,14 @@
 run: ## Start the application
 	@cabal run
 
-deps: ## Install the dependencies of the backend
+deps: ## Install the dependencies
 	@cabal build --only-dependencies
 
-build: ## Build the project in fast mode
+build: ## Build the project
 	@cabal build
+
+watch: ## Automatically rebuild and start the application on code change
+	@ghcid -c "cabal repl lib:ghcup-gtk" -T UI.main
 
 clean: ## Remove compilation artifacts
 	@cabal clean
