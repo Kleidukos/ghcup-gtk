@@ -1,5 +1,4 @@
 {-# LANGUAGE ImplicitParams #-}
-{-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 module UI.HeaderBar where
 
@@ -8,6 +7,8 @@ import Data.GI.Base
 import GI.Adw qualified as Adw
 import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
+
+import UI.PreferencesWindow
 
 genHeaderbar :: (?self :: Adw.Application) => IO Adw.HeaderBar
 genHeaderbar = do
@@ -21,15 +22,17 @@ genHeaderbar = do
 genMenuPopOver :: (?self :: Adw.Application) => IO Gtk.PopoverMenu
 genMenuPopOver = do
   menu <- Gio.menuNew
-  genAboutDialog
+  genAboutWindow
+  genPreferencesWindow
+  Gio.menuAppend menu (Just "Preferences") (Just "app.open-preferences")
   Gio.menuAppend menu (Just "About") (Just "app.open-about")
   Gtk.popoverMenuNewFromModel (Just menu)
 
-genAboutDialog :: (?self :: Adw.Application) => IO ()
-genAboutDialog = do
+genAboutWindow :: (?self :: Adw.Application) => IO ()
+genAboutWindow = do
   action <- Gio.simpleActionNew "open-about" Nothing
   aboutWindow <- mkAboutWindow
-  void $ Gio.onSimpleActionActivate action $ \_ -> do
+  void $ Gio.onSimpleActionActivate action $ \_ ->
     Gtk.widgetShow aboutWindow
   Gio.actionMapAddAction ?self action
   where

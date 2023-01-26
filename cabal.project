@@ -9,5 +9,5 @@ documentation: False
 test-show-details: direct
 
 package ghcup-gtk
-  ghc-options: -Wno-unused-imports
+  ghc-options: -j
 
