@@ -31,6 +31,7 @@ common options
     DerivingStrategies
     DerivingVia
     DuplicateRecordFields
+    ImportQualifiedPost
     LambdaCase
     OverloadedLabels
     OverloadedRecordDot
@@ -48,14 +49,16 @@ common options
 
 library
   import:          options
+  hs-source-dirs:  src
+
+  -- cabal-fmt: expand src
   exposed-modules:
     UI
     UI.Compiler
     UI.HeaderBar
     UI.Install
+    UI.PreferencesWindow
 
-  -- other-modules:
-  -- other-extensions:
   build-depends:
     , base             ==4.17.0.0
     , gi-adwaita       ^>=1.0
@@ -65,14 +68,9 @@ library
     , haskell-gi-base
     , text             ^>=2.0
 
-  hs-source-dirs:  src
-
 executable ghcup-gtk
   import:         options
   main-is:        Main.hs
-
-  -- other-modules:
-  -- other-extensions:
   build-depends:
     , base
     , ghcup-gtk
