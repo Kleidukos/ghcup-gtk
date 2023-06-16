@@ -30,8 +30,8 @@ main = do
   progName <- getProgName
   void (app.run $ Just $ progName : args)
 
-tools :: Adw.ToastOverlay -> IO Gtk.ListBox
-tools toastOverlay = do
+tools :: Adw.ToastOverlay -> Adw.ApplicationWindow -> IO Gtk.ListBox
+tools toastOverlay app = do
   toolsList <- new Gtk.ListBox [#showSeparators := True]
 
   ghcRow <-
@@ -55,13 +55,13 @@ tools toastOverlay = do
       , #expanded := True
       ]
 
-  compilers <- getGHCVersions toastOverlay
+  compilers <- getGHCVersions toastOverlay app
   traverse_ (expanderRowAddRow ghcRow) compilers
 
-  cabalVersions <- getCabalVersions toastOverlay
+  cabalVersions <- getCabalVersions toastOverlay app
   traverse_ (expanderRowAddRow cabalRow) cabalVersions
 
-  hlsVersions <- getHLSVersions toastOverlay
+  hlsVersions <- getHLSVersions toastOverlay app
   traverse_ (expanderRowAddRow hlsRow) hlsVersions
 
   toolsList.append ghcRow
@@ -72,29 +72,29 @@ tools toastOverlay = do
 
 activate :: Adw.Application -> IO ()
 activate app = do
-  let ?self = app
-  content <- new Gtk.Box [#orientation := Gtk.OrientationVertical]
-  titlebar <- genHeaderbar
-  content.append titlebar
-
-  toastOverlay <- new Adw.ToastOverlay []
-
-  toolsContainer <- tools toastOverlay
-  content.append toolsContainer
-  content.append toastOverlay
-
-  -- menuUI <- Text.readFile "./ui/menu.ui"
-  -- builder <- Gtk.builderNewFromString menuUI (-1)
-  -- menu <- getCastedObjectFromBuilder builder "menu" Gio.MenuModel
-
   window <-
     new
       Adw.ApplicationWindow
       [ #application := app
-      , #content := content
       , #defaultWidth := 400
       , #title := "Haskell Toolchain Installer"
       ]
+
+  content <- new Gtk.Box [#orientation := Gtk.OrientationVertical]
+  titlebar <- let ?self = app in genHeaderbar
+  content.append titlebar
+
+  toastOverlay <- new Adw.ToastOverlay []
+
+  toolsContainer <- tools toastOverlay window
+  content.append toolsContainer
+  content.append toastOverlay
+
+  set window [#content := content]
+
+  -- menuUI <- Text.readFile "./ui/menu.ui"
+  -- builder <- Gtk.builderNewFromString menuUI (-1)
+  -- menu <- getCastedObjectFromBuilder builder "menu" Gio.MenuModel
 
   window.present
 castWOMaybe :: forall o o'. (GObject o, GObject o') => (ManagedPtr o' -> o') -> o -> IO o'
