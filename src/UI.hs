@@ -2,19 +2,20 @@
 
 module UI where
 
+import Control.Monad.Reader
 import Data.Foldable
 import Data.Functor
 import Data.GI.Base
 import Data.Maybe
-import Data.Text (Text)
-import Data.Text.IO qualified as Text
+import GHCup
 import GI.Adw qualified as Adw
 import GI.Adw.Objects.ExpanderRow
-import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
 import System.Environment (getArgs, getProgName)
+import System.Exit
 
 import UI.Compiler
+import UI.GHCup
 import UI.HeaderBar
 
 main :: IO ()
@@ -30,8 +31,12 @@ main = do
   progName <- getProgName
   void (app.run $ Just $ progName : args)
 
-tools :: Adw.ToastOverlay -> Adw.ApplicationWindow -> IO Gtk.ListBox
-tools toastOverlay app = do
+tools
+  :: AppState
+  -> Adw.ToastOverlay
+  -> Adw.ApplicationWindow
+  -> IO Gtk.Widget
+tools appState toastOverlay app = do
   toolsList <- new Gtk.ListBox [#showSeparators := True]
 
   ghcRow <-
@@ -55,20 +60,32 @@ tools toastOverlay app = do
       , #expanded := True
       ]
 
-  compilers <- getGHCVersions toastOverlay app
+  toolVersions <- runReaderT (listVersions Nothing Nothing) appState
+
+  compilers <- getGHCVersions toolVersions toastOverlay app
   traverse_ (expanderRowAddRow ghcRow) compilers
 
-  cabalVersions <- getCabalVersions toastOverlay app
+  cabalVersions <- getCabalVersions toolVersions toastOverlay app
   traverse_ (expanderRowAddRow cabalRow) cabalVersions
 
-  hlsVersions <- getHLSVersions toastOverlay app
+  hlsVersions <- getHLSVersions toolVersions toastOverlay app
   traverse_ (expanderRowAddRow hlsRow) hlsVersions
 
   toolsList.append ghcRow
   toolsList.append cabalRow
   toolsList.append hlsRow
 
-  pure toolsList
+  toolsListContainer <-
+    new
+      Gtk.ScrolledWindow
+      [ #halign := Gtk.AlignFill
+      , #valign := Gtk.AlignFill
+      , #hexpand := True
+      , #vexpand := True
+      ]
+  toolsListContainer.setChild (Just toolsList)
+
+  Gtk.toWidget toolsListContainer
 
 activate :: Adw.Application -> IO ()
 activate app = do
@@ -86,9 +103,12 @@ activate app = do
 
   toastOverlay <- new Adw.ToastOverlay []
 
-  toolsContainer <- tools toastOverlay window
-  content.append toolsContainer
-  content.append toastOverlay
+  initAppState >>= \case
+    Left e -> exitDialogWithError window e
+    Right appState -> do
+      toolsContainer <- tools appState toastOverlay window
+      content.append toolsContainer
+      content.append toastOverlay
 
   set window [#content := content]
 
@@ -97,6 +117,21 @@ activate app = do
   -- menu <- getCastedObjectFromBuilder builder "menu" Gio.MenuModel
 
   window.present
+  where
+    exitDialogWithError window e = do
+      messageDialog <-
+        Adw.messageDialogNew
+          (Just window)
+          (Just "Error")
+          (Just e)
+      messageDialog.addResponse "ok" "OK"
+      messageDialog.setModal True
+
+      on messageDialog #response $ \_ ->
+        exitWith (ExitFailure 1)
+      messageDialog.present
+      pure ()
+
 castWOMaybe :: forall o o'. (GObject o, GObject o') => (ManagedPtr o' -> o') -> o -> IO o'
 castWOMaybe typeToCast obj = castTo typeToCast obj <&> fromJust
 

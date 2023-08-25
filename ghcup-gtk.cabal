@@ -55,18 +55,27 @@ library
   exposed-modules:
     UI
     UI.Compiler
+    UI.GHCup
     UI.HeaderBar
     UI.Install
     UI.PreferencesWindow
 
   build-depends:
     , base             ==4.17.0.0
+    , bytestring       ^>=0.11
+    , haskus-utils-variant ^>=3.2
+    , filepath         ^>=1.4
+    , ghcup            ^>=0.1
     , gi-adwaita       ^>=1.0
     , gi-gio           ^>=2.0
     , gi-glib          ^>=2.0
     , gi-gtk           ^>=4.0
     , haskell-gi-base
+    , mtl              ^>=2.2
+    , optics           ^>=0.4
+    , regex-posix      ^>=0.96
     , text             ^>=2.0
+    , versions         ^>=5.0
 
 executable ghcup-gtk
   import:         options

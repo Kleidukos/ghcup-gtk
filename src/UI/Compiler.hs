@@ -1,58 +1,82 @@
 module UI.Compiler where
 
+import Control.Monad (when)
 import Data.GI.Base
+import Data.Maybe (catMaybes)
 import Data.Text (Text)
+import Data.Text qualified as Text
+import Data.Versions (prettyVer)
+import GHCup
+import GHCup.Types
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
 import UI.Install
 
-getGHCVersions :: Adw.ToastOverlay -> Adw.ApplicationWindow -> IO [Adw.ActionRow]
-getGHCVersions toastOverlay app = traverse (toActionRow toastOverlay app "GHC") compilerList
-  where
-    compilerList =
-      [ "9.4.3 (latest)"
-      , "9.2.5"
-      , "9.0.2"
-      , "8.10.7"
-      ]
+getVersionsFor :: Tool -> [ListResult] -> [ListResult]
+getVersionsFor t = filter $ do
+    correctTool <- (== t) . lTool
+    notOld <- (Old `notElem`) . lTag
+    pure $ correctTool && notOld
 
-getCabalVersions :: Adw.ToastOverlay -> Adw.ApplicationWindow -> IO [Adw.ActionRow]
-getCabalVersions toastOverlay app = traverse (toActionRow toastOverlay app "Cabal") cabalVersions
+getGHCVersions :: [ListResult] -> Adw.ToastOverlay -> Adw.ApplicationWindow -> IO [Adw.ActionRow]
+getGHCVersions toolVersions toastOverlay app = traverse (toActionRow toastOverlay app "GHC") compilerList
   where
-    cabalVersions =
-      [ "3.8.1.0 (latest)"
-      , "3.6.2.0"
-      ]
+    compilerList = getVersionsFor GHC toolVersions
 
-getHLSVersions :: Adw.ToastOverlay -> Adw.ApplicationWindow -> IO [Adw.ActionRow]
-getHLSVersions toastOverlay app = traverse (toActionRow toastOverlay app "HLS") hlsVersions
+getCabalVersions :: [ListResult] -> Adw.ToastOverlay -> Adw.ApplicationWindow -> IO [Adw.ActionRow]
+getCabalVersions toolVersions toastOverlay app = traverse (toActionRow toastOverlay app "Cabal") cabalVersions
   where
-    hlsVersions =
-      [ "1.8.0.0 (latest)"
-      , "1.7.0.0"
-      ]
+    cabalVersions = getVersionsFor Cabal toolVersions
 
-toActionRow :: Adw.ToastOverlay -> Adw.ApplicationWindow -> Text -> Text -> IO Adw.ActionRow
-toActionRow toastOverlay app toolLabel versionLabel = do
+getHLSVersions :: [ListResult] -> Adw.ToastOverlay -> Adw.ApplicationWindow -> IO [Adw.ActionRow]
+getHLSVersions toolVersions toastOverlay app = traverse (toActionRow toastOverlay app "HLS") hlsVersions
+  where
+    hlsVersions = getVersionsFor HLS toolVersions
+
+toActionRow :: Adw.ToastOverlay -> Adw.ApplicationWindow -> Text -> ListResult -> IO Adw.ActionRow
+toActionRow toastOverlay app toolLabel ListResult{..} = do
+  let versionLabel = prettyVer lVer
+      subtitle =
+        Text.intercalate ", " $ catMaybes
+          [ toMaybe "<span color='red'>latest</span>" $ Latest `elem` lTag
+          , toMaybe "<span color='green'>recommended</span>" $ Recommended `elem` lTag
+          , toMaybe "<span color='green'>HLS-powered</span>" hlsPowered
+          ]
+
   installButton <-
     new
       Gtk.Switch
       [ #valign := Gtk.AlignCenter
+      , #active := lInstalled
+      , #state := lInstalled
       ]
   on installButton #stateSet $ \state -> do
     mockInstall installButton toastOverlay app state (toolLabel <> " " <> versionLabel)
+
+  setIcon <-
+    new
+      Gtk.Image
+      [ #iconName := "object-select-symbolic"
+      , #iconSize := Gtk.IconSizeLarge
+      ]
 
   actionRow <-
     new
       Adw.ActionRow
       [ #title := versionLabel
+      , #subtitle := subtitle
       ]
 
   -- setToggle <- new Gtk.CheckButton
   --   [ #label := "Set as default"
   --   ]
 
+  when lSet $
+    Adw.actionRowAddSuffix actionRow setIcon
   Adw.actionRowAddSuffix actionRow installButton
   -- Adw.actionRowAddSuffix actionRow setToggle
   pure actionRow
+  where
+   toMaybe _ False = Nothing 
+   toMaybe a True = Just a
