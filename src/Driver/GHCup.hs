@@ -1,4 +1,4 @@
-module UI.GHCup
+module Driver.GHCup
   ( initAppState
   , module GHCup.Types -- largely for instances
   ) where

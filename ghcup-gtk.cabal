@@ -53,9 +53,9 @@ library
 
   -- cabal-fmt: expand src
   exposed-modules:
+    Driver.GHCup
     UI
     UI.Compiler
-    UI.GHCup
     UI.HeaderBar
     UI.Install
     UI.PreferencesWindow

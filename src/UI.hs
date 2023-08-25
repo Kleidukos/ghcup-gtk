@@ -14,8 +14,8 @@ import GI.Gtk qualified as Gtk
 import System.Environment (getArgs, getProgName)
 import System.Exit
 
+import Driver.GHCup
 import UI.Compiler
-import UI.GHCup
 import UI.HeaderBar
 
 main :: IO ()
