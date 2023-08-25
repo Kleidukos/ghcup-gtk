@@ -7,7 +7,6 @@ import Data.Foldable
 import Data.Functor
 import Data.GI.Base
 import Data.Maybe
-import Data.Text.IO qualified as Text
 import GHCup
 import GI.Adw qualified as Adw
 import GI.Adw.Objects.ExpanderRow
@@ -104,7 +103,7 @@ activate app = do
 
   toastOverlay <- new Adw.ToastOverlay []
 
-  initAppState Text.putStrLn >>= \case
+  initAppState >>= \case
     Left e -> exitDialogWithError window e
     Right appState -> do
       toolsContainer <- tools appState toastOverlay window

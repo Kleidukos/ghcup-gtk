@@ -96,17 +96,15 @@ initGHCupGTKFileLogging = do
   liftIO $ writeFile logfile ""
   pure logfile
 
-initAppState
-  :: (Text -> IO ())
-  -> IO (Either Text AppState)
-initAppState consoleOutter = do
+initAppState :: IO (Either Text AppState)
+initAppState = do
   dirs <- getAllDirs
   logfile <- runReaderT initGHCupGTKFileLogging dirs
   (settings, keybinds, _userSettings) <- getSettings
   let loggerConfig =
         LoggerConfig
           { lcPrintDebug = False
-          , consoleOutter
+          , consoleOutter = Text.putStrLn
           , fileOutter = Text.appendFile logfile
           , fancyColors = False
           }
