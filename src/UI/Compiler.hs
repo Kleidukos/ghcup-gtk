@@ -14,7 +14,10 @@ import GI.Gtk qualified as Gtk
 import UI.Install
 
 getVersionsFor :: Tool -> [ListResult] -> [ListResult]
-getVersionsFor t = filter ((== t) . lTool)
+getVersionsFor t = filter $ do
+    correctTool <- (== t) . lTool
+    notOld <- (Old `notElem`) . lTag
+    pure $ correctTool && notOld
 
 getGHCVersions :: [ListResult] -> Adw.ToastOverlay -> Adw.ApplicationWindow -> IO [Adw.ActionRow]
 getGHCVersions toolVersions toastOverlay app = traverse (toActionRow toastOverlay app "GHC") compilerList
