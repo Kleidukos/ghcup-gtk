@@ -15,9 +15,9 @@ import UI.Install
 
 getVersionsFor :: Tool -> [ListResult] -> [ListResult]
 getVersionsFor t = filter $ do
-    correctTool <- (== t) . lTool
-    notOld <- (Old `notElem`) . lTag
-    pure $ correctTool && notOld
+  correctTool <- (== t) . lTool
+  notOld <- (Old `notElem`) . lTag
+  pure $ correctTool && notOld
 
 getGHCVersions :: [ListResult] -> Adw.ToastOverlay -> Adw.ApplicationWindow -> IO [Adw.ActionRow]
 getGHCVersions toolVersions toastOverlay app = traverse (toActionRow toastOverlay app "GHC") compilerList
@@ -38,11 +38,12 @@ toActionRow :: Adw.ToastOverlay -> Adw.ApplicationWindow -> Text -> ListResult -
 toActionRow toastOverlay app toolLabel ListResult{..} = do
   let versionLabel = prettyVer lVer
       subtitle =
-        Text.intercalate ", " $ catMaybes
-          [ toMaybe "<span color='red'>latest</span>" $ Latest `elem` lTag
-          , toMaybe "<span color='green'>recommended</span>" $ Recommended `elem` lTag
-          , toMaybe "<span color='green'>HLS-powered</span>" hlsPowered
-          ]
+        Text.intercalate ", " $
+          catMaybes
+            [ toMaybe "<span color='red'>latest</span>" $ Latest `elem` lTag
+            , toMaybe "<span color='green'>recommended</span>" $ Recommended `elem` lTag
+            , toMaybe "<span color='green'>HLS-powered</span>" hlsPowered
+            ]
 
   installButton <-
     new
@@ -78,5 +79,5 @@ toActionRow toastOverlay app toolLabel ListResult{..} = do
   -- Adw.actionRowAddSuffix actionRow setToggle
   pure actionRow
   where
-   toMaybe _ False = Nothing 
-   toMaybe a True = Just a
+    toMaybe _ False = Nothing
+    toMaybe a True = Just a

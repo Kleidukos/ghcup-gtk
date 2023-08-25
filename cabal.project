@@ -11,3 +11,5 @@ test-show-details: direct
 package ghcup-gtk
   ghc-options: -j
 
+package streamly
+  flags: +use-unliftio
