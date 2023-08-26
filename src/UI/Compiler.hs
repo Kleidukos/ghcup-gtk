@@ -3,7 +3,6 @@ module UI.Compiler where
 import Control.Monad (when)
 import Data.GI.Base
 import Data.Maybe (catMaybes)
-import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Versions (prettyVer)
 import GHCup
@@ -19,23 +18,29 @@ getVersionsFor t = filter $ do
   notOld <- (Old `notElem`) . lTag
   pure $ correctTool && notOld
 
-getGHCVersions :: [ListResult] -> Adw.ToastOverlay -> Adw.ApplicationWindow -> IO [Adw.ActionRow]
-getGHCVersions toolVersions toastOverlay app = traverse (toActionRow toastOverlay app "GHC") compilerList
-  where
-    compilerList = getVersionsFor GHC toolVersions
+getGHCVersions :: [ListResult] -> Adw.ToastOverlay -> Adw.ApplicationWindow -> AppState -> IO [Adw.ActionRow]
+getGHCVersions toolVersions toastOverlay app appState =
+  traverse (toActionRow toastOverlay app GHC appState) $
+    getVersionsFor GHC toolVersions
 
-getCabalVersions :: [ListResult] -> Adw.ToastOverlay -> Adw.ApplicationWindow -> IO [Adw.ActionRow]
-getCabalVersions toolVersions toastOverlay app = traverse (toActionRow toastOverlay app "Cabal") cabalVersions
-  where
-    cabalVersions = getVersionsFor Cabal toolVersions
+getCabalVersions :: [ListResult] -> Adw.ToastOverlay -> Adw.ApplicationWindow -> AppState -> IO [Adw.ActionRow]
+getCabalVersions toolVersions toastOverlay app appState =
+  traverse (toActionRow toastOverlay app Cabal appState) $
+    getVersionsFor Cabal toolVersions
 
-getHLSVersions :: [ListResult] -> Adw.ToastOverlay -> Adw.ApplicationWindow -> IO [Adw.ActionRow]
-getHLSVersions toolVersions toastOverlay app = traverse (toActionRow toastOverlay app "HLS") hlsVersions
-  where
-    hlsVersions = getVersionsFor HLS toolVersions
+getHLSVersions :: [ListResult] -> Adw.ToastOverlay -> Adw.ApplicationWindow -> AppState -> IO [Adw.ActionRow]
+getHLSVersions toolVersions toastOverlay app appState =
+  traverse (toActionRow toastOverlay app HLS appState) $
+    getVersionsFor HLS toolVersions
 
-toActionRow :: Adw.ToastOverlay -> Adw.ApplicationWindow -> Text -> ListResult -> IO Adw.ActionRow
-toActionRow toastOverlay app toolLabel ListResult{..} = do
+toActionRow
+  :: Adw.ToastOverlay
+  -> Adw.ApplicationWindow
+  -> Tool
+  -> AppState
+  -> ListResult
+  -> IO Adw.ActionRow
+toActionRow toastOverlay app tool appState ListResult{..} = do
   let versionLabel = prettyVer lVer
       subtitle =
         Text.intercalate ", " $
@@ -53,7 +58,8 @@ toActionRow toastOverlay app toolLabel ListResult{..} = do
       , #state := lInstalled
       ]
   on installButton #stateSet $ \state -> do
-    mockInstall installButton toastOverlay app state (toolLabel <> " " <> versionLabel)
+    let ds = _ghcupDownloads $ ghcupInfo appState
+    install installButton toastOverlay app appState ds state tool lVer
 
   setIcon <-
     new

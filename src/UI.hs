@@ -62,13 +62,13 @@ tools appState toastOverlay app = do
 
   toolVersions <- runReaderT (listVersions Nothing Nothing) appState
 
-  compilers <- getGHCVersions toolVersions toastOverlay app
+  compilers <- getGHCVersions toolVersions toastOverlay app appState
   traverse_ (expanderRowAddRow ghcRow) compilers
 
-  cabalVersions <- getCabalVersions toolVersions toastOverlay app
+  cabalVersions <- getCabalVersions toolVersions toastOverlay app appState
   traverse_ (expanderRowAddRow cabalRow) cabalVersions
 
-  hlsVersions <- getHLSVersions toolVersions toastOverlay app
+  hlsVersions <- getHLSVersions toolVersions toastOverlay app appState
   traverse_ (expanderRowAddRow hlsRow) hlsVersions
 
   toolsList.append ghcRow

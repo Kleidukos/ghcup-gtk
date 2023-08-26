@@ -1,14 +1,20 @@
 module Driver.GHCup
   ( initAppState
+  , GHCupResult (..)
+  , installGHC
+  , rmGHC
   , module GHCup.Types -- largely for instances
   ) where
 
 import Control.Applicative ((<|>))
 import Control.Monad.Reader
+import Control.Monad.Trans.Resource (runResourceT)
 import Data.ByteString (ByteString)
 import Data.Maybe
 import Data.Text (Text, pack)
 import Data.Text.IO qualified as Text
+import Data.Versions (Version)
+import GHCup (installGHCBin, rmGHCVer)
 import GHCup.Download (getDownloadsF)
 import GHCup.Errors
 import GHCup.Platform
@@ -19,7 +25,7 @@ import GHCup.Prelude.String.QQ (s)
 import GHCup.Types
 import GHCup.Types qualified as Types
 import GHCup.Types.Optics (getDirs)
-import GHCup.Utils (ghcupConfigFile)
+import GHCup.Utils (getVersionInfo, ghcupConfigFile)
 import GHCup.Utils.Dirs (fromGHCupPath, getAllDirs)
 import Haskus.Utils.Variant.Excepts (liftE, runE)
 import Haskus.Utils.Variant.VEither
@@ -133,3 +139,48 @@ initAppState = do
       let e' = pack $ prettyHFError e
       runLogger $ logError e'
       pure $ Left e'
+
+data GHCupResult
+  = GHCupSuccess (Maybe Text)
+  | GHCupFailed Text
+  deriving (Show)
+
+installGHC :: AppState -> GHCupDownloads -> Version -> IO GHCupResult
+installGHC st ds v =
+  ( flip runReaderT st
+      . runResourceT
+      . runE
+      $ installGHCBin v GHCupInternal False []
+  )
+    >>= \case
+      VRight () ->
+        pure $
+          GHCupSuccess $
+            _viPostInstall =<< vi
+      VLeft e ->
+        pure $
+          GHCupFailed $
+            pack $
+              prettyHFError e
+  where
+    vi = getVersionInfo v GHC ds
+
+rmGHC :: AppState -> GHCupDownloads -> Version -> IO GHCupResult
+rmGHC st ds v =
+  ( flip runReaderT st
+      . runE
+      $ rmGHCVer ghcVer
+  )
+    >>= \case
+      VRight () ->
+        pure $
+          GHCupSuccess $
+            _viPostRemove =<< vi
+      VLeft e ->
+        pure $
+          GHCupFailed $
+            pack $
+              prettyHFError e
+  where
+    ghcVer = GHCTargetVersion Nothing v
+    vi = getVersionInfo v GHC ds

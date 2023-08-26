@@ -2,12 +2,25 @@ module UI.Install where
 
 import Control.Monad (when)
 import Data.GI.Base
-import Data.Text (Text)
+import Data.Text (pack)
+import Data.Versions (Version, prettyVer)
+import GHCup.Types
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
-mockInstall :: Gtk.Switch -> Adw.ToastOverlay -> Adw.ApplicationWindow -> Bool -> Text -> IO Bool
-mockInstall selfSwitch toastOverlay app state toolDescription = do
+import Driver.GHCup
+
+install
+  :: Gtk.Switch
+  -> Adw.ToastOverlay
+  -> Adw.ApplicationWindow
+  -> AppState
+  -> GHCupDownloads
+  -> Bool
+  -> Tool
+  -> Version
+  -> IO Bool
+install selfSwitch toastOverlay app st ds state tool version = do
   curState <- selfSwitch.getState
   -- don't handle case when state is being reset: e.g. when 'Cancel'
   -- button is pressed on message box
@@ -18,7 +31,9 @@ mockInstall selfSwitch toastOverlay app state toolDescription = do
           "Are you sure you want to "
             <> stateText
             <> " "
-            <> toolDescription
+            <> pack (show tool)
+            <> " "
+            <> prettyVer version
             <> "?"
 
     messageDialog <-
@@ -37,22 +52,38 @@ mockInstall selfSwitch toastOverlay app state toolDescription = do
       "doit" ->
         if state
           then do
-            notificationToast <-
-              new
-                Adw.Toast
-                [ #title := "Installing…"
-                , #timeout := 3
-                ]
-            Adw.toastOverlayAddToast toastOverlay notificationToast
-            set selfSwitch [#state := state]
+            presentToast "Installing…"
+            case tool of
+              GHC -> do
+                installGHC st ds version >>= \case
+                  GHCupSuccess t -> do
+                    presentToast "GHC installation successful"
+                    maybe (pure ()) presentToast t
+                  GHCupFailed e -> do
+                    presentToast e
+                    set selfSwitch [#active := not state] -- reset position
+                set selfSwitch [#state := state]
+              _ -> error "unsupported tool!"
           else do
-            notificationToast <-
-              new
-                Adw.Toast
-                [ #title := "Uninstalling…"
-                , #timeout := 3
-                ]
-            Adw.toastOverlayAddToast toastOverlay notificationToast
-            set selfSwitch [#state := state]
+            presentToast "Uninstalling…"
+            case tool of
+              GHC -> do
+                rmGHC st ds version >>= \case
+                  GHCupSuccess t -> do
+                    presentToast "GHC removal successful"
+                    maybe (pure ()) presentToast t
+                  GHCupFailed e -> do
+                    presentToast e
+                    set selfSwitch [#active := not state] -- reset position
+                set selfSwitch [#state := state]
       _ -> set selfSwitch [#active := not state] -- reset position
     messageDialog.present
+  where
+    presentToast title = do
+      notificationToast <-
+        new
+          Adw.Toast
+          [ #title := title
+          , #timeout := 3
+          ]
+      Adw.toastOverlayAddToast toastOverlay notificationToast
