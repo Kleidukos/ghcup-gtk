@@ -1,6 +1,6 @@
 packages: ./
 
-with-compiler: ghc-9.4.4
+with-compiler: ghc-9.14.1
 
 tests: True
 
@@ -8,6 +8,11 @@ documentation: False
 
 test-show-details: direct
 
-package ghcup-gtk
-  ghc-options: -j
+semaphore: True
 
+jobs: $ncpus
+
+index-state: 2026-08-22T02:59:31Z
+
+allow-newer:
+  gi-adwaita:text

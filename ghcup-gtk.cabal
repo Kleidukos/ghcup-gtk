@@ -1,31 +1,34 @@
-cabal-version:   3.4
-name:            ghcup-gtk
-version:         0.1.0.0
-
+cabal-version: 3.4
+name: ghcup-gtk
+version: 0.1.0.0
 -- synopsis:
 -- description:
-license:         BSD-3-Clause
-license-file:    LICENSE
-author:          Hécate Moonlight
-maintainer:      hecate+github@glitchbra.in
-
+license: BSD-3-Clause
+license-file: LICENSE
+author: Hécate Moonlight
+maintainer: hecate+github@glitchbra.in
 -- copyright:
-category:        Distribution
-build-type:      Simple
+category: Distribution
+build-type: Simple
 extra-doc-files: CHANGELOG.md
-tested-with:     GHC ==9.4.4
+tested-with: ghc ==9.4.4
 
 -- extra-source-files:
-
 common options
   ghc-options:
-    -Wall -Wcompat -Widentities -Wincomplete-record-updates
-    -Wincomplete-uni-patterns -Wpartial-fields -Wredundant-constraints
-    -fhide-source-paths -Wno-unused-do-bind -fshow-hole-constraints
+    -Wall
+    -Wcompat
+    -Widentities
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wpartial-fields
+    -Wredundant-constraints
+    -fhide-source-paths
+    -Wno-unused-do-bind
+    -fshow-hole-constraints
     -Wno-unticked-promoted-constructors
 
   default-extensions:
-    NoStarIsType
     DataKinds
     DeriveAnyClass
     DerivingStrategies
@@ -33,6 +36,7 @@ common options
     DuplicateRecordFields
     ImportQualifiedPost
     LambdaCase
+    NoStarIsType
     OverloadedLabels
     OverloadedRecordDot
     OverloadedStrings
@@ -45,13 +49,12 @@ common options
     UndecidableInstances
     ViewPatterns
 
-  default-language:   GHC2021
+  default-language: GHC2021
 
 library
-  import:          options
-  hs-source-dirs:  src
-
-  -- cabal-fmt: expand src
+  import: options
+  hs-source-dirs: src
+  -- cabal-gild: discover src
   exposed-modules:
     UI
     UI.Compiler
@@ -60,35 +63,34 @@ library
     UI.PreferencesWindow
 
   build-depends:
-    , base             ==4.17.0.0
-    , gi-adwaita       ^>=1.0
-    , gi-gio           ^>=2.0
-    , gi-glib          ^>=2.0
-    , gi-gtk           ^>=4.0
-    , haskell-gi-base
-    , text             ^>=2.0
+    base,
+    gi-adwaita ^>=1.0,
+    gi-gio ^>=2.0,
+    gi-glib ^>=2.0,
+    gi-gtk ^>=4.0,
+    haskell-gi-base,
+    text ^>=2.1,
 
 executable ghcup-gtk
-  import:         options
-  main-is:        Main.hs
+  import: options
+  main-is: Main.hs
   build-depends:
-    , base
-    , ghcup-gtk
-    , gi-adwaita
-    , gi-glib
-    , gi-gtk
-    , haskell-gi-base
+    base,
+    ghcup-gtk,
+    gi-adwaita,
+    gi-glib,
+    gi-gtk,
+    haskell-gi-base,
 
   hs-source-dirs: app
 
 test-suite ghcup-gtk-test
-  import:         options
-
+  import: options
   -- other-modules:
   -- other-extensions:
-  type:           exitcode-stdio-1.0
+  type: exitcode-stdio-1.0
   hs-source-dirs: test
-  main-is:        Main.hs
+  main-is: Main.hs
   build-depends:
-    , base
-    , ghcup-gtk
+    base,
+    ghcup-gtk,
