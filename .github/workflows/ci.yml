@@ -6,33 +6,30 @@ on:
     branches: ["main"]
 
 jobs:                                                                                                                   
-  generateMatrix:                                                                                                       
-    name: "Generate matrix from cabal"                                                                                  
-    runs-on: ubuntu-latest                                                                                              
-    outputs:                                                                                                            
-      matrix: ${{ steps.set-matrix.outputs.matrix }}                                                                    
-    steps:                                                                                                              
-      - name: Checkout base repo                                                                                        
-        uses: actions/checkout@v3                                                                                       
-      - name: Extract the tested GHC versions                                                                           
-        id: set-matrix                                                                                                  
-        run: |                                                                                                          
-          wget https://github.com/Kleidukos/get-tested/releases/download/v0.1.4.0/get-tested-0.1.4.0-linux-amd64 -O get-tested
-          chmod +x get-tested                                                                                           
-          ./get-tested --ubuntu ghcup-gtk.cabal >> $GITHUB_OUTPUT                                            
+  generate-matrix:
+    name: 'Generate matrix from cabal'
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract the tested GHC versions
+        id: set-matrix
+        uses: kleidukos/get-tested@v0.1.9.1
+        with:
+          cabal-file: ghcup-gtk.cabal
+          ubuntu-version: 'latest'
+          macos-version: 'latest'
+          version: 0.1.9.1
+
   tests:                                                                                                                
     name: ${{ matrix.ghc }} on ${{ matrix.os }}                                                                         
-    needs: generateMatrix                                                                                               
+    needs: generate-matrix
     runs-on: ${{ matrix.os }}                                                                                           
     strategy:                                                                                                           
       matrix: ${{ fromJSON(needs.generateMatrix.outputs.matrix) }}
     steps:
     - uses: actions/checkout@v3
       if: github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.ref == 'refs/heads/main'
-
-    - name: "Configure ghcup"
-      run: |
-        ghcup config add-release-channel https://raw.githubusercontent.com/haskell/ghcup-metadata/master/ghcup-prereleases-0.0.7.yaml;
 
     - name: Set up Haskell
       id: setup-haskell
@@ -53,10 +50,10 @@ jobs:
         cabal freeze
 
     - name: Cache
-      uses: actions/cache@v3
+      uses: actions/cache@v5
       with:
         path: ${{ steps.setup-haskell.outputs.cabal-store }}
-        key: ${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('cabal.project.freeze') }}
+        key: ${{ runner.os }}-ghc-${{ matrix.ghc }}-${{ hashFiles('**/plan.json') }}
         restore-keys: ${{ runner.os }}-${{ matrix.ghc }}-
 
     - name: Build
