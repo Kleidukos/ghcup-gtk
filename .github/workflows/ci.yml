@@ -41,7 +41,7 @@ jobs:
     - name: Configure environment
       run: |
         sudo apt update
-        sudo apt install -y libgirepository1.0-dev libwebkit2gtk-4.0-dev \
+        sudo apt install -y libgirepository1.0-dev \
           libgtksourceview-3.0-dev libgtk-4-bin libgtk-4-common libgtk-4-dev \
           libadwaita-1-dev
         echo "$HOME/.ghcup/bin" >> $GITHUB_PATH
