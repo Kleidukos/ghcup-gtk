@@ -10,7 +10,7 @@ import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 import GI.Pango qualified as Pango
 
-import Presentation (RowAction (..), RowSpec (..))
+import Presentation.Row (RowAction (..), RowSpec (..))
 import Toolchain.Types (Mutation, Progress (..))
 import UI.Dialog qualified as Dialog
 

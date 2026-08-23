@@ -1,28 +1,18 @@
-module Presentation
+module Presentation.Row
   ( Confirmation (..)
-  , BannerSpec (..)
-  , BannerAction (..)
-  , InstructionsSpec (..)
-  , OfferFixSpec (..)
   , RowSpec (..)
   , RowAction (..)
   , ToolRows (..)
   , installConfirmation
-  , removeConfirmation
-  , pathFixConfirmation
-  , pathBanner
-  , appliedBanner
-  , planRows
   , jobTitle
+  , planRows
+  , removeConfirmation
   ) where
 
-import Data.Function
-import Data.Functor
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
-import Data.Text qualified as Text
 import Data.Time.Calendar (Day)
 import Data.Vector (Vector)
 import Data.Vector qualified as Vector
@@ -31,7 +21,6 @@ import GHCup.Command.List (ListResult (..))
 import GHCup.Types (Tag (..), TargetVersion, TargetVersionReq (..), tVerToText)
 
 import Toolchain.Curation (CurationMode (..), FamilyKey, curate, isLatestInFamily, latestPerFamily)
-import Toolchain.Path (FileChange (..), PathStatus (..), WriteMode (..), sourceLine)
 import Toolchain.Types
 
 data Confirmation = Confirmation
@@ -39,31 +28,6 @@ data Confirmation = Confirmation
   , body :: Text
   , affirmLabel :: Text
   , destructive :: Bool
-  }
-  deriving stock (Eq, Show)
-
-data BannerSpec = BannerSpec
-  { title :: Text
-  , action :: Maybe BannerAction
-  -- ^ 'Nothing' is a plain hint with no button.
-  }
-  deriving stock (Eq, Show)
-
-data BannerAction
-  = ShowInfo InstructionsSpec
-  | ConfirmFix OfferFixSpec
-  deriving stock (Eq, Show)
-
-data InstructionsSpec = InstructionsSpec
-  { buttonLabel :: Text
-  , dialogHeading :: Text
-  , dialogBody :: Text
-  }
-  deriving stock (Eq, Show)
-
-data OfferFixSpec = OfferFixSpec
-  { buttonLabel :: Text
-  , confirmation :: Confirmation
   }
   deriving stock (Eq, Show)
 
@@ -136,10 +100,15 @@ rowSpec tool newest rank lr =
     , setDefault = SetDefault tool (tvOf lr)
     , rank
     , releaseDay = lReleaseDay lr
-    , hlsPowered = hlsPowered lr
+    , hlsPowered = passesHlsFilter tool lr
     , latestInFamily = isLatestInFamily newest lr
     , statusLabel = statusLabelOf lr
     }
+
+-- | The HLS-powered notion only exists for GHC releases, so the filter must
+-- never hide another tool's rows: every non-GHC row passes.
+passesHlsFilter :: SupportedTool -> ListResult -> Bool
+passesHlsFilter tool lr = tool /= GHC || hlsPowered lr
 
 statusLabelOf :: ListResult -> Text
 statusLabelOf lr
@@ -183,68 +152,3 @@ removeConfirmation tool lr =
     , affirmLabel = "Uninstall"
     , destructive = True
     }
-
-pathFixConfirmation :: Vector FileChange -> Confirmation
-pathFixConfirmation changes =
-  let filteredChanges =
-        changes
-          & Vector.filter (\c -> c.mode == FilteredAppend)
-          <&> (.payload)
-          & Vector.toList
-  in Confirmation
-       { heading = "Set Up Your PATH?"
-       , body =
-           Text.unlines $
-             concat
-               [ ["This will modify:", ""]
-               , [ Text.pack c.path
-                     <> (if c.mode == CreateOrReplace then " (created, PATH setup)" else "")
-                 | c <- Vector.toList changes
-                 ]
-               , ["", "Lines to be written:", ""]
-               ]
-               <> filteredChanges
-       , affirmLabel = "Apply"
-       , destructive = False
-       }
-
-pathBanner :: GhcupDirs -> PathStatus -> Maybe BannerSpec
-pathBanner dirs = \case
-  PathOk -> Nothing
-  FixedAwaitingRestart ->
-    Just
-      BannerSpec
-        { title = "Restart your terminal or session for the tools to be available"
-        , action = Nothing
-        }
-  NeedsFixManual ->
-    Just
-      BannerSpec
-        { title = notFoundTitle
-        , action =
-            Just $
-              ShowInfo
-                InstructionsSpec
-                  { buttonLabel = "How to fix…"
-                  , dialogHeading = "Add ghcup to your PATH"
-                  , dialogBody =
-                      "Add this line to your shell configuration file:\n\n" <> sourceLine dirs
-                  }
-        }
-  NeedsFixPlanned changes ->
-    Just
-      BannerSpec
-        { title = notFoundTitle
-        , action =
-            Just $
-              ConfirmFix
-                OfferFixSpec
-                  { buttonLabel = "Fix…"
-                  , confirmation = pathFixConfirmation changes
-                  }
-        }
-  where
-    notFoundTitle = "Installed tools won't be found in your terminal"
-
-appliedBanner :: BannerSpec
-appliedBanner = BannerSpec {title = "Done — restart your terminal", action = Nothing}

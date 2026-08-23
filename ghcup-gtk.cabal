@@ -54,7 +54,8 @@ library core
     Effects.FileSystem
     Effects.Ghcup
     Effects.Notify
-    Presentation
+    Presentation.Path
+    Presentation.Row
     Session
     Toolchain.Curation
     Toolchain.GHCup
