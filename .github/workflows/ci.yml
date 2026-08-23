@@ -42,11 +42,17 @@ jobs:
         sudo apt update
         sudo apt install -y \
           libadwaita-1-dev \
+          libcairo2-dev \
+          libfreetype-dev \
+          libgdk-pixbuf-2.0-dev \
           libgirepository1.0-dev \
+          libglib2.0-dev \
+          libgraphene-1.0-dev \
           libgtk-4-dev \
+          libharfbuzz-dev \
+          liblzma-dev \
           libpango1.0-dev \
-          libsdl2-dev \
-          libunwind-dev
+          zlib1g-dev
         echo "$HOME/.ghcup/bin" >> $GITHUB_PATH
         echo "$HOME/.cabal/bin" >> $GITHUB_PATH
         echo "$HOME/.local/bin" >> $GITHUB_PATH
