@@ -1,5 +1,6 @@
 module Fixtures
   ( mkLR
+  , withHls
   , lr914
   , dirs
   , anError
@@ -34,6 +35,10 @@ mkLR v tags inst dflt =
     , hlsPowered = False
     , lReleaseDay = Nothing
     }
+
+-- | Mark a listing as covered by the currently-set HLS.
+withHls :: ListResult -> ListResult
+withHls lr = lr {hlsPowered = True}
 
 lr914 :: ListResult
 lr914 = mkLR "9.14.1" [Latest] False False

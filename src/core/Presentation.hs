@@ -4,6 +4,8 @@ module Presentation
   , BannerAction (..)
   , InstructionsSpec (..)
   , OfferFixSpec (..)
+  , Pill (..)
+  , PillAccent (..)
   , RowSpec (..)
   , RowAction (..)
   , ToolRows (..)
@@ -66,12 +68,26 @@ data OfferFixSpec = OfferFixSpec
   }
   deriving stock (Eq, Show)
 
+-- | How much a pill should stand out. The widget layer picks the style
+-- class; the meaning stays here.
+data PillAccent
+  = Neutral
+  | Positive
+  deriving stock (Eq, Show)
+
+-- | A small badge shown at the end of a row.
+data Pill = Pill
+  { label :: Text
+  , accent :: PillAccent
+  }
+  deriving stock (Eq, Show)
+
 -- | Everything a rendered version row shows and can do, as data: the
 -- widget layer only draws labels and routes clicks.
 data RowSpec = RowSpec
   { key :: RowKey
   , title :: Text
-  , pills :: [Text]
+  , pills :: [Pill]
   , installed :: Bool
   , isDefault :: Bool
   , action :: RowAction
@@ -118,7 +134,9 @@ rowSpec tool lr =
   RowSpec
     { key = keyOfListing tool lr
     , title = prettyVer (lVer lr)
-    , pills = mapMaybe pillLabel (lTag lr)
+    , pills =
+        mapMaybe tagPill (lTag lr)
+          <> [Pill "HLS-powered" Positive | tool == GHC, hlsPowered lr]
     , installed = lInstalled lr
     , isDefault = lSet lr
     , action =
@@ -128,10 +146,10 @@ rowSpec tool lr =
     , setDefault = SetDefault tool (tvOf lr)
     }
 
-pillLabel :: Tag -> Maybe Text
-pillLabel = \case
-  Recommended -> Just "recommended"
-  Latest -> Just "latest"
+tagPill :: Tag -> Maybe Pill
+tagPill = \case
+  Recommended -> Just (Pill "recommended" Neutral)
+  Latest -> Just (Pill "latest" Neutral)
   _ -> Nothing
 
 subject :: SupportedTool -> ListResult -> Text

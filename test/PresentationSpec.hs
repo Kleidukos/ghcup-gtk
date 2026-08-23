@@ -9,7 +9,7 @@ import GHCup.Types (Tag (..))
 import Test.Tasty
 import Test.Tasty.HUnit
 
-import Fixtures (dirs, listingsFor, lr914, mkLR, sampleChanges)
+import Fixtures (dirs, listingsFor, lr914, mkLR, sampleChanges, withHls)
 import Presentation
 import Toolchain.Path (PathStatus (..), sourceLine)
 import Toolchain.Types (Mutation (..), SupportedTool (..), keyOfMutation, reqOf, supportedTools, tvOf)
@@ -100,7 +100,26 @@ tests =
         , testCase "pills from tags" $ do
             let inst = mkLR "9.10.3" [Recommended] True False
                 specs = ghcRows False [lr914, inst]
-            ((.pills) <$> specs) @?= Vector.fromList [["latest"], ["recommended"]]
+            ((.pills) <$> specs)
+              @?= Vector.fromList
+                [ [Pill "latest" Neutral]
+                , [Pill "recommended" Neutral]
+                ]
+        , testCase "HLS support gets an accented pill, after its tags" $ do
+            let inst = withHls (mkLR "9.10.3" [Recommended] True False)
+            ((.pills) <$> ghcRows False [inst])
+              @?= Vector.fromList
+                [[Pill "recommended" Neutral, Pill "HLS-powered" Positive]]
+        , testCase "no HLS pill when the set HLS does not cover the version" $ do
+            let inst = mkLR "9.10.3" [Recommended] True False
+            ((.pills) <$> ghcRows False [inst])
+              @?= Vector.fromList [[Pill "recommended" Neutral]]
+        , testCase "the HLS pill is GHC-only" $ do
+            let inst = withHls (mkLR "3.16.0.0" [Recommended] True False)
+                rows = case Map.lookup Cabal (planRows False (listingsFor Cabal [inst])) of
+                  Just toolRows -> toolRows.rows
+                  Nothing -> error "planRows lost the cabal entry"
+            ((.pills) <$> rows) @?= Vector.fromList [[Pill "recommended" Neutral]]
         , testCase "row action is install or remove per installed state" $ do
             let inst = mkLR "9.10.3" [Recommended] True False
                 specs = ghcRows False [lr914, inst]
