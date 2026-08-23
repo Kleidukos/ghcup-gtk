@@ -10,6 +10,10 @@ It aims to have feature parity with the GHCup TUI.
 
 _Please open a ticket if these are not up to date_
 
+_libadwaita 1.5 or newer is required._ Older releases lack `AdwAboutDialog`
+and `AdwAlertDialog`.
+Debian 12 (1.2) and Ubuntu 22.04 (1.1) are too old and need a backport; Ubuntu 24.04 (1.5) and current Fedora/Arch are fine.
+
 #### Fedora
 
 ```bash
