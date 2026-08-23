@@ -1,0 +1,36 @@
+name: Lint
+
+on:
+  pull_request:
+    paths:
+      - "**.cabal"
+      - "cabal.project"
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  cabal-gild:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: tfausak/cabal-gild-setup-action@v2
+        with:
+          version: 1.6.0.2
+      - run: cabal-gild --input ghcup-gtk.cabal --mode check
+  hlint:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: 'Set up HLint'
+      uses: haskell-actions/hlint-setup@v2
+      with:
+        version: '3.10'
+
+    - name: 'Run HLint'
+      uses: haskell-actions/hlint-run@v2
+      with:
+        path: '["src/", "test/", "app/"]'
+        fail-on: warning

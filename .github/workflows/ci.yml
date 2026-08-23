@@ -17,8 +17,7 @@ jobs:
         uses: kleidukos/get-tested@v0.1.9.1
         with:
           cabal-file: ghcup-gtk.cabal
-          ubuntu-version: 'latest'
-          macos-version: 'latest'
+          ubuntu-version: '26.04'
           version: 0.1.9.1
 
   tests:                                                                                                                
@@ -26,14 +25,14 @@ jobs:
     needs: generate-matrix
     runs-on: ${{ matrix.os }}                                                                                           
     strategy:                                                                                                           
-      matrix: ${{ fromJSON(needs.generateMatrix.outputs.matrix) }}
+      matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
     steps:
     - uses: actions/checkout@v3
       if: github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.ref == 'refs/heads/main'
 
     - name: Set up Haskell
       id: setup-haskell
-      uses: haskell/actions/setup@v2
+      uses: haskell-actions/setup@v2
       with:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: ${{ matrix.cabal }}
@@ -41,9 +40,13 @@ jobs:
     - name: Configure environment
       run: |
         sudo apt update
-        sudo apt install -y libgirepository1.0-dev libwebkit2gtk-4.0-dev \
-          libgtksourceview-3.0-dev libgtk-4-bin libgtk-4-common libgtk-4-dev \
-          libadwaita-1-dev
+        sudo apt install -y \
+          libadwaita-1-dev \
+          libgirepository1.0-dev \
+          libgtk-4-dev \
+          libpango1.0-dev \
+          libsdl2-dev \
+          libunwind-dev
         echo "$HOME/.ghcup/bin" >> $GITHUB_PATH
         echo "$HOME/.cabal/bin" >> $GITHUB_PATH
         echo "$HOME/.local/bin" >> $GITHUB_PATH
