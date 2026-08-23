@@ -1,7 +1,7 @@
 cabal-version: 3.4
 name: ghcup-gtk
 version: 0.1.0.0
--- synopsis:
+synopsis: GTK installer for the Haskell toolchain
 -- description:
 license: BSD-3-Clause
 license-file: LICENSE
@@ -29,50 +29,93 @@ common options
     -Wno-unticked-promoted-constructors
 
   default-extensions:
-    DataKinds
-    DeriveAnyClass
-    DerivingStrategies
-    DerivingVia
     DuplicateRecordFields
-    ImportQualifiedPost
-    LambdaCase
+    NoFieldSelectors
     NoStarIsType
     OverloadedLabels
     OverloadedRecordDot
     OverloadedStrings
-    PackageImports
-    PolyKinds
-    QuasiQuotes
-    RecordWildCards
     StrictData
     TypeFamilies
-    UndecidableInstances
     ViewPatterns
 
-  default-language: GHC2021
+  default-language: GHC2024
 
-library
+-- Application logic, GTK-free: effects, toolchain operations, view models.
+-- Must never depend on gi-* packages; the test suite builds against this
+-- component alone.
+library core
   import: options
-  hs-source-dirs: src
-  -- cabal-gild: discover src
+  hs-source-dirs: src/core
+  -- cabal-gild: discover src/core
   exposed-modules:
-    UI
-    UI.Compiler
-    UI.HeaderBar
-    UI.Install
-    UI.PreferencesWindow
+    Config
+    Effects.FileSystem
+    Effects.Ghcup
+    Effects.Notify
+    Presentation
+    Session
+    Toolchain.Curation
+    Toolchain.GHCup
+    Toolchain.Path
+    Toolchain.Types
+    Worker
 
   build-depends:
     base,
+    containers,
+    directory,
+    effectful-core ^>=2.6,
+    filepath,
+    ghcup ^>=0.2.6,
+    kdl-hs ^>=1.1,
+    mtl,
+    pretty,
+    resourcet,
+    stm,
+    text ^>=2.1,
+    variant,
+    vector,
+    versions,
+
+-- Rendering layer: the only component allowed to import gi-*.
+library
+  import: options
+  hs-source-dirs: src/gtk
+  -- cabal-gild: discover src/gtk
+  exposed-modules:
+    UI
+    UI.Dialog
+    UI.HeaderBar
+    UI.PathBanner
+    UI.PreferencesWindow
+    UI.Row
+    UI.RowRegistry
+    UI.ToolList
+
+  build-depends:
+    base,
+    containers,
+    directory,
+    effectful-core,
+    ghcup,
+    ghcup-gtk:core,
     gi-adwaita ^>=1.0,
+    gi-gdk4 ^>=4.0,
     gi-gio ^>=2.0,
     gi-glib ^>=2.0,
+    gi-gsk ^>=4.0,
     gi-gtk ^>=4.0,
+    gi-pango ^>=1.0,
     haskell-gi-base,
-    text ^>=2.1,
+    text,
+    vector,
 
 executable ghcup-gtk
   import: options
+  -- -threaded is load-bearing: the GTK main loop is a blocking foreign
+  -- call; without OS threads the worker thread would never run
+  ghc-options: -threaded
   main-is: Main.hs
   build-depends:
     base,
@@ -86,11 +129,29 @@ executable ghcup-gtk
 
 test-suite ghcup-gtk-test
   import: options
-  -- other-modules:
-  -- other-extensions:
+  other-modules:
+    ConfigSpec
+    Fixtures
+    PresentationSpec
+    SessionSpec
+    TestInterpreters
+    Toolchain.CurationSpec
+    Toolchain.PathSpec
+    WorkerSpec
+
   type: exitcode-stdio-1.0
   hs-source-dirs: test
   main-is: Main.hs
   build-depends:
     base,
-    ghcup-gtk,
+    containers,
+    directory,
+    effectful-core,
+    filepath,
+    ghcup,
+    ghcup-gtk:core,
+    tasty,
+    tasty-hunit,
+    text,
+    vector,
+    versions,

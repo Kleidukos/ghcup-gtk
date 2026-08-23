@@ -14,5 +14,9 @@ jobs: $ncpus
 
 index-state: 2026-08-22T02:59:31Z
 
+constraints: ghcup +no-exe -tui -dhall
+
 allow-newer:
-  gi-adwaita:text
+  versions:base,
+  gi-adwaita:text,
+  monad-control:transformers-compat,
