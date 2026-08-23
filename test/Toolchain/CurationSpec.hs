@@ -3,12 +3,12 @@ module Toolchain.CurationSpec (tests) where
 import Data.Map.Strict qualified as Map
 import Data.Vector qualified as Vector
 import Data.Versions (Version)
+import GHCup.Command.List (ListResult (..))
+import GHCup.Types (Tag (..))
 import Test.Tasty
 import Test.Tasty.HUnit
 
 import Fixtures (listingsFor, mkLR)
-import GHCup.Command.List (ListResult (..))
-import GHCup.Types (Tag (..))
 import Toolchain.Curation
 import Toolchain.Types (Listings, SupportedTool (..))
 
@@ -52,8 +52,8 @@ tests =
     , testCase "empty input, empty output" $
         curate False Map.empty @?= Map.empty
     , testCase "no-bindist rows hidden unless installed, even with toggle on" $ do
-        let noBindist = (mkLR "9.14.1" [Latest] False False){lNoBindist = True}
-            installedNoBindist = (mkLR "9.8.4" [] True False){lNoBindist = True}
+        let noBindist = (mkLR "9.14.1" [Latest] False False) {lNoBindist = True}
+            installedNoBindist = (mkLR "9.8.4" [] True False) {lNoBindist = True}
         versionsOf GHC (curate True (listingsFor GHC [noBindist, installedNoBindist]))
           @?= [lVer installedNoBindist]
     ]

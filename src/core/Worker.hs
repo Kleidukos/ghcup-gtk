@@ -66,9 +66,9 @@ processJob setCurrent job = do
     Right () -> pure ()
     Left e ->
       let err = OpError "Unexpected error" (Text.pack (show e))
-       in emit $ case job of
-            Mutate mutation -> JobDone mutation (Left err)
-            RefreshListings -> ListingsFailed err
+      in emit $ case job of
+           Mutate mutation -> JobDone mutation (Left err)
+           RefreshListings -> ListingsFailed err
 
 runJob :: (Ghcup :> es, Notify :> es) => (Job -> Eff es ()) -> Job -> Eff es ()
 runJob setCurrent = \case

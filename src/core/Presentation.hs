@@ -16,6 +16,8 @@ module Presentation
   , jobTitle
   ) where
 
+import Data.Function
+import Data.Functor
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
@@ -27,8 +29,6 @@ import Data.Versions (prettyVer)
 import GHCup.Command.List (ListResult (..))
 import GHCup.Types (Tag (..), TargetVersion, TargetVersionReq (..), tVerToText)
 
-import Data.Function
-import Data.Functor
 import Toolchain.Curation (curate)
 import Toolchain.Path (FileChange (..), PathStatus (..), WriteMode (..), sourceLine)
 import Toolchain.Types
@@ -99,10 +99,10 @@ data ToolRows = ToolRows
 planRows :: Bool -> Listings -> Map SupportedTool ToolRows
 planRows showOld listings =
   let curated = curate showOld listings
-   in Map.fromList
-        [ (tool, planTool tool (Map.findWithDefault Vector.empty tool curated))
-        | tool <- Vector.toList supportedTools
-        ]
+  in Map.fromList
+       [ (tool, planTool tool (Map.findWithDefault Vector.empty tool curated))
+       | tool <- Vector.toList supportedTools
+       ]
 
 planTool :: SupportedTool -> Vector ListResult -> ToolRows
 planTool tool toolRows =
@@ -172,22 +172,22 @@ pathFixConfirmation changes =
           & Vector.filter (\c -> c.mode == FilteredAppend)
           <&> (.payload)
           & Vector.toList
-   in Confirmation
-        { heading = "Set Up Your PATH?"
-        , body =
-            Text.unlines $
-              concat
-                [ ["This will modify:", ""]
-                , [ Text.pack c.path
-                      <> (if c.mode == CreateOrReplace then " (created, PATH setup)" else "")
-                  | c <- Vector.toList changes
-                  ]
-                , ["", "Lines to be written:", ""]
-                ]
-                <> filteredChanges
-        , affirmLabel = "Apply"
-        , destructive = False
-        }
+  in Confirmation
+       { heading = "Set Up Your PATH?"
+       , body =
+           Text.unlines $
+             concat
+               [ ["This will modify:", ""]
+               , [ Text.pack c.path
+                     <> (if c.mode == CreateOrReplace then " (created, PATH setup)" else "")
+                 | c <- Vector.toList changes
+                 ]
+               , ["", "Lines to be written:", ""]
+               ]
+               <> filteredChanges
+       , affirmLabel = "Apply"
+       , destructive = False
+       }
 
 pathBanner :: GhcupDirs -> PathStatus -> Maybe BannerSpec
 pathBanner dirs = \case
@@ -228,4 +228,4 @@ pathBanner dirs = \case
     notFoundTitle = "Installed tools won't be found in your terminal"
 
 appliedBanner :: BannerSpec
-appliedBanner = BannerSpec{title = "Done — restart your terminal", action = Nothing}
+appliedBanner = BannerSpec {title = "Done — restart your terminal", action = Nothing}

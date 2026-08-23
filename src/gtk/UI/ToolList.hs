@@ -79,9 +79,9 @@ newToolPanes = do
         , #hscrollbarPolicy := Gtk.PolicyTypeNever
         ]
     pages.addNamed scrolled (Just (pageName tool))
-    pure ToolPane{tool, sidebarRow, list}
+    pure ToolPane {tool, sidebarRow, list}
 
-  pure ToolPanes{sidebar, pages, panes}
+  pure ToolPanes {sidebar, pages, panes}
 
 selectFirst :: ToolPanes -> IO ()
 selectFirst toolPanes =

@@ -71,18 +71,17 @@ activate app = do
   modelRef <- newIORef (Session.initialModel dirs config)
   worker <- Worker.new
 
-  let
-    runtime = Runtime{app, shell, registry, worker, dirs, dispatch}
-    dispatch event = do
-      model <- readIORef modelRef
-      let (model', effects) = Session.step event model
-      writeIORef modelRef model'
-      mapM_ (interpretEffect runtime) effects
+  let runtime = Runtime {app, shell, registry, worker, dirs, dispatch}
+      dispatch event = do
+        model <- readIORef modelRef
+        let (model', effects) = Session.step event model
+        writeIORef modelRef model'
+        mapM_ (interpretEffect runtime) effects
 
-    notify msg =
-      void $ GLib.idleAdd GLib.PRIORITY_DEFAULT_IDLE $ do
-        dispatch (Session.WorkerMsg msg)
-        pure False
+      notify msg =
+        void $ GLib.idleAdd GLib.PRIORITY_DEFAULT_IDLE $ do
+          dispatch (Session.WorkerMsg msg)
+          pure False
 
   Worker.start worker notify
 
@@ -175,7 +174,7 @@ buildShell app = do
   toastOverlay <- new Adw.ToastOverlay [#child := splitView]
   set window [#content := toastOverlay]
 
-  pure Shell{window, toastOverlay, stack, staleBanner, panes, pathBanner, retryButton}
+  pure Shell {window, toastOverlay, stack, staleBanner, panes, pathBanner, retryButton}
 
 navPage :: Text -> Text -> Adw.HeaderBar -> Gtk.Widget -> IO Adw.NavigationPage
 navPage title tag header content = do
@@ -214,7 +213,7 @@ interpretEffect rt = \case
       Session.Ready -> "list"
 
 callbacks :: Runtime -> Row.RowCallbacks
-callbacks rt = Row.RowCallbacks{onSubmit = rt.dispatch . Session.Submitted . Mutate}
+callbacks rt = Row.RowCallbacks {onSubmit = rt.dispatch . Session.Submitted . Mutate}
 
 runPathCheck :: Runtime -> IO ()
 runPathCheck rt = do

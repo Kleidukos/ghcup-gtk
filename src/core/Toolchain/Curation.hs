@@ -2,13 +2,13 @@ module Toolchain.Curation
   ( curate
   ) where
 
+import Data.Functor
+import Data.List qualified as List
 import Data.Ord (Down (..))
 import Data.Vector qualified as Vector
 import GHCup.Command.List (ListResult (..))
 import GHCup.Types (Tag (..))
 
-import Data.Functor
-import Data.List qualified as List
 import Toolchain.Types (Listings)
 
 curate :: Bool -> Listings -> Listings

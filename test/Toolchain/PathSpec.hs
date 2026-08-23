@@ -27,7 +27,7 @@ import Toolchain.Path
 import Toolchain.Types (GhcupDirs (..), OpError (..))
 
 xdgDirs :: GhcupDirs
-xdgDirs = GhcupDirs{ghcupBinDir = "/home/u/.local/bin", ghcupBaseDir = "/home/u/.local/share/ghcup"}
+xdgDirs = GhcupDirs {ghcupBinDir = "/home/u/.local/bin", ghcupBaseDir = "/home/u/.local/share/ghcup"}
 
 paths :: Vector FileChange -> [FilePath]
 paths = map (.path) . Vector.toList
@@ -79,26 +79,26 @@ tests =
             rc.payload
               @?= "[ -f \"/home/u/.ghcup/env\" ] && . \"/home/u/.ghcup/env\" # ghcup-env"
         , testCase "zsh honors ZDOTDIR" $ do
-            changes <- planOf env{envZdotdir = Just "/home/u/cfg"}
+            changes <- planOf env {envZdotdir = Just "/home/u/cfg"}
             paths changes @?= ["/home/u/.ghcup/env", "/home/u/cfg/.zshrc"]
         , testCase "bash targets .bashrc" $ do
-            changes <- planOf env{envShell = "/bin/bash"}
+            changes <- planOf env {envShell = "/bin/bash"}
             paths changes @?= ["/home/u/.ghcup/env", "/home/u/.bashrc"]
         , testCase ".profile appended when it exists" $ do
-            changes <- planOf env{envProfileExists = True}
+            changes <- planOf env {envProfileExists = True}
             paths changes
               @?= ["/home/u/.ghcup/env", "/home/u/.zshrc", "/home/u/.profile"]
         , testCase "fish writes config.fish, no env source line" $ do
-            changes <- planOf env{envShell = "/usr/bin/fish"}
+            changes <- planOf env {envShell = "/usr/bin/fish"}
             paths changes
               @?= ["/home/u/.ghcup/env", "/home/u/.config/fish/config.fish"]
             (_, fishRc) <- pairOf changes
             Text.isInfixOf "set -gx PATH $HOME/.cabal/bin /home/u/.ghcup/bin $PATH # ghcup-env" fishRc.payload
               @?= True
         , testCase "unknown shell: no plan" $
-            planFix env{envShell = "/bin/sh"} @?= Nothing
+            planFix env {envShell = "/bin/sh"} @?= Nothing
         , testCase "XDG dirs: all ghcup paths come from GhcupDirs, not $HOME" $ do
-            changes <- planOf env{envDirs = xdgDirs}
+            changes <- planOf env {envDirs = xdgDirs}
             paths changes
               @?= ["/home/u/.local/share/ghcup/env", "/home/u/.zshrc"]
             (_, rc) <- pairOf changes
@@ -234,4 +234,4 @@ runApply files unreadable c =
   runPureEff (runFileSystemPure Map.empty files unreadable (applyFix (Vector.singleton c)))
 
 change :: FilePath -> Text -> WriteMode -> FileChange
-change path payload mode = FileChange{path, payload, mode}
+change path payload mode = FileChange {path, payload, mode}

@@ -1,0 +1,27 @@
+name: Formatting
+
+on:
+  pull_request:
+    paths:
+      - "**.hs"
+      - .github/workflows/fourmolu.yaml
+  push:
+    branches:
+      - master
+    paths:
+      - "**.hs"
+      - .github/workflows/fourmolu.yaml
+
+jobs:
+  fourmolu-formatting:
+    runs-on:
+      - ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: haskell-actions/run-fourmolu@v11
+        with:
+          version: "0.20.0.0"
+          pattern: |
+            src/**/*.hs
+            test/**/*.hs
+            app/**/*.hs

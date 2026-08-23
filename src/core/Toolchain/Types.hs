@@ -83,7 +83,7 @@ keyOfListing tool lr = RowKey (tool, tVerToText (tvOf lr))
 keyOfMutation :: Mutation -> RowKey
 keyOfMutation mutation =
   let (tool, tv) = target mutation
-   in RowKey (tool, tVerToText tv)
+  in RowKey (tool, tVerToText tv)
   where
     target = \case
       Install tool (TargetVersionReq tv _) -> (tool, tv)

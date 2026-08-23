@@ -34,7 +34,7 @@ tests =
     , testCase "v1-style bare bool is malformed → default" $
         (parseConfig "show-old-versions true").showOldVersions @?= False
     , testCase "round-trip" $ do
-        let c = Config{showOldVersions = True}
+        let c = Config {showOldVersions = True}
         (parseConfig (renderConfig c)).showOldVersions @?= True
     , testGroup
         "load/save (pure filesystem)"
@@ -60,7 +60,7 @@ tests =
             config @?= defaultConfig
             isJust warning @? "expected a warning"
         , testCase "save-then-load round-trip" $ do
-            let c = Config{showOldVersions = True}
+            let c = Config {showOldVersions = True}
                 ((saved, (loaded, warning)), _) =
                   runFs Map.empty $ do
                     saveResult <- save c

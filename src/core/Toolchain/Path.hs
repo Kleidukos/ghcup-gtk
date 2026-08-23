@@ -96,7 +96,7 @@ envFilePath dirs = dirs.ghcupBaseDir </> "env"
 sourceLine :: GhcupDirs -> Text
 sourceLine dirs =
   let envFile = Text.pack (envFilePath dirs)
-   in "[ -f \"" <> envFile <> "\" ] && . \"" <> envFile <> "\" " <> marker
+  in "[ -f \"" <> envFile <> "\" ] && . \"" <> envFile <> "\" " <> marker
 
 planFix :: EnvSnapshot -> Maybe (Vector FileChange)
 planFix env = do
@@ -111,7 +111,7 @@ planFix env = do
     rcFor = \case
       Zsh ->
         let dir = fromMaybe env.envHome env.envZdotdir
-         in Just (FileChange (dir </> ".zshrc") (sourceLine env.envDirs) FilteredAppend)
+        in Just (FileChange (dir </> ".zshrc") (sourceLine env.envDirs) FilteredAppend)
       Bash ->
         Just (FileChange (env.envHome </> ".bashrc") (sourceLine env.envDirs) FilteredAppend)
       Fish ->
@@ -154,7 +154,7 @@ snapshotEnvironment envDirs = do
 
   envZdotdir <- mfilter (not . null) <$> lookupEnv "ZDOTDIR"
   envProfileExists <- doesFileExist (profilePath envHome)
-  pure EnvSnapshot{envShell, envPath, envHome, envZdotdir, envProfileExists, envDirs}
+  pure EnvSnapshot {envShell, envPath, envHome, envZdotdir, envProfileExists, envDirs}
 
 checkPath
   :: (FileSystem :> es)

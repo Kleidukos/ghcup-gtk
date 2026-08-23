@@ -23,7 +23,7 @@ build window = do
   widget <- new Adw.Banner [#revealed := False]
   onClick <- newIORef (pure ())
   void $ on widget #buttonClicked $ join (readIORef onClick)
-  pure Handle{window, widget, onClick}
+  pure Handle {window, widget, onClick}
 
 render :: Handle -> IO () -> Maybe BannerSpec -> IO ()
 render handle onFixConfirmed = \case
