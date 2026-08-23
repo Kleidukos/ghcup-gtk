@@ -38,6 +38,9 @@ tests =
             keyOfMutation (Install GHC (reqOf lr914)) @?= installKey
             keyOfMutation (Uninstall GHC (tvOf lr914)) @?= installKey
             keyOfMutation (SetDefault GHC (tvOf lr914)) @?= installKey
+        , testCase "rowKeyText is stable and distinguishes tool and version" $ do
+            rowKeyText installKey @?= "GHC:9.14.1"
+            rowKeyText (keyOfListing Cabal lr914) @?= "Cabal:9.14.1"
         ]
     , testGroup
         "Submitted"
