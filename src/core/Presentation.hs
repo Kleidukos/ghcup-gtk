@@ -29,7 +29,7 @@ import Data.Versions (prettyVer)
 import GHCup.Command.List (ListResult (..))
 import GHCup.Types (Tag (..), TargetVersion, TargetVersionReq (..), tVerToText)
 
-import Toolchain.Curation (curate)
+import Toolchain.Curation (CurationMode (..), curate)
 import Toolchain.Path (FileChange (..), PathStatus (..), WriteMode (..), sourceLine)
 import Toolchain.Types
 
@@ -96,9 +96,9 @@ data ToolRows = ToolRows
 -- | The full row plan. Total over 'supportedTools': a tool with nothing to
 -- show still gets an entry (empty rows, blank subtitle), so a rebuild
 -- clears its pane and subtitle.
-planRows :: Bool -> Listings -> Map SupportedTool ToolRows
-planRows showOld listings =
-  let curated = curate showOld listings
+planRows :: CurationMode -> Listings -> Map SupportedTool ToolRows
+planRows mode listings =
+  let curated = curate mode listings
   in Map.fromList
        [ (tool, planTool tool (Map.findWithDefault Vector.empty tool curated))
        | tool <- Vector.toList supportedTools
