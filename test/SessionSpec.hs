@@ -4,7 +4,16 @@ import Data.Set qualified as Set
 import Test.Tasty
 import Test.Tasty.HUnit
 
-import Config (Config (..), ConfigUpdate (..), defaultConfig)
+import Config
+  ( Config (..)
+  , ConfigUpdate (..)
+  , SortColumn (ByReleased)
+  , SortDirection (Ascending)
+  , TableFilters (..)
+  , TableSort (..)
+  , ViewMode (Advanced)
+  , defaultConfig
+  )
 import Fixtures (anError, dirs, installJob, installMutation, listingsFor, lr914, sampleChanges)
 import Presentation.Path (appliedBanner, pathBanner)
 import Presentation.Row (planRows)
@@ -135,7 +144,7 @@ tests =
                 (model, effects) = step RetryClicked offline
             effects @?= [SwitchPage Loading, Enqueue RefreshListings]
             model.phase @?= Loading
-        , testCase "config change saves and rerenders with the new flag" $ do
+        , testCase "show-old-versions saves and rerenders with the new flag" $ do
             let (ready, _) = step (WorkerMsg (ListingsReady sampleListings False)) model0
                 newConfig = defaultConfig {showOldVersions = True}
                 (model, effects) = step (ConfigChanged (SetShowOldVersions True)) ready
@@ -148,6 +157,48 @@ tests =
                     , ConfigChanged (SetShowOldVersions False)
                     ]
             model.config @?= defaultConfig
+        , testCase "advanced interface: save, then switch renderer with the Full plan" $ do
+            let (ready, _) = step (WorkerMsg (ListingsReady sampleListings False)) model0
+                newConfig = defaultConfig {advancedInterface = True}
+                (model, effects) = step (ConfigChanged (SetAdvancedInterface True)) ready
+            effects
+              @?= [ SaveConfig newConfig
+                  , SwitchRenderer Advanced (planRows Full sampleListings)
+                  ]
+            model.config @?= newConfig
+        , testCase "show-old-versions while advanced still saves, and the plan is unchanged" $ do
+            let advanced = model0 {config = defaultConfig {advancedInterface = True}}
+                (ready, _) = step (WorkerMsg (ListingsReady sampleListings False)) advanced
+                (_, effects) = step (ConfigChanged (SetShowOldVersions True)) ready
+            effects
+              @?= [ SaveConfig (defaultConfig {advancedInterface = True, showOldVersions = True})
+                  , Rerender (planRows Full sampleListings)
+                  ]
+        , testCase "table sort and filters save and fan out to every table" $ do
+            let (ready, _) = step (WorkerMsg (ListingsReady sampleListings False)) model0
+                sort = TableSort ByReleased Ascending
+                (model, effects) = step (ConfigChanged (SetTableSort sort)) ready
+            effects
+              @?= [ SaveConfig defaultConfig {tableSort = sort}
+                  , SetTableState sort defaultConfig.tableFilters
+                  ]
+            model.config.tableSort @?= sort
+            let filters = TableFilters True False
+                (_, filterEffects) = step (ConfigChanged (SetTableFilters filters)) ready
+            filterEffects
+              @?= [ SaveConfig defaultConfig {tableFilters = filters}
+                  , SetTableState defaultConfig.tableSort filters
+                  ]
+        , testCase "table state never re-plans: GTK has already applied it" $ do
+            let (ready, _) = step (WorkerMsg (ListingsReady sampleListings False)) model0
+                (_, effects) =
+                  step (ConfigChanged (SetTableFilters (TableFilters True True))) ready
+            filter isRerender effects @?= []
+        , testCase "an echoed config update emits nothing, which is what stops the sort-save-apply-sort loop" $ do
+            let (ready, _) = step (WorkerMsg (ListingsReady sampleListings False)) model0
+            snd (step (ConfigChanged (SetTableSort defaultConfig.tableSort)) ready) @?= []
+            snd (step (ConfigChanged (SetShowOldVersions False)) ready) @?= []
+            snd (step (ConfigChanged (SetAdvancedInterface False)) ready) @?= []
         ]
     , testGroup
         "PATH fix"
@@ -197,4 +248,7 @@ tests =
       _ -> False
     isPathBanner = \case
       SetPathBanner _ -> True
+      _ -> False
+    isRerender = \case
+      Rerender _ -> True
       _ -> False

@@ -205,6 +205,8 @@ interpretEffect rt = \case
     rt.dispatch (Session.PathFixDone result)
   Session.SetPathBanner spec ->
     PathBanner.render rt.shell.pathBanner (rt.dispatch Session.PathFixConfirmed) spec
+  Session.SetViewMode _ -> pure ()
+  Session.SetTableState _ _ -> pure ()
   where
     pageOf :: Session.Phase -> Text
     pageOf = \case
