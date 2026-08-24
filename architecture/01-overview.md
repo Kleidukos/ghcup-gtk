@@ -2,21 +2,31 @@
 
 ## What the application does
 
-ghcup-gtk is a graphical installer for the Haskell toolchain.
-It is a desktop frontend for the `ghcup` library. It:
+Graphical frontend for the `ghcup` library:
 
-- lists available and installed versions of tools (GHC, Cabal, HLS, and Stack, etc);
-- installs and uninstalls versions, and sets the default version;
-- warns the user when installed tools won't be found in their terminal (the
-  ghcup bin directory is not on `PATH`) and offers to fix it;
-- works offline by falling back to cached metadata.
+- lists available and installed versions of GHC, Cabal, HLS, Stack, etc;
+- installs, uninstalls, sets defaults;
+- warns when the ghcup bin directory is not on `PATH` and offers to fix it;
+- works offline via cached metadata.
 
 ## Deciding, Operating, Rendering
 
 | Layer | Purpose |
 |---|---|
-| Decisions | Pure functions. No `IO` in the logic. This is where behavior lives, and it is what the test suite covers. |
-| Operations | `IO` that touches the network, the filesystem, and the ghcup library. Slow and fallible. |
-| Rendering | GTK widget construction and signal wiring. Deliberately dumb: it renders what it is told and forwards clicks as events. |
+| Decisions | Pure functions, no `IO`. All behavior; all test coverage. |
+| Operations | `IO`: network, filesystem, ghcup library. Slow and fallible. |
+| Rendering | GTK widgets and signal wiring. Dumb: renders what it is told, forwards clicks as events. |
 
-The point of the split is that everything interesting enough to get wrong is a pure function.
+Everything interesting enough to get wrong is a pure function.
+
+## Directory layout
+
+- `src/core`: GTK-free library (`Session`, `Config`, `Presentation.*`,
+  `Toolchain.*`, `Effects.*`, `Worker`). Test suite builds against this.
+  Must never import a `gi-*` module.
+- `src/gtk`: rendering layer, linked against `src/core`.
+- `src/gtk/UI/View*`: the two renderers (`UI.View.List`, `UI.View.Table`)
+  behind the single `View` record in `UI.View`.
+- `src/gtk/UI/Shell.hs`: widget construction only, no model or callbacks.
+- `src/gtk/UI.hs`: builds the shell, feeds events to the state
+  machine, interprets the resulting effects.

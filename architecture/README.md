@@ -1,40 +1,31 @@
 # Architecture
 
-These documents describe how ghcup-gtk is put together.
-
-1. [Overview](01-overview.md): What the application is, the layers, the
-   directory layout.
-2. [The core loop](02-core-loop.md): How state, events, and effects flow
-   through the application.
-3. [Concurrency](03-concurrency.md): The GTK main thread, the worker
-   thread, and how they talk to each other.
-4. [Talking to ghcup](04-ghcup-integration.md): How the `Toolchain` layer
-   wraps the `ghcup` library.
-5. [PATH management](05-path-management.md): How the app detects and fixes
-   a missing `PATH` entry for installed tools.
-6. [Testing](06-testing.md): What is tested automatically, what needs
-   manual QA.
+1. [Overview](01-overview.md): layers, directory layout.
+2. [The core loop](02-core-loop.md): state, events, effects.
+3. [Concurrency](03-concurrency.md): GTK main thread vs worker thread.
+4. [Talking to ghcup](04-ghcup-integration.md): the `Toolchain` layer over the `ghcup` library.
+5. [PATH management](05-path-management.md): detecting and fixing a missing `PATH` entry.
+6. [Two renderers](06-two-renderers.md): simple list and advanced table behind one `View`.
 
 ## Overview
 
-ghcup-gtk is a GTK4/libadwaita desktop frontend for [ghcup](https://www.haskell.org/ghcup/),
-the Haskell toolchain manager. It shows the available versions of GHC, Cabal,
-HLS, and Stack, and lets the user install, uninstall, and set defaults with a
-click. All decisions live in a pure state machine (`Session.step`); all slow
-ghcup operations run on a single background worker thread; the GTK code is a
-thin shell that renders state and forwards clicks.
+ghcup-gtk is a GTK4/libadwaita frontend for [ghcup](https://www.haskell.org/ghcup/),
+the Haskell toolchain manager: list, install, uninstall, and set default
+versions of GHC, Cabal, HLS, and Stack. All decisions live in a pure state
+machine; all slow ghcup operations run on one background worker thread; the
+GTK code renders state and forwards clicks.
 
 ```
    user clicks                    GTK main thread
         │                               │
         ▼                               │
   ┌───────────┐   Event   ┌─────────────────────────┐
-  │  UI (GTK) │ ────────► │  Session.step (pure)    │
+  │  UI (GTK) │ ────────► │  pure state machine     │
   │  widgets  │ ◄──────── │  (Model, Event)         │
   └───────────┘  Effects  │    → (Model, [Effect])  │
         ▲                 └─────────────────────────┘
         │ WorkerMsg                     │ Enqueue effect
-        │ (via GLib.idleAdd)            ▼
+        │ (via GLib idle)               ▼
   ┌─────┴─────────────────────────────────────┐
   │  Worker thread (one job at a time)        │
   │  runs ghcup operations: list, install,    │

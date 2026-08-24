@@ -13,17 +13,22 @@ module Toolchain.Types
   , RowKey
   , keyOfListing
   , keyOfMutation
+  , rowKeyText
   , Progress (..)
+  , progressOf
   , OpError (..)
   , UiMsg (..)
   ) where
 
 import Data.Map.Strict (Map)
+import Data.Maybe (listToMaybe)
 import Data.Text (Text)
+import Data.Text qualified as Text
 import Data.Vector (Vector)
 import Data.Vector qualified as Vector
 import GHCup.Command.List (ListResult (..))
 import GHCup.Types (TargetVersion (..), TargetVersionReq (..), Tool, cabal, ghc, hls, stack, tVerToText)
+import Text.Read (readMaybe)
 
 data SupportedTool = GHC | Cabal | HLS | Stack
   deriving stock (Eq, Ord, Show, Enum, Bounded)
@@ -90,10 +95,33 @@ keyOfMutation mutation =
       Uninstall tool tv -> (tool, tv)
       SetDefault tool tv -> (tool, tv)
 
-newtype Progress = Progress
+-- | Stable text encoding of a 'RowKey', for widget models that can only hold
+-- strings
+rowKeyText :: RowKey -> Text
+rowKeyText (RowKey (tool, ver)) = Text.pack (show tool) <> ":" <> ver
+
+data Progress = Progress
   { phase :: Text
+  , fraction :: Maybe Double
+  -- ^ Set when the log line carried a percentage, so renderers can show a
+  -- determinate bar instead of pulsing
   }
   deriving stock (Eq, Show)
+
+-- | Progress from a raw ghcup log line, reading a "NN%" token if one appears.
+progressOf :: Text -> Progress
+progressOf line = Progress (Text.strip line) (fractionOf line)
+
+fractionOf :: Text -> Maybe Double
+fractionOf line =
+  listToMaybe
+    [ percent / 100
+    | word <- reverse (Text.words line)
+    , Just number <- [Text.stripSuffix "%" word]
+    , Just percent <- [readMaybe (Text.unpack number)]
+    , percent >= 0
+    , percent <= 100
+    ]
 
 data OpError = OpError
   { title :: Text

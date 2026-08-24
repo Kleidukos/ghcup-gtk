@@ -29,7 +29,7 @@ style: ## Run the code styler (stylish-haskell)
 dist: build ## Assemble release tarball
 	@rm -rf dist-tarball && mkdir -p dist-tarball/ghcup-gtk
 	@cp $$(cabal list-bin ghcup-gtk) dist-tarball/ghcup-gtk/ghcup-gtk
-	@cp data/org.haskell.GhcupGtk.desktop data/install.sh dist-tarball/ghcup-gtk/
+	@cp data/org.haskell.GhcupGtk.desktop data/org.haskell.GhcupGtk.svg data/install.sh dist-tarball/ghcup-gtk/
 	@chmod +x dist-tarball/ghcup-gtk/install.sh
 	@tar czf ghcup-gtk-$$(git describe --tags --always).tar.gz -C dist-tarball ghcup-gtk
 	@echo "Wrote ghcup-gtk-$$(git describe --tags --always).tar.gz"

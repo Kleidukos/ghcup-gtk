@@ -53,7 +53,7 @@ throttledProgress line = do
   when (now - before >= 0.1) $ do
     put now
     job <- get @Job
-    emit (JobProgress job (Progress (Text.strip line)))
+    emit (JobProgress job (progressOf line))
 
 processJob
   :: (Ghcup :> es, Notify :> es)
