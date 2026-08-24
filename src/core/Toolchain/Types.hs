@@ -26,9 +26,9 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Vector (Vector)
 import Data.Vector qualified as Vector
-import Text.Read (readMaybe)
 import GHCup.Command.List (ListResult (..))
 import GHCup.Types (TargetVersion (..), TargetVersionReq (..), Tool, cabal, ghc, hls, stack, tVerToText)
+import Text.Read (readMaybe)
 
 data SupportedTool = GHC | Cabal | HLS | Stack
   deriving stock (Eq, Ord, Show, Enum, Bounded)
