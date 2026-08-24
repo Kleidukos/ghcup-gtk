@@ -64,10 +64,11 @@ tests =
               ]
         length (versionsOf GHC (curate Full (listingsFor GHC rows))) @?= 3
     , testCase "Full still hides uninstalled rows with no bindist" $ do
-        let noBindist = (mkLR "9.12.1" [] False False) {lNoBindist = True}
-            rows = [mkLR "9.14.1" [Latest] False False, noBindist]
+        let latest = mkLR "9.14.1" [Latest] False False
+            noBindist = (mkLR "9.12.1" [] False False) {lNoBindist = True}
+            rows = [latest, noBindist]
         versionsOf GHC (curate Full (listingsFor GHC rows))
-          @?= [lVer (head rows)]
+          @?= [lVer latest]
     , testGroup
         "version families"
         [ testCase "familyKey is (cross, major, minor)" $
@@ -78,13 +79,14 @@ tests =
         , testCase "a non-numeric version has no family" $
             familyKey (mkLR "head" [] False False) @?= Nothing
         , testCase "latestPerFamily keeps the newest of each family" $ do
-            let rows =
-                  [ mkLR "9.12.2" [] False False
+            let newestMinor = mkLR "9.12.2" [] False False
+                rows =
+                  [ newestMinor
                   , mkLR "9.12.1" [] False False
                   , mkLR "9.10.1" [] False False
                   ]
                 newest = latestPerFamily (Vector.fromList rows)
-            Map.lookup (Nothing, 9, 12) newest @?= Just (lVer (head rows))
+            Map.lookup (Nothing, 9, 12) newest @?= Just (lVer newestMinor)
             Map.lookup (Nothing, 9, 10) newest @?= Just (lVer (rows !! 2))
         , testCase "latestPerFamily does not depend on input order" $ do
             let rows = [mkLR "9.12.1" [] False False, mkLR "9.12.2" [] False False]

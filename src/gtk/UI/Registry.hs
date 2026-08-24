@@ -1,12 +1,12 @@
 module UI.Registry
   ( Registry
+  , applyTableState
   , build
   , rebuild
   , setBusy
   , setIdle
   , setSensitive
   , setViewMode
-  , applyTableState
   ) where
 
 import Control.Monad (forM, forM_, when)
@@ -113,7 +113,7 @@ setBusy registry key progress = do
 setIdle :: Registry -> RowKey -> IO ()
 setIdle registry key = do
   modifyIORef' registry.busyRef (Map.delete key)
-  withVisibleViews registry $ \view -> view.setIdle key
+  withAllViews registry $ \view -> view.setIdle key
 
 setSensitive :: Registry -> Bool -> IO ()
 setSensitive registry b = do
