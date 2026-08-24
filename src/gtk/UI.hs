@@ -176,7 +176,7 @@ installActions app shell modelRef dispatch = do
   app.addAction shortcutsAction
 
   quitAction <- Gio.simpleActionNew "quit" Nothing
-  on quitAction #activate $ \_ -> app.quit
+  on quitAction #activate $ const app.quit
   app.addAction quitAction
 
   aboutAction <- Gio.simpleActionNew "about" Nothing
