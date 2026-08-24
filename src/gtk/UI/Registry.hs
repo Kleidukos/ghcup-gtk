@@ -94,9 +94,6 @@ rebuild registry callbacks plan = do
         view.setRows callbacks toolRows
   writeIORef registry.planRef plan
 
--- | Interpret 'Session.SwitchRenderer': tear down the old renderers, build
--- the new mode's, and draw the carried plan into them. The plan carries
--- progress stamps, so a switch mid-mutation shows its spinners immediately.
 switchTo
   :: Registry
   -> RowCallbacks

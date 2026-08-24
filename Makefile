@@ -1,9 +1,6 @@
 run: ## Start the application
 	@cabal run
 
-install: ## Install the application
-	@./data/install.sh
-
 deps: ## Install the dependencies
 	@cabal build --only-dependencies
 
