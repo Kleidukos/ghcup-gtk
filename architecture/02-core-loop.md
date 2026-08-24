@@ -2,7 +2,7 @@
 
 We use an Elm-style architecture: a single pure function receives the
 current state and an event, and returns the new state plus a list of effects
-to perform. The GTK code does not application state directly.
+to perform. The GTK code does not hold application state directly.
 
 ## The four pieces
 
@@ -72,5 +72,7 @@ by comparing effect lists.
    toast. Then it handles `ListingsReady`: re-renders the lists and
    re-enables them.
 
-On failure, step 5 instead re-renders the old listings (so the row shows its
-true state again) and emits an `ErrorToast` carrying the real error text.
+On failure, step 5 instead restores the row's true state with the preceding
+`SetIdle` (the accompanying re-render is a no-op: listings did not change,
+so Registry's diff gate skips it) and emits an `ErrorToast` carrying the
+real error text.

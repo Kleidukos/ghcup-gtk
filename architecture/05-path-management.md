@@ -21,10 +21,10 @@ The ghcup bin directory is already on `PATH`. No banner.
 The fix has been applied and the current session predates it.
 Banner is "Restart your terminal".
 
-### `NeedsFix (Just plan)`
+### `NeedsFixPlanned`
 Not on `PATH`, no marker, and we recognize the user's shell (bash, zsh, or fish).
 Banner with a **Fix…** button.
 
-### `NeedsFix Nothing`
+### `NeedsFixManual`
 Same, but the shell is unknown. We won't guess which file to edit, so the banner shows manual instructions instead: the exact line to add, for the user to place themselves.
 
