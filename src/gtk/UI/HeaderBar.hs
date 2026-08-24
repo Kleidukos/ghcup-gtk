@@ -10,7 +10,8 @@ genHeaderbar = do
   headerBar <- Adw.headerBarNew
   menu <- Gio.menuNew
   Gio.menuAppend menu (Just "Preferences") (Just "app.preferences")
-  Gio.menuAppend menu (Just "About ghcup-gtk") (Just "app.about")
+  Gio.menuAppend menu (Just "Keyboard Shortcuts") (Just "app.shortcuts")
+  Gio.menuAppend menu (Just "About Haskell Toolchain Manager") (Just "app.about")
   menuButton <-
     new
       Gtk.MenuButton

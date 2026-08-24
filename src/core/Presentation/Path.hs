@@ -22,7 +22,6 @@ import Toolchain.Types (GhcupDirs)
 data BannerSpec = BannerSpec
   { title :: Text
   , action :: Maybe BannerAction
-  -- ^ 'Nothing' is a plain hint with no button.
   }
   deriving stock (Eq, Show)
 

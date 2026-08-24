@@ -74,6 +74,7 @@ library core
     mtl,
     pretty,
     resourcet,
+    scientific,
     stm,
     text ^>=2.1,
     time,
@@ -101,6 +102,8 @@ library
     UI.View.List.Row
     UI.View.Table
 
+  other-modules: Paths_ghcup_gtk
+  autogen-modules: Paths_ghcup_gtk
   build-depends:
     base,
     containers,
@@ -109,7 +112,6 @@ library
     ghcup,
     ghcup-gtk:core,
     gi-adwaita ^>=1.0,
-    gi-gdk4 ^>=4.0,
     gi-gio ^>=2.0,
     gi-glib ^>=2.0,
     gi-gobject ^>=2.0,

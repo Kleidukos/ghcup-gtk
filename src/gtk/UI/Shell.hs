@@ -8,6 +8,7 @@ import Data.Text (Text)
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
+import Config (Config (..))
 import UI.HeaderBar
 import UI.PathBanner qualified as PathBanner
 import UI.ToolPanes qualified as ToolPanes
@@ -23,14 +24,14 @@ data Shell = Shell
   }
 
 -- | Widget construction only: no model, no worker, no callbacks.
-build :: Adw.Application -> IO Shell
-build app = do
+build :: Adw.Application -> Config -> IO Shell
+build app config = do
   window <-
     new
       Adw.ApplicationWindow
       [ #application := app
-      , #defaultWidth := 760
-      , #defaultHeight := 560
+      , #defaultWidth := fromIntegral config.windowWidth
+      , #defaultHeight := fromIntegral config.windowHeight
       , #title := "Haskell Toolchain Manager"
       ]
 

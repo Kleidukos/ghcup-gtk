@@ -158,6 +158,7 @@ apply event model = case event of
             ]
           SetTableSort _ -> [tableState model']
           SetTableFilters _ -> [tableState model']
+          SetWindowSize _ _ -> []
     in if echoesCurrentConfig
          then (model, [])
          else (model', SaveConfig model'.config : redraw)

@@ -7,6 +7,7 @@ import Data.GI.Base
 import Data.IORef
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Data.Version (showVersion)
 import Data.Word (Word32)
 import Effectful (runEff)
 import GI.Adw qualified as Adw
@@ -18,6 +19,7 @@ import System.IO (hPutStrLn, stderr)
 
 import Config qualified
 import Effects.FileSystem (runFileSystemIO)
+import Paths_ghcup_gtk qualified as Paths
 import Session qualified
 import Toolchain.GHCup qualified as GHCup
 import Toolchain.Path (applyFix, checkPath)
@@ -56,9 +58,9 @@ data Runtime = Runtime
 
 activate :: Adw.Application -> IO ()
 activate app = do
-  shell <- Shell.build app
   dirs <- GHCup.ghcupDirs
   (config, configWarning) <- runEff (runFileSystemIO Config.load)
+  shell <- Shell.build app config
   modelRef <- newIORef (Session.initialModel dirs config)
   worker <- Worker.new
 
@@ -87,6 +89,12 @@ activate app = do
 
   installActions app shell modelRef dispatch
   on shell.retryButton #clicked $ dispatch Session.RetryClicked
+  on shell.window #closeRequest $ do
+    (width, height) <- shell.window.getDefaultSize
+    dispatch $
+      Session.ConfigChanged $
+        Config.SetWindowSize (fromIntegral width) (fromIntegral height)
+    pure False
 
   Worker.enqueue worker RefreshListings
   runPathCheck runtime
@@ -160,20 +168,32 @@ installActions app shell modelRef dispatch = do
   prefsAction <- Gio.simpleActionNew "preferences" Nothing
   on prefsAction #activate $ \_ -> do
     model <- readIORef modelRef
-    PreferencesWindow.present shell.window model.config (dispatch . Session.ConfigChanged)
+    Preferences.present shell.window model.config (dispatch . Session.ConfigChanged)
   app.addAction prefsAction
+
+  shortcutsAction <- Gio.simpleActionNew "shortcuts" Nothing
+  on shortcutsAction #activate $ \_ -> Shortcuts.present shell.window
+  app.addAction shortcutsAction
+
+  quitAction <- Gio.simpleActionNew "quit" Nothing
+  on quitAction #activate $ \_ -> app.quit
+  app.addAction quitAction
 
   aboutAction <- Gio.simpleActionNew "about" Nothing
   on aboutAction #activate $ \_ -> do
     about <-
       new
         Adw.AboutDialog
-        [ #applicationName := "ghcup-gtk"
-        , #version := "0.1.0.0"
+        [ #applicationName := "Haskell Toolchain Manager"
+        , #version := Text.pack (showVersion Paths.version)
         , #developerName := "Hécate Moonlight"
         , #comments := "A GTK4 frontend for the ghcup toolchain manager"
         , #website := "https://www.haskell.org/ghcup/"
-        , #licenseType := Gtk.LicenseGpl30Only
+        , #licenseType := Gtk.LicenseBsd3
         ]
     about.present (Just shell.window)
   app.addAction aboutAction
+
+  app.setAccelsForAction "app.preferences" ["<Control>comma"]
+  app.setAccelsForAction "app.shortcuts" ["<Control>question"]
+  app.setAccelsForAction "app.quit" ["<Control>q"]
