@@ -5,6 +5,7 @@ module UI.View.List.Row
 
 import Control.Monad (forM_, when)
 import Data.GI.Base
+import Data.Maybe (isJust, isNothing)
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 import GI.Pango qualified as Pango
@@ -16,8 +17,6 @@ import UI.View (RowCallbacks (..), dimCaption, pillLabel)
 
 data RowHandle = RowHandle
   { row :: Adw.ActionRow
-  , setBusy :: Progress -> IO ()
-  , setIdle :: IO ()
   , defaultCheck :: Maybe Gtk.CheckButton
   }
 
@@ -52,13 +51,13 @@ build window spec callbacks = do
     new
       Gtk.Label
       [ #valign := Gtk.AlignCenter
-      , #visible := False
+      , #visible := isJust spec.progress
       , #maxWidthChars := 30
       , #ellipsize := Pango.EllipsizeModeEnd
       ]
   dimCaption phaseLabel
   progressBar <-
-    new Gtk.ProgressBar [#valign := Gtk.AlignCenter, #visible := False]
+    new Gtk.ProgressBar [#valign := Gtk.AlignCenter, #visible := isJust spec.progress]
   row.addSuffix phaseLabel
   row.addSuffix progressBar
 
@@ -67,21 +66,19 @@ build window spec callbacks = do
       Gtk.Button
       [ #label := spec.action.label
       , #valign := Gtk.AlignCenter
+      , #visible := isNothing spec.progress
       ]
   on actionButton #clicked $
     Dialog.confirm window spec.action.confirmation $ \confirmed ->
       when confirmed $ callbacks.onSubmit spec.action.job
   row.addSuffix actionButton
 
-  let setBusy progress = do
-        actionButton.setVisible False
-        progressBar.setVisible True
-        phaseLabel.setVisible True
-        phaseLabel.setLabel progress.phase
-        progressBar.pulse
-      setIdle = do
-        progressBar.setVisible False
-        phaseLabel.setVisible False
-        actionButton.setVisible True
+  -- With a known fraction the bar is determinate; otherwise each redraw
+  -- pulses once, the worker's progress ticks being the animation.
+  forM_ spec.progress $ \progress -> do
+    phaseLabel.setLabel progress.phase
+    case progress.fraction of
+      Just fraction -> progressBar.setFraction fraction
+      Nothing -> progressBar.pulse
 
-  pure RowHandle {row, setBusy, setIdle, defaultCheck}
+  pure RowHandle {row, defaultCheck}

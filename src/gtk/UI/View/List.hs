@@ -2,8 +2,6 @@ module UI.View.List (build) where
 
 import Control.Monad (forM, forM_)
 import Data.GI.Base
-import Data.IORef
-import Data.Map.Strict qualified as Map
 import Data.Vector qualified as Vector
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
@@ -39,7 +37,6 @@ build window = do
       , #hscrollbarPolicy := Gtk.PolicyTypeNever
       ]
   widget <- Gtk.toWidget scrolled
-  handlesRef <- newIORef Map.empty
 
   let setRows callbacks toolRows = do
         listBox.removeAll
@@ -51,14 +48,7 @@ build window = do
         case Vector.uncons (Vector.mapMaybe ((.defaultCheck) . snd) handles) of
           Just (anchor, rest) -> forM_ rest $ \check -> check.setGroup (Just anchor)
           Nothing -> pure ()
-        writeIORef handlesRef (Map.fromList (Vector.toList handles))
 
-      withHandle key act = do
-        handles <- readIORef handlesRef
-        forM_ (Map.lookup key handles) act
-
-      setBusy key progress = withHandle key $ \handle -> handle.setBusy progress
-      setIdle key = withHandle key (.setIdle)
       setSensitive b = set listBox [#sensitive := b]
 
-  pure View {widget, setRows, setBusy, setIdle, setSensitive}
+  pure View {widget, setRows, setSensitive}

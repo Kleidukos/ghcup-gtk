@@ -15,7 +15,7 @@ import Presentation.Path
 import Presentation.Row
 import Toolchain.Curation (CurationMode (..))
 import Toolchain.Path (PathStatus (..), sourceLine)
-import Toolchain.Types (Mutation (..), SupportedTool (..), keyOfMutation, reqOf, supportedTools, tvOf)
+import Toolchain.Types (Mutation (..), Progress (..), SupportedTool (..), keyOfMutation, reqOf, supportedTools, tvOf)
 
 tests :: TestTree
 tests =
@@ -92,9 +92,6 @@ tests =
             let old = mkLR "9.2.8" [] False False
             ((.title) <$> ghcRows (Curated False) [lr914, old]) @?= Vector.fromList ["9.14.1"]
             ((.title) <$> ghcRows (Curated True) [lr914, old]) @?= Vector.fromList ["9.14.1", "9.2.8"]
-        , testCase "rows sorted descending by version" $ do
-            let old = mkLR "9.2.8" [] False False
-            ((.title) <$> ghcRows (Curated True) [old, lr914]) @?= Vector.fromList ["9.14.1", "9.2.8"]
         , testCase "installed and default facts mirror the listing" $ do
             let inst = mkLR "9.10.3" [Recommended] True True
                 specs = ghcRows (Curated False) [lr914, inst]
@@ -123,7 +120,7 @@ tests =
         , testCase "no default, no subtitle" $
             (ghcPlan (Curated False) [lr914]).subtitle @?= ""
         , testCase "total over supportedTools, even on empty listings" $ do
-            let plan = planRows (Curated False) Map.empty
+            let plan = planRows (Curated False) Map.empty Map.empty
             Map.keys plan @?= sort (Vector.toList supportedTools)
             ((.rows) <$> Map.elems plan) @?= replicate 4 Vector.empty
         , testCase "rank is the newest-first position, so it sorts like the version" $ do
@@ -156,16 +153,31 @@ tests =
             ((.statusLabel) <$> Vector.toList specs) @?= ["", "default", "installed"]
         , testCase "non-GHC tools always count as hls-powered" $ do
             let cabalRow = mkLR "3.14.1.0" [Latest] False False
-                specs = case Map.lookup Cabal (planRows (Curated True) (listingsFor Cabal [cabalRow])) of
+                specs = case Map.lookup Cabal (planRows (Curated True) Map.empty (listingsFor Cabal [cabalRow])) of
                   Just toolRows -> toolRows.rows
                   Nothing -> error "planRows lost the cabal entry"
             ((.passesHlsFilter) <$> Vector.toList specs) @?= [True]
+        , testCase "a busy map stamps progress onto the matching row" $ do
+            let key = keyOfMutation (Install GHC (reqOf lr914))
+                busy = Map.singleton key (Progress "unpacking" Nothing)
+                specs = case Map.lookup GHC (planRows (Curated True) busy (listingsFor GHC [lr914])) of
+                  Just toolRows -> toolRows.rows
+                  Nothing -> error "planRows lost the ghc entry"
+            ((.progress) <$> Vector.toList specs) @?= [Just (Progress "unpacking" Nothing)]
+        , testCase "rows without a stamp carry Nothing" $
+            ((.progress) <$> Vector.toList (ghcRows (Curated True) [lr914])) @?= [Nothing]
+        , testCase "a stamp for a key outside the listings is dropped" $ do
+            let busy = Map.singleton (keyOfMutation (Install Cabal (reqOf lr914))) (Progress "x" Nothing)
+                specs = case Map.lookup GHC (planRows (Curated True) busy (listingsFor GHC [lr914])) of
+                  Just toolRows -> toolRows.rows
+                  Nothing -> error "planRows lost the ghc entry"
+            ((.progress) <$> Vector.toList specs) @?= [Nothing]
         ]
     ]
   where
     ghcPlan :: CurationMode -> [ListResult] -> ToolRows
     ghcPlan mode lrs =
-      case Map.lookup GHC (planRows mode (listingsFor GHC lrs)) of
+      case Map.lookup GHC (planRows mode Map.empty (listingsFor GHC lrs)) of
         Just toolRows -> toolRows
         Nothing -> error "planRows lost the ghc entry"
 

@@ -9,8 +9,7 @@ module Session
   ) where
 
 import Data.Map.Strict (Map)
-import Data.Set (Set)
-import Data.Set qualified as Set
+import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Vector (Vector)
 
@@ -24,7 +23,7 @@ import Toolchain.Types
   , Job (..)
   , Listings
   , OpError
-  , Progress
+  , Progress (Progress)
   , RowKey
   , SupportedTool
   , UiMsg (..)
@@ -49,8 +48,8 @@ data Model = Model
   -- ^ User preferences
   , phase :: Phase
   -- ^ Top-level page currently being shown
-  , inFlight :: Set RowKey
-  -- ^ Mutations still running
+  , inFlight :: Map RowKey Progress
+  -- ^ Mutations still running, with the latest progress report of each
   , ghcupDirs :: GhcupDirs
   -- ^ ghcup's directories
   , pathModel :: PathModel
@@ -84,11 +83,9 @@ data Effect
   | RevealStaleBanner Bool
   | Toast Text
   | ErrorToast OpError
-  | SetBusy RowKey Progress
-  | SetIdle RowKey
   | Rerender (Map SupportedTool ToolRows)
   | SaveConfig Config
-  | SwitchRenderer ViewMode (Map SupportedTool ToolRows)
+  | SwitchRenderer ViewMode (Map SupportedTool ToolRows) TableSort TableFilters
   | SetTableState TableSort TableFilters
   | CheckPath
   | ApplyPathFix (Vector FileChange)
@@ -101,7 +98,7 @@ initialModel ghcupDirs config =
     { listings = mempty
     , config
     , phase = Loading
-    , inFlight = Set.empty
+    , inFlight = Map.empty
     , ghcupDirs
     , pathModel = Unchecked
     }
@@ -114,7 +111,7 @@ bannerFor model = case model.pathModel of
 
 -- | The row plan for the model's current listings and preferences.
 rowPlan :: Model -> Map SupportedTool ToolRows
-rowPlan model = planRows (curationMode model.config) model.listings
+rowPlan model = planRows (curationMode model.config) model.inFlight model.listings
 
 rerender :: Model -> Effect
 rerender model = Rerender (rowPlan model)
@@ -131,19 +128,19 @@ step :: Event -> Model -> (Model, [Effect])
 step event model =
   let (model', effects) = apply event model
       sensitivity =
-        [ SetSensitive (Set.null model'.inFlight)
-        | Set.null model'.inFlight /= Set.null model.inFlight
+        [ SetSensitive (Map.null model'.inFlight)
+        | Map.null model'.inFlight /= Map.null model.inFlight
         ]
   in (model', effects <> sensitivity)
 
 apply :: Event -> Model -> (Model, [Effect])
 apply event model = case event of
-  Submitted job@(Mutate mutation)
-    | key <- keyOfMutation mutation
-    , not (Set.member key model.inFlight) ->
-        ( model {inFlight = Set.insert key model.inFlight}
-        , [Hold, Enqueue job]
-        )
+  Submitted (Mutate mutation)
+    | Map.member (keyOfMutation mutation) model.inFlight -> (model, [])
+  Submitted job@(Mutate mutation) ->
+    let key = keyOfMutation mutation
+        model' = model {inFlight = Map.insert key (Progress "" Nothing) model.inFlight}
+    in (model', [Hold, Enqueue job, rerender model'])
   Submitted job -> (model, [Enqueue job])
   RetryClicked ->
     (model {phase = Loading}, [SwitchPage Loading, Enqueue RefreshListings])
@@ -152,7 +149,13 @@ apply event model = case event of
         echoesCurrentConfig = model'.config == model.config
         redraw = case update of
           SetShowOldVersions _ -> [rerender model']
-          SetAdvancedInterface _ -> [SwitchRenderer (viewMode model'.config) (rowPlan model')]
+          SetAdvancedInterface _ ->
+            [ SwitchRenderer
+                (viewMode model'.config)
+                (rowPlan model')
+                model'.config.tableSort
+                model'.config.tableFilters
+            ]
           SetTableSort _ -> [tableState model']
           SetTableFilters _ -> [tableState model']
     in if echoesCurrentConfig
@@ -184,18 +187,19 @@ apply event model = case event of
         , [RevealStaleBanner True, ErrorToast err]
         )
       _ -> (model {phase = Offline}, [SwitchPage Offline])
-    JobProgress job progress ->
-      (model, [SetBusy (keyOfMutation mutation) progress | Mutate mutation <- [job]])
+    JobProgress (Mutate mutation) progress
+      | key <- keyOfMutation mutation
+      , Map.member key model.inFlight ->
+          let model' = model {inFlight = Map.insert key progress model.inFlight}
+          in (model', [rerender model'])
+    JobProgress _ _ -> (model, [])
     JobDone mutation result ->
       let key = keyOfMutation mutation
           (model', release)
-            | Set.member key model.inFlight =
-                (model {inFlight = Set.delete key model.inFlight}, [Release])
+            | Map.member key model.inFlight =
+                (model {inFlight = Map.delete key model.inFlight}, [Release])
             | otherwise = (model, [])
           outcome = case result of
             Right () -> [Toast (jobTitle mutation), CheckPath]
-            Left err ->
-              [ rerender model'
-              , ErrorToast err
-              ]
-      in (model', release <> (SetIdle key : outcome))
+            Left err -> [ErrorToast err]
+      in (model', release <> (rerender model' : outcome))
