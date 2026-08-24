@@ -9,6 +9,7 @@ module Presentation.Row
   , removeConfirmation
   ) where
 
+import Data.List qualified as List
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
@@ -16,7 +17,7 @@ import Data.Text (Text)
 import Data.Time.Calendar (Day)
 import Data.Vector (Vector)
 import Data.Vector qualified as Vector
-import Data.Versions (Version, prettyVer)
+import Data.Versions (PVP, Version, prettyPVP, prettyVer)
 import GHCup.Command.List (ListResult (..))
 import GHCup.Types (Tag (..), TargetVersion, TargetVersionReq (..), tVerToText)
 
@@ -86,7 +87,7 @@ rowSpec :: Map RowKey Progress -> SupportedTool -> Map FamilyKey Version -> Int 
 rowSpec busy tool newest rank lr =
   RowSpec
     { key
-    , title = prettyVer (lVer lr)
+    , title
     , pills = mapMaybe pillLabel (lTag lr)
     , installed = lInstalled lr
     , isDefault = lSet lr
@@ -104,6 +105,22 @@ rowSpec busy tool newest rank lr =
     }
   where
     key = keyOfListing tool lr
+    basePVP =
+      case getBaseVersion lr.lTag of
+        Nothing -> ""
+        Just pvp -> " / base-" <> prettyPVP pvp
+    title =
+      case tool of
+        GHC -> prettyVer lr.lVer <> basePVP
+        _ -> prettyVer (lVer lr)
+
+getBaseVersion :: [Tag] -> Maybe PVP
+getBaseVersion tags = List.foldl' go Nothing tags
+  where
+    go :: Maybe PVP -> Tag -> Maybe PVP
+    go Nothing (Base b) = Just b
+    go Nothing _ = Nothing
+    go (Just b) _ = Just b
 
 passesHlsFilter :: SupportedTool -> ListResult -> Bool
 passesHlsFilter tool lr = tool /= GHC || hlsPowered lr
