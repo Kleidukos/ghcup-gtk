@@ -20,3 +20,15 @@ It is a desktop frontend for the `ghcup` library. It:
 | Rendering | GTK widget construction and signal wiring. Deliberately dumb: it renders what it is told and forwards clicks as events. |
 
 The point of the split is that everything interesting enough to get wrong is a pure function.
+
+## Directory layout
+
+- `src/core`: the GTK-free library (`Session`, `Config`, `Presentation.*`,
+  `Toolchain.*`, `Effects.*`, `Worker`). This is what the test suite builds
+  against, and it must never import a `gi-*` module.
+- `src/gtk`: the rendering layer, linked against `src/core`.
+- `src/gtk/UI/View*`: the two renderers (`UI.View.List`, `UI.View.Table`)
+  behind the single `View` record in `UI.View`.
+- `src/gtk/UI/Shell.hs`: widget construction only, no model or callbacks.
+- `src/gtk/UI.hs`: wiring — builds the shell, dispatches events into
+  `Session.step`, and interprets the resulting effects.

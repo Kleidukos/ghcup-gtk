@@ -63,6 +63,12 @@ filters and sorts before rendering:
   user enabled "show older versions" in the preferences);
 - sort newest first.
 
-Curation runs when `Session.step` plans the rows (`Presentation.planRows`,
-shipped to the UI in the `Rerender` effect), not at fetch time: the Model
-always holds the full listings, so toggling the preference re-renders instantly
+Curation runs when `Session.step` plans the rows (`Presentation.Row.planRows`,
+shipped to the UI in the `Rerender` effect, or in `SwitchRenderer` — the only
+carrier of a plan on an interface toggle), not at fetch time: the Model
+always holds the full listings, so toggling the preference re-renders instantly.
+
+The advanced interface curates with `Full` instead: every installable
+version is planned, the "show older versions" preference does not apply,
+and narrowing the list is left to the table's own filters in the widget
+layer.

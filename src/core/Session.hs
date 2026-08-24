@@ -112,6 +112,10 @@ bannerFor model = case model.pathModel of
   Checked status -> pathBanner model.ghcupDirs status
   FixApplied -> Just appliedBanner
 
+-- | The row plan for the model's current listings and preferences.
+rowPlan :: Model -> Map SupportedTool ToolRows
+rowPlan model = planRows (curationMode model.config) model.listings
+
 rerender :: Model -> Effect
 rerender model = Rerender (rowPlan model)
 

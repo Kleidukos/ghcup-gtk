@@ -12,8 +12,8 @@ These documents describe how ghcup-gtk is put together.
    wraps the `ghcup` library.
 5. [PATH management](05-path-management.md): How the app detects and fixes
    a missing `PATH` entry for installed tools.
-6. [Testing](06-testing.md): What is tested automatically, what needs
-   manual QA.
+6. [Two renderers](06-two-renderers.md): The simple list and the advanced
+   table behind one `View` seam.
 
 ## Overview
 

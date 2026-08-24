@@ -1,7 +1,7 @@
 # PATH management
 
 All logic lives in `src/core/Toolchain/Path.hs`, user-facing text
-in `Presentation`, and the widget in `UI.PathBanner`.
+in `Presentation.Path`, and the widget in `UI.PathBanner`.
 
 The flow itself runs through the core loop: `PathChecked`,
 `PathFixConfirmed`, and `PathFixDone` events drive `Session.step`, which
