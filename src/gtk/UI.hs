@@ -24,12 +24,12 @@ import Toolchain.Path (applyFix, checkPath)
 import Toolchain.Types
 import UI.Dialog qualified as Dialog
 import UI.PathBanner qualified as PathBanner
-import UI.PreferencesWindow qualified as PreferencesWindow
-import UI.Row qualified as Row
-import UI.RowRegistry qualified as RowRegistry
+import UI.Preferences qualified as Preferences
+import UI.Registry qualified as Registry
 import UI.Shell (Shell (..))
 import UI.Shell qualified as Shell
-import UI.ToolList qualified as ToolList
+import UI.Shortcuts qualified as Shortcuts
+import UI.View (RowCallbacks (..))
 import Worker qualified
 
 main :: IO ()
@@ -47,7 +47,7 @@ main = do
 data Runtime = Runtime
   { app :: Adw.Application
   , shell :: Shell
-  , registry :: RowRegistry.Registry
+  , registry :: Registry.Registry
   , worker :: Worker.Handle
   , dirs :: GhcupDirs
   , dispatch :: Session.Event -> IO ()
@@ -56,9 +56,9 @@ data Runtime = Runtime
 activate :: Adw.Application -> IO ()
 activate app = do
   shell <- Shell.build app
-  registry <- RowRegistry.new shell.window shell.panes
   dirs <- GHCup.ghcupDirs
   (config, configWarning) <- runEff (runFileSystemIO Config.load)
+  registry <- Registry.build shell.window shell.panes config
   modelRef <- newIORef (Session.initialModel dirs config)
   worker <- Worker.new
 
@@ -90,14 +90,14 @@ interpretEffect rt = \case
   Session.Enqueue job -> Worker.enqueue rt.worker job
   Session.Hold -> rt.app.hold
   Session.Release -> rt.app.release
-  Session.SetSensitive b -> ToolList.setSensitive rt.shell.panes b
+  Session.SetSensitive b -> Registry.setSensitive rt.registry b
   Session.SwitchPage phase -> rt.shell.stack.setVisibleChildName (pageOf phase)
   Session.RevealStaleBanner b -> rt.shell.staleBanner.setRevealed b
   Session.Toast title -> showToast rt.shell title 3
   Session.ErrorToast err -> showErrorToast rt.shell err
-  Session.SetBusy key progress -> RowRegistry.setBusy rt.registry key progress
-  Session.SetIdle key -> RowRegistry.setIdle rt.registry key
-  Session.Rerender plan -> RowRegistry.rebuild rt.registry (callbacks rt) plan
+  Session.SetBusy key progress -> Registry.setBusy rt.registry key progress
+  Session.SetIdle key -> Registry.setIdle rt.registry key
+  Session.Rerender plan -> Registry.rebuild rt.registry (callbacks rt) plan
   Session.SaveConfig newConfig ->
     runEff (runFileSystemIO (Config.save newConfig)) >>= \case
       Left e -> hPutStrLn stderr ("ghcup-gtk: could not save config: " <> Text.unpack e)
@@ -117,8 +117,8 @@ interpretEffect rt = \case
       Session.Offline -> "offline"
       Session.Ready -> "list"
 
-callbacks :: Runtime -> Row.RowCallbacks
-callbacks rt = Row.RowCallbacks {onSubmit = rt.dispatch . Session.Submitted . Mutate}
+callbacks :: Runtime -> RowCallbacks
+callbacks rt = RowCallbacks {onSubmit = rt.dispatch . Session.Submitted . Mutate}
 
 runPathCheck :: Runtime -> IO ()
 runPathCheck rt = do

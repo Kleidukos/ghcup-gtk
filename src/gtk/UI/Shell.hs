@@ -10,14 +10,14 @@ import GI.Gtk qualified as Gtk
 
 import UI.HeaderBar
 import UI.PathBanner qualified as PathBanner
-import UI.ToolList qualified as ToolList
+import UI.ToolPanes qualified as ToolPanes
 
 data Shell = Shell
   { window :: Adw.ApplicationWindow
   , toastOverlay :: Adw.ToastOverlay
   , stack :: Gtk.Stack
   , staleBanner :: Adw.Banner
-  , panes :: ToolList.ToolPanes
+  , panes :: ToolPanes.ToolPanes
   , pathBanner :: PathBanner.Handle
   , retryButton :: Gtk.Button
   }
@@ -53,7 +53,7 @@ build app = do
   retryButton.addCssClass "suggested-action"
   offlinePage.setChild (Just retryButton)
 
-  panes <- ToolList.newToolPanes
+  panes <- ToolPanes.build
 
   stack <- new Gtk.Stack []
   stack.addNamed loadingSpinner (Just "loading")
@@ -94,10 +94,10 @@ build app = do
   breakpoint.addSetter splitView "collapsed" (Just collapsed)
   window.addBreakpoint breakpoint
 
-  ToolList.onToolSelected panes $ \tool -> do
-    set contentPage [#title := ToolList.displayName tool]
+  ToolPanes.onToolSelected panes $ \tool -> do
+    set contentPage [#title := ToolPanes.displayName tool]
     splitView.setShowContent True
-  ToolList.selectFirst panes
+  ToolPanes.selectFirst panes
 
   toastOverlay <- new Adw.ToastOverlay [#child := splitView]
   set window [#content := toastOverlay]

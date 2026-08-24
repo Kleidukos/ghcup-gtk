@@ -91,11 +91,14 @@ library
     UI.Dialog
     UI.HeaderBar
     UI.PathBanner
-    UI.PreferencesWindow
-    UI.Row
-    UI.RowRegistry
+    UI.Preferences
+    UI.Registry
     UI.Shell
-    UI.ToolList
+    UI.Shortcuts
+    UI.ToolPanes
+    UI.View
+    UI.View.List
+    UI.View.List.Row
 
   build-depends:
     base,
