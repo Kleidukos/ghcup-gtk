@@ -42,9 +42,6 @@ common options
 
   default-language: GHC2024
 
--- Application logic, GTK-free: effects, toolchain operations, view models.
--- Must never depend on gi-* packages; the test suite builds against this
--- component alone.
 library core
   import: options
   hs-source-dirs: src/core
@@ -82,7 +79,6 @@ library core
     vector,
     versions,
 
--- Rendering layer: the only component allowed to import gi-*.
 library
   import: options
   hs-source-dirs: src/gtk
@@ -112,6 +108,7 @@ library
     ghcup,
     ghcup-gtk:core,
     gi-adwaita ^>=1.0,
+    gi-gdk4,
     gi-gio ^>=2.0,
     gi-glib ^>=2.0,
     gi-gobject ^>=2.0,

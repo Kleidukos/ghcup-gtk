@@ -5,13 +5,15 @@ module UI (main) where
 import Control.Monad (forM_, void)
 import Data.GI.Base
 import Data.IORef
+import Data.Int
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Version (showVersion)
 import Data.Word (Word32)
-import Effectful (runEff)
+import Effectful
 import GI.Adw qualified as Adw
 import GI.GLib qualified as GLib
+import GI.Gdk qualified as Gdk
 import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
 import System.Environment (getArgs, getProgName)
@@ -42,10 +44,25 @@ main = do
       Adw.Application
       [ #applicationId := "org.haskell.GhcupGtk"
       , On #activate (activate ?self)
+      , On #startup loadCSS
       ]
   args <- getArgs
   progName <- getProgName
   void (app.run $ Just $ progName : args)
+
+loadCSS :: (MonadIO m) => m ()
+loadCSS = do
+  display <-
+    Gdk.displayGetDefault
+      >>= \case
+        Nothing -> error "Could not find Display!"
+        Just d -> pure d
+  cssProvider <- Gtk.cssProviderNew
+  Gtk.cssProviderLoadFromPath cssProvider "data/style.css"
+  Gtk.styleContextAddProviderForDisplay
+    display
+    cssProvider
+    (fromIntegral @Int32 @Word32 Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
 data Runtime = Runtime
   { app :: Adw.Application
