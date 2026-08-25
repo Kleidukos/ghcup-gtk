@@ -271,7 +271,7 @@ textCell :: (RowSpec -> Text) -> RowSpec -> IO Gtk.Widget
 textCell render spec = new Gtk.Label [#label := render spec, #xalign := 0] >>= Gtk.toWidget
 
 dayText :: RowSpec -> Text
-dayText spec = maybe "—" (Text.pack . show) spec.releaseDay
+dayText spec = maybe "–" (Text.pack . show) spec.releaseDay
 
 actionsCell
   :: Adw.ApplicationWindow
