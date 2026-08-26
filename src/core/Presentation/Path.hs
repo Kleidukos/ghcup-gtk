@@ -106,4 +106,4 @@ pathBanner dirs = \case
     notFoundTitle = "Installed tools won't be found in your terminal"
 
 appliedBanner :: BannerSpec
-appliedBanner = BannerSpec {title = "Done — restart your terminal", action = Nothing}
+appliedBanner = BannerSpec {title = "Done – restart your terminal", action = Nothing}

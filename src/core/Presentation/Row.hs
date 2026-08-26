@@ -88,7 +88,7 @@ rowSpec busy tool newest rank lr =
   RowSpec
     { key
     , title
-    , pills = mapMaybe pillLabel (lTag lr)
+    , pills = mkListResultLabels lr
     , installed = lInstalled lr
     , isDefault = lSet lr
     , action =
@@ -131,8 +131,14 @@ statusLabelOf lr
   | lInstalled lr = "installed"
   | otherwise = ""
 
-pillLabel :: Tag -> Maybe Text
-pillLabel = \case
+mkListResultLabels :: ListResult -> [Text]
+mkListResultLabels lr =
+  let tagLabels = mapMaybe mkTagLabel lr.lTag
+      hlsPoweredLabel = ["hls-powered" | lr.hlsPowered]
+  in tagLabels <> hlsPoweredLabel
+
+mkTagLabel :: Tag -> Maybe Text
+mkTagLabel = \case
   Recommended -> Just "recommended"
   Latest -> Just "latest"
   _ -> Nothing
