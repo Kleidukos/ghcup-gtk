@@ -12,10 +12,10 @@ module Presentation.Row
 
 import Data.List qualified as List
 import Data.Map.Strict (Map)
-import Data.Text.Display
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
+import Data.Text.Display
 import Data.Time.Calendar (Day)
 import Data.Vector (Vector)
 import Data.Vector qualified as Vector

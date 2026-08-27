@@ -9,12 +9,12 @@ import Data.GI.Base
 import Data.IORef
 import Data.Int (Int32)
 import Data.Map.Strict (Map)
-import Data.Text.Display
 import Data.Map.Strict qualified as Map
 import Data.Maybe (isJust, isNothing)
 import Data.Ord (Down (..))
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Data.Text.Display
 import Data.Vector qualified as Vector
 import Foreign.Ptr (Ptr, castPtr)
 import GI.Adw qualified as Adw
