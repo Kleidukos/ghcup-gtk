@@ -4,6 +4,7 @@ module UI.View.List.Row
   ) where
 
 import Control.Monad (forM_, when)
+import Data.Text.Display
 import Data.GI.Base
 import Data.Maybe (isJust, isNothing)
 import GI.Adw qualified as Adw
@@ -24,8 +25,8 @@ build :: Adw.ApplicationWindow -> RowSpec -> RowCallbacks -> IO RowHandle
 build window spec callbacks = do
   row <- new Adw.ActionRow [#title := spec.title]
 
-  forM_ spec.pills $ \text -> do
-    pill <- pillLabel text
+  forM_ spec.pills $ \p -> do
+    pill <- pillLabel (display p)
     row.addSuffix pill
 
   defaultCheck <-
