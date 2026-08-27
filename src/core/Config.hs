@@ -3,7 +3,7 @@ module Config
   , ConfigUpdate (..)
   , SortColumn (..)
   , SortDirection (..)
-  , TableFilters (..)
+  , Filters (..)
   , TableSort (..)
   , ViewMode (..)
   , applyUpdate
@@ -42,7 +42,7 @@ data TableSort = TableSort
   }
   deriving stock (Eq, Show)
 
-data TableFilters = TableFilters
+data Filters = Filters
   { hlsPoweredOnly :: Bool
   , latestPatchOnly :: Bool
   }
@@ -52,10 +52,10 @@ data ViewMode = Simple | Advanced
   deriving stock (Eq, Ord, Show)
 
 data Config = Config
-  { showOldVersions :: Bool
-  , advancedInterface :: Bool
+  { advancedInterface :: Bool
   , tableSort :: TableSort
-  , tableFilters :: TableFilters
+  , tableFilters :: Filters
+  , listFilters :: Filters
   , windowWidth :: Int
   , windowHeight :: Int
   }
@@ -64,10 +64,10 @@ data Config = Config
 defaultConfig :: Config
 defaultConfig =
   Config
-    { showOldVersions = False
-    , advancedInterface = False
+    { advancedInterface = False
     , tableSort = TableSort ByVersion Descending
-    , tableFilters = TableFilters False False
+    , tableFilters = Filters False True
+    , listFilters = Filters False True
     , windowWidth = 760
     , windowHeight = 560
     }
@@ -79,19 +79,19 @@ viewMode config
 
 -- | A preference change, or a table-state change worth remembering.
 data ConfigUpdate
-  = SetShowOldVersions Bool
-  | SetAdvancedInterface Bool
+  = SetAdvancedInterface Bool
   | SetTableSort TableSort
-  | SetTableFilters TableFilters
+  | SetTableFilters Filters
+  | SetListFilters Filters
   | SetWindowSize Int Int
   deriving stock (Eq, Show)
 
 applyUpdate :: ConfigUpdate -> Config -> Config
 applyUpdate update config = case update of
-  SetShowOldVersions b -> config {showOldVersions = b}
   SetAdvancedInterface b -> config {advancedInterface = b}
   SetTableSort sort -> config {tableSort = sort}
   SetTableFilters filters -> config {tableFilters = filters}
+  SetListFilters filters -> config {listFilters = filters}
   SetWindowSize width height -> config {windowWidth = width, windowHeight = height}
 
 parseConfigEither :: Text -> Either Text Config
@@ -99,8 +99,7 @@ parseConfigEither input = configOf <$> KDL.parse input
   where
     configOf doc =
       Config
-        { showOldVersions = bool "show-old-versions" defaultConfig.showOldVersions doc
-        , advancedInterface = bool "advanced-interface" defaultConfig.advancedInterface doc
+        { advancedInterface = bool "advanced-interface" defaultConfig.advancedInterface doc
         , tableSort =
             TableSort
               { column = fromMaybe defaultConfig.tableSort.column (sortColumn doc)
@@ -109,16 +108,19 @@ parseConfigEither input = configOf <$> KDL.parse input
                     then Descending
                     else Ascending
               }
-        , tableFilters =
-            TableFilters
-              { hlsPoweredOnly = bool "filter-hls-powered" defaultConfig.tableFilters.hlsPoweredOnly doc
-              , latestPatchOnly = bool "filter-latest-patch" defaultConfig.tableFilters.latestPatchOnly doc
-              }
+        , tableFilters = filtersOf "filter-hls-powered" "filter-latest-patch" defaultConfig.tableFilters doc
+        , listFilters = filtersOf "list-filter-hls-powered" "list-filter-latest-patch" defaultConfig.listFilters doc
         , windowWidth = int "window-width" defaultConfig.windowWidth doc
         , windowHeight = int "window-height" defaultConfig.windowHeight doc
         }
 
     sortColumn doc = sortColumnFromName =<< stringArg "table-sort-column" doc
+
+    filtersOf hlsKey latestKey fallback doc =
+      Filters
+        { hlsPoweredOnly = bool hlsKey fallback.hlsPoweredOnly doc
+        , latestPatchOnly = bool latestKey fallback.latestPatchOnly doc
+        }
 
     bool name fallback doc = fromMaybe fallback (boolArg name doc)
 
@@ -146,15 +148,17 @@ renderConfig config =
   KDL.render
     KDL.NodeList
       { nodes =
-          [ boolNode "show-old-versions" config.showOldVersions
-          , boolNode "advanced-interface" config.advancedInterface
+          [ boolNode "advanced-interface" config.advancedInterface
           , stringNode "table-sort-column" (sortColumnName config.tableSort.column)
           , boolNode "table-sort-descending" (config.tableSort.direction == Descending)
-          , boolNode "filter-hls-powered" config.tableFilters.hlsPoweredOnly
-          , boolNode "filter-latest-patch" config.tableFilters.latestPatchOnly
-          , intNode "window-width" config.windowWidth
-          , intNode "window-height" config.windowHeight
           ]
+            -- The table keys keep their unprefixed legacy names so existing
+            -- config files stay valid; only the list keys carry a prefix.
+            <> filterNodes "filter-hls-powered" "filter-latest-patch" config.tableFilters
+            <> filterNodes "list-filter-hls-powered" "list-filter-latest-patch" config.listFilters
+            <> [ intNode "window-width" config.windowWidth
+               , intNode "window-height" config.windowHeight
+               ]
       , ext = KDL.def
       }
 
@@ -170,6 +174,12 @@ sortColumnFromName = \case
   "released" -> Just ByReleased
   "status" -> Just ByStatus
   _ -> Nothing
+
+filterNodes :: Text -> Text -> Filters -> [KDL.Node]
+filterNodes hlsKey latestKey filters =
+  [ boolNode hlsKey filters.hlsPoweredOnly
+  , boolNode latestKey filters.latestPatchOnly
+  ]
 
 boolNode :: Text -> Bool -> KDL.Node
 boolNode name value = node name (KDL.Bool value)

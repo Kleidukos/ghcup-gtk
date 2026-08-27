@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ImplicitParams #-}
 
-module UI (main) where
+module UI (startUI) where
 
 import Control.Monad (forM_, void)
 import Data.GI.Base
@@ -38,11 +38,12 @@ import UI.Shell (Shell (..))
 import UI.Shell qualified as Shell
 import UI.Shortcuts qualified as Shortcuts
 import UI.View (RowCallbacks (..))
+import UI.View.List qualified as ListView
 import UI.View.Table qualified as TableView
 import Worker qualified
 
-main :: IO ()
-main = do
+startUI :: IO ()
+startUI = do
   app <-
     new
       Adw.Application
@@ -93,9 +94,14 @@ activate app = do
   worker <- Worker.new
 
   dispatchRef <- newIORef (\_ -> pure ())
+  let dispatchLater event = readIORef dispatchRef >>= ($ event)
   registry <-
-    Registry.build shell.window shell.panes config $
-      tableCallbacks (\event -> readIORef dispatchRef >>= ($ event))
+    Registry.build
+      shell.window
+      shell.panes
+      config
+      (tableCallbacks dispatchLater)
+      (listCallbacks dispatchLater)
 
   let runtime = Runtime {app, shell, registry, worker, dirs, dispatch}
       dispatch event = do
@@ -149,9 +155,10 @@ interpretEffect rt = \case
     rt.dispatch (Session.PathFixDone result)
   Session.SetPathBanner spec ->
     PathBanner.render rt.shell.pathBanner (rt.dispatch Session.PathFixConfirmed) spec
-  Session.SwitchRenderer mode plan sort filters ->
-    Registry.switchTo rt.registry (callbacks rt) mode plan sort filters
+  Session.SwitchRenderer plan config ->
+    Registry.switchTo rt.registry (callbacks rt) plan config
   Session.SetTableState sort filters -> Registry.applyTableState rt.registry sort filters
+  Session.SetListState filters -> Registry.applyListState rt.registry filters
   where
     pageOf :: Session.Phase -> Text
     pageOf = \case
@@ -167,6 +174,12 @@ tableCallbacks dispatch =
   TableView.TableCallbacks
     { onSortChanged = dispatch . Session.ConfigChanged . Config.SetTableSort
     , onFiltersChanged = dispatch . Session.ConfigChanged . Config.SetTableFilters
+    }
+
+listCallbacks :: (Session.Event -> IO ()) -> ListView.ListCallbacks
+listCallbacks dispatch =
+  ListView.ListCallbacks
+    { onFiltersChanged = dispatch . Session.ConfigChanged . Config.SetListFilters
     }
 
 runPathCheck :: Runtime -> IO ()

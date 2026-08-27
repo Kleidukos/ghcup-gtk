@@ -7,18 +7,16 @@ import Test.Tasty.HUnit
 import Config
   ( Config (..)
   , ConfigUpdate (..)
+  , Filters (..)
   , SortColumn (ByReleased)
   , SortDirection (Ascending)
-  , TableFilters (..)
   , TableSort (..)
-  , ViewMode (Advanced)
   , defaultConfig
   )
 import Fixtures (anError, dirs, installJob, installMutation, listingsFor, lr914, sampleChanges)
 import Presentation.Path (appliedBanner, pathBanner)
 import Presentation.Row (planRows)
 import Session
-import Toolchain.Curation (CurationMode (..))
 import Toolchain.Path (PathStatus (..))
 import Toolchain.Types
 
@@ -59,7 +57,7 @@ tests =
             effects
               @?= [ Hold
                   , Enqueue installJob
-                  , Rerender (planRows (Curated False) (Map.singleton installKey (Progress "" Nothing)) mempty)
+                  , Rerender (planRows (Map.singleton installKey (Progress "" Nothing)) mempty)
                   , SetSensitive False
                   ]
             model.inFlight @?= Map.singleton installKey (Progress "" Nothing)
@@ -77,7 +75,7 @@ tests =
         [ testCase "ready: rerender, banner, list page" $ do
             let (model, effects) = step (WorkerMsg (ListingsReady sampleListings False)) model0
             effects
-              @?= [ Rerender (planRows (Curated False) Map.empty sampleListings)
+              @?= [ Rerender (planRows Map.empty sampleListings)
                   , RevealStaleBanner False
                   , SwitchPage Ready
                   ]
@@ -107,7 +105,7 @@ tests =
                 (model, effects) = step (WorkerMsg (JobProgress installJob (Progress "unpacking" Nothing))) held
             model.inFlight @?= Map.singleton installKey (Progress "unpacking" Nothing)
             effects
-              @?= [Rerender (planRows (Curated False) (Map.singleton installKey (Progress "unpacking" Nothing)) mempty)]
+              @?= [Rerender (planRows (Map.singleton installKey (Progress "unpacking" Nothing)) mempty)]
         , testCase "progress for an untracked job is ignored" $
             step (WorkerMsg (JobProgress installJob (Progress "unpacking" Nothing))) model0
               @?= (model0, [])
@@ -119,7 +117,7 @@ tests =
                 (model, effects) = step (WorkerMsg (JobDone installMutation (Right ()))) held
             effects
               @?= [ Release
-                  , Rerender (planRows (Curated False) Map.empty mempty)
+                  , Rerender (planRows Map.empty mempty)
                   , Toast "GHC 9.14.1 installed"
                   , CheckPath
                   , SetSensitive True
@@ -131,7 +129,7 @@ tests =
                 (model, effects) = step (WorkerMsg (JobDone installMutation (Left anError))) held
             effects
               @?= [ Release
-                  , Rerender (planRows (Curated False) Map.empty sampleListings)
+                  , Rerender (planRows Map.empty sampleListings)
                   , ErrorToast anError
                   , SetSensitive True
                   ]
@@ -144,33 +142,24 @@ tests =
                 (model, effects) = step RetryClicked offline
             effects @?= [SwitchPage Loading, Enqueue RefreshListings]
             model.phase @?= Loading
-        , testCase "show-old-versions saves and rerenders with the new flag" $ do
-            let (ready, _) = step (WorkerMsg (ListingsReady sampleListings False)) model0
-                newConfig = defaultConfig {showOldVersions = True}
-                (model, effects) = step (ConfigChanged (SetShowOldVersions True)) ready
-            effects @?= [SaveConfig newConfig, Rerender (planRows (Curated True) Map.empty sampleListings)]
-            model.config @?= newConfig
-        , testCase "advanced interface: save, then switch renderer with the Full plan" $ do
+        , testCase "advanced interface: save, then switch renderer with the plan and new config" $ do
             let (ready, _) = step (WorkerMsg (ListingsReady sampleListings False)) model0
                 newConfig = defaultConfig {advancedInterface = True}
                 (model, effects) = step (ConfigChanged (SetAdvancedInterface True)) ready
             effects
               @?= [ SaveConfig newConfig
-                  , SwitchRenderer
-                      Advanced
-                      (planRows Full Map.empty sampleListings)
-                      defaultConfig.tableSort
-                      defaultConfig.tableFilters
+                  , SwitchRenderer (planRows Map.empty sampleListings) newConfig
                   ]
             model.config @?= newConfig
-        , testCase "show-old-versions while advanced still saves, and the plan is unchanged" $ do
-            let advanced = model0 {config = defaultConfig {advancedInterface = True}}
-                (ready, _) = step (WorkerMsg (ListingsReady sampleListings False)) advanced
-                (_, effects) = step (ConfigChanged (SetShowOldVersions True)) ready
+        , testCase "list filters save and fan out to every list" $ do
+            let (ready, _) = step (WorkerMsg (ListingsReady sampleListings False)) model0
+                filters = Filters True False
+                (model, effects) = step (ConfigChanged (SetListFilters filters)) ready
             effects
-              @?= [ SaveConfig (defaultConfig {advancedInterface = True, showOldVersions = True})
-                  , Rerender (planRows Full Map.empty sampleListings)
+              @?= [ SaveConfig defaultConfig {listFilters = filters}
+                  , SetListState filters
                   ]
+            model.config.listFilters @?= filters
         , testCase "table sort and filters save and fan out to every table" $ do
             let (ready, _) = step (WorkerMsg (ListingsReady sampleListings False)) model0
                 sort = TableSort ByReleased Ascending
@@ -180,21 +169,24 @@ tests =
                   , SetTableState sort defaultConfig.tableFilters
                   ]
             model.config.tableSort @?= sort
-            let filters = TableFilters True False
+            let filters = Filters True False
                 (_, filterEffects) = step (ConfigChanged (SetTableFilters filters)) ready
             filterEffects
               @?= [ SaveConfig defaultConfig {tableFilters = filters}
                   , SetTableState defaultConfig.tableSort filters
                   ]
-        , testCase "table state never re-plans: GTK has already applied it" $ do
+        , testCase "table and list state never re-plan: GTK has already applied them" $ do
             let (ready, _) = step (WorkerMsg (ListingsReady sampleListings False)) model0
                 (_, effects) =
-                  step (ConfigChanged (SetTableFilters (TableFilters True True))) ready
+                  step (ConfigChanged (SetTableFilters (Filters True True))) ready
+                (_, listEffects) =
+                  step (ConfigChanged (SetListFilters (Filters True True))) ready
             filter isRerender effects @?= []
+            filter isRerender listEffects @?= []
         , testCase "an echoed config update emits nothing, which is what stops the sort-save-apply-sort loop" $ do
             let (ready, _) = step (WorkerMsg (ListingsReady sampleListings False)) model0
             snd (step (ConfigChanged (SetTableSort defaultConfig.tableSort)) ready) @?= []
-            snd (step (ConfigChanged (SetShowOldVersions False)) ready) @?= []
+            snd (step (ConfigChanged (SetListFilters defaultConfig.listFilters)) ready) @?= []
             snd (step (ConfigChanged (SetAdvancedInterface False)) ready) @?= []
         ]
     , testGroup

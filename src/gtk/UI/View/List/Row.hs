@@ -14,7 +14,7 @@ import GI.Pango qualified as Pango
 import Presentation.Row (RowAction (..), RowSpec (..))
 import Toolchain.Types (Progress (..))
 import UI.Dialog qualified as Dialog
-import UI.View (RowCallbacks (..), dimCaption, pillLabel)
+import UI.View (RowCallbacks (..), captionLabel, pillLabel)
 
 data RowHandle = RowHandle
   { row :: Adw.ActionRow
@@ -56,7 +56,7 @@ build window spec callbacks = do
       , #maxWidthChars := 30
       , #ellipsize := Pango.EllipsizeModeEnd
       ]
-  dimCaption phaseLabel
+  captionLabel phaseLabel
   progressBar <-
     new Gtk.ProgressBar [#valign := Gtk.AlignCenter, #visible := isJust spec.progress]
   row.addSuffix phaseLabel

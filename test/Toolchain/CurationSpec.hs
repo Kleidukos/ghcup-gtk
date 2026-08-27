@@ -20,27 +20,19 @@ tests :: TestTree
 tests =
   testGroup
     "Curation"
-    [ testCase "keeps recommended, latest, installed; hides the rest" $ do
-        let rows =
-              [ mkLR "9.10.2" [Recommended] False False
-              , mkLR "9.14.1" [Latest] False False
-              , mkLR "9.8.4" [] True True
-              , mkLR "8.10.7" [] False False
-              ]
-        versionsOf GHC (curate (Curated False) (listingsFor GHC rows))
-          @?= map lVer [rows !! 1, head rows, rows !! 2]
-    , testCase "toggle reveals everything" $ do
+    [ testCase "keeps every installable row" $ do
         let rows =
               [ mkLR "9.14.1" [Latest] False False
+              , mkLR "9.12.1" [] False False
               , mkLR "8.10.7" [] False False
               ]
-        length (versionsOf GHC (curate (Curated True) (listingsFor GHC rows))) @?= 2
+        length (versionsOf GHC (curate (listingsFor GHC rows))) @?= 3
     , testCase "sorts descending by version" $ do
         let rows =
               [ mkLR "3.10.3.0" [] True False
               , mkLR "3.14.1.0" [Latest] False False
               ]
-        versionsOf Cabal (curate (Curated False) (listingsFor Cabal rows))
+        versionsOf Cabal (curate (listingsFor Cabal rows))
           @?= map lVer [rows !! 1, head rows]
     , testCase "tools stay separate" $ do
         let listings =
@@ -48,27 +40,14 @@ tests =
                 [ (GHC, Vector.fromList [mkLR "9.14.1" [Latest] False False])
                 , (Cabal, Vector.fromList [mkLR "3.14.1.0" [Latest] False False])
                 ]
-        Map.keys (curate (Curated False) listings) @?= Map.keys listings
+        Map.keys (curate listings) @?= Map.keys listings
     , testCase "empty input, empty output" $
-        curate (Curated False) Map.empty @?= Map.empty
-    , testCase "no-bindist rows hidden unless installed, even with toggle on" $ do
+        curate Map.empty @?= Map.empty
+    , testCase "no-bindist rows hidden unless installed" $ do
         let noBindist = (mkLR "9.14.1" [Latest] False False) {lNoBindist = True}
             installedNoBindist = (mkLR "9.8.4" [] True False) {lNoBindist = True}
-        versionsOf GHC (curate (Curated True) (listingsFor GHC [noBindist, installedNoBindist]))
+        versionsOf GHC (curate (listingsFor GHC [noBindist, installedNoBindist]))
           @?= [lVer installedNoBindist]
-    , testCase "Full keeps installable rows the curated mode hides" $ do
-        let rows =
-              [ mkLR "9.14.1" [Latest] False False
-              , mkLR "9.12.1" [] False False
-              , mkLR "8.10.7" [] False False
-              ]
-        length (versionsOf GHC (curate Full (listingsFor GHC rows))) @?= 3
-    , testCase "Full still hides uninstalled rows with no bindist" $ do
-        let latest = mkLR "9.14.1" [Latest] False False
-            noBindist = (mkLR "9.12.1" [] False False) {lNoBindist = True}
-            rows = [latest, noBindist]
-        versionsOf GHC (curate Full (listingsFor GHC rows))
-          @?= [lVer latest]
     , testGroup
         "version families"
         [ testCase "familyKey is (cross, major, minor)" $
