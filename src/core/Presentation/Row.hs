@@ -6,6 +6,7 @@ module Presentation.Row
   , Pill (..)
   , installConfirmation
   , jobTitle
+  , matchesFilters
   , planRows
   , removeConfirmation
   ) where
@@ -23,7 +24,8 @@ import Data.Versions (PVP, Version, prettyPVP, prettyVer)
 import GHCup.Command.List (ListResult (..))
 import GHCup.Types (Tag (..), TargetVersion, TargetVersionReq (..), tVerToText)
 
-import Toolchain.Curation (CurationMode (..), FamilyKey, curate, isLatestInFamily, latestPerFamily)
+import Config (Filters (..))
+import Toolchain.Curation (FamilyKey, curate, isLatestInFamily, latestPerFamily)
 import Toolchain.Types
 
 data Confirmation = Confirmation
@@ -77,9 +79,9 @@ data ToolRows = ToolRows
   }
   deriving stock (Eq, Show)
 
-planRows :: CurationMode -> Map RowKey Progress -> Listings -> Map SupportedTool ToolRows
-planRows mode busy listings =
-  let curated = curate mode listings
+planRows :: Map RowKey Progress -> Listings -> Map SupportedTool ToolRows
+planRows busy listings =
+  let curated = curate listings
   in Map.fromList
        [ (tool, planTool busy tool (Map.findWithDefault Vector.empty tool curated))
        | tool <- Vector.toList supportedTools
@@ -137,6 +139,13 @@ getBaseVersion tags = List.foldl' go Nothing tags
 
 passesHlsFilter :: SupportedTool -> ListResult -> Bool
 passesHlsFilter tool lr = tool /= GHC || hlsPowered lr
+
+-- | Whether a row survives a filter bar's active filters. Shared by the list
+-- and table renderers.
+matchesFilters :: Filters -> RowSpec -> Bool
+matchesFilters filters spec =
+  (not filters.hlsPoweredOnly || spec.passesHlsFilter)
+    && (not filters.latestPatchOnly || spec.latestInFamily)
 
 statusLabelOf :: ListResult -> Text
 statusLabelOf lr

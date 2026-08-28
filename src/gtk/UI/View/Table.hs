@@ -23,23 +23,23 @@ import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
 import GI.Pango qualified as Pango
 
-import Config (SortColumn (..), SortDirection (..), TableFilters (..), TableSort (..), sortColumnFromName, sortColumnName)
-import Presentation.Row (RowAction (..), RowSpec (..), ToolRows (..))
+import Config (Filters, SortColumn (..), SortDirection (..), TableSort (..), sortColumnFromName, sortColumnName)
+import Presentation.Row (RowAction (..), RowSpec (..), ToolRows (..), matchesFilters)
 import Toolchain.Types (Progress (..), rowKeyText)
 import UI.Dialog qualified as Dialog
-import UI.View (RowCallbacks (..), View (..), dimCaption, pillLabel)
+import UI.View (FilterBar (..), RowCallbacks (..), View (..), buildFilterBar, captionLabel, emptyStateStack, pillLabel)
 
 -- | How the table reports state the user changed, for 'Config' to remember.
 data TableCallbacks = TableCallbacks
   { onSortChanged :: TableSort -> IO ()
-  , onFiltersChanged :: TableFilters -> IO ()
+  , onFiltersChanged :: Filters -> IO ()
   }
 
 -- | A built table: its 'View' plus the handle for applying state this table
 -- did not originate.
 data Table = Table
   { view :: View
-  , applyState :: TableSort -> TableFilters -> IO ()
+  , applyState :: TableSort -> Filters -> IO ()
   }
 
 -- | The advanced renderer: a sortable, filterable 'Gtk.ColumnView'.
@@ -51,7 +51,7 @@ data Table = Table
 build
   :: Adw.ApplicationWindow
   -> TableSort
-  -> TableFilters
+  -> Filters
   -> TableCallbacks
   -> IO Table
 build window initialSort initialFilters tableCallbacks = do
@@ -59,12 +59,14 @@ build window initialSort initialFilters tableCallbacks = do
   filtersRef <- newIORef initialFilters
   callbacksRef <- newIORef (RowCallbacks (const (pure ())))
 
+  defaultGroup <- new Gtk.CheckButton []
+
   items <- Gtk.stringListNew (Just [])
 
   rowFilter <- Gtk.customFilterNew . Just $ \obj -> do
     mspec <- specOfObject specsRef obj
     filters <- readIORef filtersRef
-    pure (maybe True (matches filters) mspec)
+    pure (maybe True (matchesFilters filters) mspec)
 
   -- Property construction, never gtk_filter_list_model_new: the *_new
   -- constructors are transfer-full, haskell-gi disowns our wrapper, and a
@@ -73,8 +75,25 @@ build window initialSort initialFilters tableCallbacks = do
   sorted <- new Gtk.SortListModel [#model := filtered]
   selection <- new Gtk.NoSelection [#model := sorted]
 
-  columnView <- new Gtk.ColumnView [#showRowSeparators := True, #cssClasses := ["zebra-stripes"]]
+  columnView <-
+    new
+      Gtk.ColumnView
+      [ #showRowSeparators := True
+      , #cssClasses := ["zebra-stripes", "card"]
+      ]
+
   columnView.setModel (Just selection)
+
+  clamp <-
+    new
+      Adw.Clamp
+      [ #child := columnView
+      , #maximumSize := 700
+      , #tighteningThreshold := 600
+      , #marginStart := 12
+      , #marginEnd := 12
+      , #cssClasses := ["table-container"]
+      ]
 
   -- Version sorts on RowSpec.rank, which counts down from the newest row, so
   -- ascending on Down rank is ascending by version. No version parsing here.
@@ -88,7 +107,7 @@ build window initialSort initialFilters tableCallbacks = do
   releasedColumn <- textColumn ByReleased "Released" dayText (.releaseDay)
   statusColumn <- textColumn ByStatus "Status" (.statusLabel) (\spec -> (spec.isDefault, spec.installed))
   void $
-    addColumn columnView specsRef "actions" "Actions" (actionsCell window callbacksRef) Nothing
+    addColumn columnView specsRef "actions" "Actions" (actionsCell window callbacksRef defaultGroup) Nothing
 
   let columns =
         [ (ByVersion, versionColumn)
@@ -110,58 +129,31 @@ build window initialSort initialFilters tableCallbacks = do
         forM_ (mid >>= sortColumnFromName) $ \sortColumn ->
           tableCallbacks.onSortChanged (TableSort sortColumn (directionOf order))
 
-  hlsCheck <-
-    new Gtk.CheckButton [#label := "HLS-powered", #active := initialFilters.hlsPoweredOnly]
-  latestCheck <-
+  scrolled <-
     new
-      Gtk.CheckButton
-      [ #label := "Latest patch per major.minor"
-      , #active := initialFilters.latestPatchOnly
+      Gtk.ScrolledWindow
+      [ #child := clamp
+      , #vexpand := True
+      , #hscrollbarPolicy := Gtk.PolicyTypeNever
       ]
-  filterBar <-
-    new
-      Gtk.Box
-      [ #orientation := Gtk.OrientationHorizontal
-      , #spacing := 12
-      , #marginTop := 6
-      , #marginBottom := 6
-      , #marginStart := 12
-      , #marginEnd := 12
-      ]
-  filterBar.append hlsCheck
-  filterBar.append latestCheck
-
-  emptyPage <-
-    new
-      Adw.StatusPage
-      [ #title := "No versions match the filters"
-      , #iconName := "system-search-symbolic"
-      ]
-  scrolled <- new Gtk.ScrolledWindow [#child := columnView, #vexpand := True]
-  contentStack <- new Gtk.Stack []
-  contentStack.addNamed scrolled (Just "rows")
-  contentStack.addNamed emptyPage (Just "empty")
+  scrolledWidget <- Gtk.toWidget scrolled
+  (contentStack, setEmpty) <- emptyStateStack scrolledWidget
 
   let syncEmptyState = do
         count <- Gio.listModelGetNItems filtered
-        contentStack.setVisibleChildName (if count == 0 then "empty" else "rows")
+        setEmpty (count == 0)
 
-      syncFilters = do
-        hls <- hlsCheck.getActive
-        latest <- latestCheck.getActive
-        let filters = TableFilters {hlsPoweredOnly = hls, latestPatchOnly = latest}
-        writeIORef filtersRef filters
-        Gtk.filterChanged rowFilter Gtk.FilterChangeDifferent
-        syncEmptyState
-        tableCallbacks.onFiltersChanged filters
+  bar <- buildFilterBar initialFilters $ \filters -> do
+    writeIORef filtersRef filters
+    Gtk.filterChanged rowFilter Gtk.FilterChangeDifferent
+    syncEmptyState
+    tableCallbacks.onFiltersChanged filters
 
-  void $ on hlsCheck #toggled syncFilters
-  void $ on latestCheck #toggled syncFilters
   void $ on filtered #itemsChanged $ \_position _removed _added -> syncEmptyState
   syncEmptyState
 
   content <- new Gtk.Box [#orientation := Gtk.OrientationVertical]
-  content.append filterBar
+  content.append bar.widget
   content.append contentStack
   widget <- Gtk.toWidget content
 
@@ -175,22 +167,13 @@ build window initialSort initialFilters tableCallbacks = do
 
       setSensitive b = do
         set columnView [#sensitive := b]
-        set filterBar [#sensitive := b]
+        set bar.widget [#sensitive := b]
 
       applyState sort filters = do
         applySort columnView columns sort
-        hlsCheck.setActive filters.hlsPoweredOnly
-        latestCheck.setActive filters.latestPatchOnly
-        writeIORef filtersRef filters
-        Gtk.filterChanged rowFilter Gtk.FilterChangeDifferent
-        syncEmptyState
+        bar.setFilters filters
 
   pure Table {view = View {widget, setRows, setSensitive}, applyState}
-
-matches :: TableFilters -> RowSpec -> Bool
-matches filters spec =
-  (not filters.hlsPoweredOnly || spec.passesHlsFilter)
-    && (not filters.latestPatchOnly || spec.latestInFamily)
 
 -- | Row behind a 'Gtk.StringObject' handed to a signal callback.
 specOfObject :: IORef (Map Text RowSpec) -> GObject.Object -> IO (Maybe RowSpec)
@@ -277,9 +260,10 @@ dayText spec = maybe "–" (Text.pack . show) spec.releaseDay
 actionsCell
   :: Adw.ApplicationWindow
   -> IORef RowCallbacks
+  -> Gtk.CheckButton
   -> RowSpec
   -> IO Gtk.Widget
-actionsCell window callbacksRef spec = do
+actionsCell window callbacksRef defaultGroup spec = do
   box <-
     new
       Gtk.Box
@@ -298,6 +282,7 @@ actionsCell window callbacksRef spec = do
         , #active := spec.isDefault
         , #sensitive := not spec.isDefault
         ]
+    check.setGroup (Just defaultGroup)
     void $ on check #toggled $ do
       active <- check.getActive
       when (active && not spec.isDefault) $ callbacks.onSubmit spec.setDefault
@@ -311,7 +296,7 @@ actionsCell window callbacksRef spec = do
       , #maxWidthChars := 20
       , #ellipsize := Pango.EllipsizeModeEnd
       ]
-  dimCaption phaseLabel
+  captionLabel phaseLabel
   progressBar <-
     new Gtk.ProgressBar [#valign := Gtk.AlignCenter, #visible := isJust spec.progress]
   actionButton <-

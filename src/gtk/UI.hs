@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ImplicitParams #-}
 
-module UI (main) where
+module UI (startUI) where
 
 import Control.Monad (forM_, void)
 import Data.GI.Base
@@ -20,9 +20,10 @@ import GI.Gtk qualified as Gtk
 #ifdef DEVELOPMENT
 import Development.Reload qualified as Reload
 #endif
-import System.Environment (getArgs, getProgName)
+import System.Environment (getProgName)
 import System.IO (hPutStrLn, stderr)
 
+import CLI qualified
 import Config qualified
 import Effects.FileSystem (runFileSystemIO)
 import Paths_ghcup_gtk qualified as Paths
@@ -38,21 +39,22 @@ import UI.Shell (Shell (..))
 import UI.Shell qualified as Shell
 import UI.Shortcuts qualified as Shortcuts
 import UI.View (RowCallbacks (..))
+import UI.View.List qualified as ListView
 import UI.View.Table qualified as TableView
 import Worker qualified
 
-main :: IO ()
-main = do
+startUI :: IO ()
+startUI = do
+  options <- CLI.getOptions
   app <-
     new
       Adw.Application
       [ #applicationId := "org.haskell.GhcupGtk"
-      , On #activate (activate ?self)
+      , On #activate (activate options.forcedView ?self)
       , On #startup loadCSS
       ]
-  args <- getArgs
   progName <- getProgName
-  void (app.run $ Just $ progName : args)
+  void (app.run $ Just $ progName : options.gtkArgs)
 
 {- FOURMOLU_DISABLE -}
 loadCSS :: (MonadIO m) => m ()
@@ -84,18 +86,26 @@ data Runtime = Runtime
   , dispatch :: Session.Event -> IO ()
   }
 
-activate :: Adw.Application -> IO ()
-activate app = do
+activate :: Maybe Config.ViewMode -> Adw.Application -> IO ()
+activate forcedView app = do
   dirs <- GHCup.ghcupDirs
-  (config, configWarning) <- runEff (runFileSystemIO Config.load)
+  (loadedConfig, configWarning) <- runEff (runFileSystemIO Config.load)
+  let config = case forcedView of
+        Nothing -> loadedConfig
+        Just mode -> loadedConfig {Config.advancedInterface = mode == Config.Advanced}
   shell <- Shell.build app config
   modelRef <- newIORef (Session.initialModel dirs config)
   worker <- Worker.new
 
   dispatchRef <- newIORef (\_ -> pure ())
+  let dispatchLater event = readIORef dispatchRef >>= ($ event)
   registry <-
-    Registry.build shell.window shell.panes config $
-      tableCallbacks (\event -> readIORef dispatchRef >>= ($ event))
+    Registry.build
+      shell.window
+      shell.panes
+      config
+      (tableCallbacks dispatchLater)
+      (listCallbacks dispatchLater)
 
   let runtime = Runtime {app, shell, registry, worker, dirs, dispatch}
       dispatch event = do
@@ -149,9 +159,10 @@ interpretEffect rt = \case
     rt.dispatch (Session.PathFixDone result)
   Session.SetPathBanner spec ->
     PathBanner.render rt.shell.pathBanner (rt.dispatch Session.PathFixConfirmed) spec
-  Session.SwitchRenderer mode plan sort filters ->
-    Registry.switchTo rt.registry (callbacks rt) mode plan sort filters
+  Session.SwitchRenderer plan config ->
+    Registry.switchTo rt.registry (callbacks rt) plan config
   Session.SetTableState sort filters -> Registry.applyTableState rt.registry sort filters
+  Session.SetListState filters -> Registry.applyListState rt.registry filters
   where
     pageOf :: Session.Phase -> Text
     pageOf = \case
@@ -167,6 +178,12 @@ tableCallbacks dispatch =
   TableView.TableCallbacks
     { onSortChanged = dispatch . Session.ConfigChanged . Config.SetTableSort
     , onFiltersChanged = dispatch . Session.ConfigChanged . Config.SetTableFilters
+    }
+
+listCallbacks :: (Session.Event -> IO ()) -> ListView.ListCallbacks
+listCallbacks dispatch =
+  ListView.ListCallbacks
+    { onFiltersChanged = dispatch . Session.ConfigChanged . Config.SetListFilters
     }
 
 runPathCheck :: Runtime -> IO ()

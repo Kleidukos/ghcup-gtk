@@ -4,6 +4,19 @@ A GTK4/libadwaita installer for the Haskell toolchain.
 
 It aims to have feature parity with the GHCup TUI.
 
+<img
+  width="800px"
+  src="./screenshots/list-view.png"
+  alt="The default view of the application with a simple listing."
+/>
+
+
+<img
+  width="800px"
+  src="./screenshots/table-view.png"
+  alt="The advanced view of the application with more details per entry, and sorting options."
+/>
+
 ## Development
 
 ### System Dependencies

@@ -1,5 +1,6 @@
 module UI.Registry
   ( Registry
+  , applyListState
   , applyTableState
   , build
   , rebuild
@@ -15,7 +16,7 @@ import Data.Map.Strict qualified as Map
 import Data.Vector qualified as Vector
 import GI.Adw qualified as Adw
 
-import Config (Config (..), TableFilters, TableSort, ViewMode (..), viewMode)
+import Config (Config (..), Filters, TableSort, ViewMode (..), viewMode)
 import Presentation.Row (ToolRows (..))
 import Toolchain.Types (SupportedTool)
 import UI.ToolPanes (ToolPane (..), ToolPanes (..))
@@ -24,17 +25,28 @@ import UI.View (RowCallbacks, View (..))
 import UI.View.List qualified as ListView
 import UI.View.Table qualified as TableView
 
--- | One live renderer per tool. Only the active mode's views exist;
--- 'switchTo' destroys them and builds the other mode's.
+-- | The renderer a pane holds in the current mode.
+data Renderer
+  = TableRenderer TableView.Table
+  | ListRenderer ListView.ListView
+
+viewOf :: Renderer -> View
+viewOf = \case
+  TableRenderer table -> table.view
+  ListRenderer list -> list.view
+
+-- | One live renderer per tool. Only the active mode's renderers exist,
+-- becase 'switchTo' destroys them and builds the other mode's.
 data Registry = Registry
   { panes :: ToolPanes
   , window :: Adw.ApplicationWindow
   -- ^ Retained so 'switchTo' can build fresh renderers.
   , tableCallbacks :: TableView.TableCallbacks
   -- ^ Likewise.
+  , listCallbacks :: ListView.ListCallbacks
+  -- ^ Likewise.
   , modeRef :: IORef ViewMode
-  , viewsRef :: IORef (Map SupportedTool View)
-  , tablesRef :: IORef (Map SupportedTool TableView.Table)
+  , renderersRef :: IORef (Map SupportedTool Renderer)
   , planRef :: IORef (Map SupportedTool ToolRows)
   , sensitiveRef :: IORef Bool
   }
@@ -44,85 +56,88 @@ build
   -> ToolPanes
   -> Config
   -> TableView.TableCallbacks
+  -> ListView.ListCallbacks
   -> IO Registry
-build window panes config tableCallbacks = do
-  let mode = viewMode config
-  (views, tables) <-
-    buildViews window panes tableCallbacks mode config.tableSort config.tableFilters
-  Registry panes window tableCallbacks
-    <$> newIORef mode
-    <*> newIORef views
-    <*> newIORef tables
+build window panes config tableCallbacks listCallbacks = do
+  renderers <- buildRenderers window panes tableCallbacks listCallbacks config
+  Registry panes window tableCallbacks listCallbacks
+    <$> newIORef (viewMode config)
+    <*> newIORef renderers
     <*> newIORef Map.empty
     <*> newIORef True
 
--- | Build one renderer per tool and mount each in its pane, dropping
--- whatever the pane held before.
-buildViews
+-- | Build one renderer per tool and mount each in its pane
+buildRenderers
   :: Adw.ApplicationWindow
   -> ToolPanes
   -> TableView.TableCallbacks
-  -> ViewMode
-  -> TableSort
-  -> TableFilters
-  -> IO (Map SupportedTool View, Map SupportedTool TableView.Table)
-buildViews window panes tableCallbacks mode sort filters = do
+  -> ListView.ListCallbacks
+  -> Config
+  -> IO (Map SupportedTool Renderer)
+buildRenderers window panes tableCallbacks listCallbacks config = do
   built <- forM panes.panes $ \pane -> do
-    (view, mtable) <- case mode of
-      Simple -> do
-        view <- ListView.build window
-        pure (view, Nothing)
-      Advanced -> do
-        table <- TableView.build window sort filters tableCallbacks
-        pure (table.view, Just table)
-    ToolPanes.setChild pane view.widget
-    pure (pane.tool, view, mtable)
-  pure
-    ( Map.fromList [(tool, view) | (tool, view, _) <- Vector.toList built]
-    , Map.fromList [(tool, table) | (tool, _, Just table) <- Vector.toList built]
-    )
+    renderer <- case viewMode config of
+      Simple ->
+        ListRenderer <$> ListView.build window config.listFilters listCallbacks
+      Advanced ->
+        TableRenderer
+          <$> TableView.build window config.tableSort config.tableFilters tableCallbacks
+    ToolPanes.setChild pane (viewOf renderer).widget
+    pure (pane.tool, renderer)
+  pure (Map.fromList (Vector.toList built))
 
 rebuild :: Registry -> RowCallbacks -> Map SupportedTool ToolRows -> IO ()
 rebuild registry callbacks plan = do
   prev <- readIORef registry.planRef
-  views <- readIORef registry.viewsRef
+  renderers <- readIORef registry.renderersRef
   forM_ registry.panes.panes $ \pane -> do
     let toolRows = Map.findWithDefault (ToolRows Vector.empty "") pane.tool plan
     set pane.sidebarRow [#subtitle := toolRows.subtitle]
     when (Map.lookup pane.tool prev /= Just toolRows) $
-      forM_ (Map.lookup pane.tool views) $ \view ->
-        view.setRows callbacks toolRows
+      forM_ (Map.lookup pane.tool renderers) $ \renderer ->
+        (viewOf renderer).setRows callbacks toolRows
   writeIORef registry.planRef plan
 
 switchTo
   :: Registry
   -> RowCallbacks
-  -> ViewMode
   -> Map SupportedTool ToolRows
-  -> TableSort
-  -> TableFilters
+  -> Config
   -> IO ()
-switchTo registry callbacks mode plan sort filters = do
+switchTo registry callbacks plan config = do
   current <- readIORef registry.modeRef
-  when (current /= mode) $ do
-    (views, tables) <-
-      buildViews registry.window registry.panes registry.tableCallbacks mode sort filters
-    writeIORef registry.modeRef mode
-    writeIORef registry.viewsRef views
-    writeIORef registry.tablesRef tables
+  when (current /= viewMode config) $ do
+    renderers <-
+      buildRenderers
+        registry.window
+        registry.panes
+        registry.tableCallbacks
+        registry.listCallbacks
+        config
+    writeIORef registry.modeRef (viewMode config)
+    writeIORef registry.renderersRef renderers
     writeIORef registry.planRef Map.empty
     sensitive <- readIORef registry.sensitiveRef
-    forM_ (Map.elems views) $ \view -> view.setSensitive sensitive
+    forM_ (Map.elems renderers) $ \renderer -> (viewOf renderer).setSensitive sensitive
     rebuild registry callbacks plan
 
-applyTableState :: Registry -> TableSort -> TableFilters -> IO ()
+applyTableState :: Registry -> TableSort -> Filters -> IO ()
 applyTableState registry sort filters = do
-  tables <- readIORef registry.tablesRef
-  forM_ (Map.elems tables) $ \table -> table.applyState sort filters
+  renderers <- readIORef registry.renderersRef
+  forM_ (Map.elems renderers) $ \case
+    TableRenderer table -> table.applyState sort filters
+    ListRenderer _ -> pure ()
+
+applyListState :: Registry -> Filters -> IO ()
+applyListState registry filters = do
+  renderers <- readIORef registry.renderersRef
+  forM_ (Map.elems renderers) $ \case
+    ListRenderer list -> list.applyFilters filters
+    TableRenderer _ -> pure ()
 
 setSensitive :: Registry -> Bool -> IO ()
 setSensitive registry b = do
   writeIORef registry.sensitiveRef b
   set registry.panes.sidebar [#sensitive := b]
-  views <- readIORef registry.viewsRef
-  forM_ (Map.elems views) $ \view -> view.setSensitive b
+  renderers <- readIORef registry.renderersRef
+  forM_ (Map.elems renderers) $ \renderer -> (viewOf renderer).setSensitive b

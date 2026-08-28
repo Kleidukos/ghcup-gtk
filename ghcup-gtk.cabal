@@ -53,6 +53,7 @@ library core
   hs-source-dirs: src/core
   -- cabal-gild: discover src/core
   exposed-modules:
+    CLI
     Config
     Effects.FileSystem
     Effects.Ghcup
@@ -70,16 +71,17 @@ library core
     base,
     containers,
     directory,
-    effectful-core ^>=2.6,
+    effectful-core,
     filepath,
-    ghcup ^>=0.2.6,
-    kdl-hs ^>=1.1,
+    ghcup,
+    kdl-hs,
     mtl,
+    optparse-applicative,
     pretty,
     resourcet,
     scientific,
     stm,
-    text ^>=2.1,
+    text,
     text-display,
     time,
     variant,
