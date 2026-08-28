@@ -85,7 +85,12 @@ jobs:
           restore-keys: release-${{ runner.os }}-ghc-${{ matrix.ghc }}-
 
       - name: Build packages
-        run: ./scripts/package.sh
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            ./scripts/package.sh -v "${GITHUB_REF_NAME#v}"
+          else
+            ./scripts/package.sh -v head
+          fi
 
       - uses: actions/upload-artifact@v6
         with:

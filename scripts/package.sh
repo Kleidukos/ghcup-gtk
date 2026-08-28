@@ -3,19 +3,62 @@ set -euo pipefail
 
 # Build distribution packages for ghcup-gtk with fpm.
 #
-# Usage: scripts/package.sh [format...]
+# Usage: scripts/package.sh -v <version>|head [format...]
+#   -v: mandatory; version label used in the package file name; either
+#       a numeric version (e.g. 1.2.3) or the literal "head".
 #   formats: deb rpm pacman (Linux), osxpkg (macOS)
-#   No arguments: build every format native to the host OS.
+#   No format arguments: build every format native to the host OS.
 #
 # Output lands in dist-package/out/.
 #
 # Make sure you keep the usage of the tools (tar, etc) compatible
 # with both GNU and macOS.
 
+usage() {
+  echo "usage: scripts/package.sh -v <version>|head [format...]"
+  echo "  -v   mandatory; version label for the package file name:"
+  echo "       a numeric version (e.g. 1.2.3) or \"head\""
+  echo "  formats: deb rpm pacman (Linux), osxpkg (macOS)"
+}
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 OS="$(uname -s)"
+
+VERSION_LABEL=""
+while getopts ":v:h" opt; do
+  case "$opt" in
+    v) VERSION_LABEL="$OPTARG" ;;
+    h)
+      usage
+      exit 0
+      ;;
+    :)
+      echo "error: option -$OPTARG requires an argument" >&2
+      usage >&2
+      exit 1
+      ;;
+    \?)
+      echo "error: unknown option -$OPTARG" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
+shift $((OPTIND - 1))
+
+if [ -z "$VERSION_LABEL" ]; then
+  echo "error: -v is mandatory" >&2
+  usage >&2
+  exit 1
+fi
+
+if [ "$VERSION_LABEL" != "head" ] \
+  && ! [[ "$VERSION_LABEL" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+  echo "error: -v expects a numeric version (e.g. 1.2.3) or \"head\", got '$VERSION_LABEL'" >&2
+  exit 1
+fi
 
 if [ "$#" -gt 0 ]; then
   FORMATS=("$@")
@@ -48,7 +91,6 @@ else
   VERSION="${CABAL_VERSION}.git$(git rev-parse --short HEAD)"
 fi
 
-GIT_HASH="$(git rev-parse --short HEAD)"
 ARCH="$(uname -m)"
 
 # Minimum supported OS per package format. Keep in sync with the
@@ -110,7 +152,7 @@ for fmt in "${FORMATS[@]}"; do
     pacman) EXTRA=(-d gtk4 -d libadwaita); EXT=pkg.tar.zst ;;
     osxpkg) EXTRA=(--osxpkg-identifier-prefix org.haskell); EXT=pkg ;;
   esac
-  PKG_NAME="ghcup-gtk-${GIT_HASH}-$(min_os_for "$fmt")-${ARCH}.${EXT}"
+  PKG_NAME="ghcup-gtk-${VERSION_LABEL}-$(min_os_for "$fmt")-${ARCH}.${EXT}"
   echo "==> fpm -t $fmt ($PKG_NAME)"
   fpm "${FPM_COMMON[@]}" -t "$fmt" -p "dist-package/out/${PKG_NAME}" "${EXTRA[@]}" .
 done
