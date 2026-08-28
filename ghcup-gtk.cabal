@@ -84,6 +84,7 @@ library core
     text,
     text-display,
     time,
+    uri-bytestring,
     variant,
     vector,
     versions,
@@ -96,6 +97,7 @@ library
     UI
     UI.Dialog
     UI.HeaderBar
+    UI.InstallOptionsDialog
     UI.PathBanner
     UI.Preferences
     UI.Registry

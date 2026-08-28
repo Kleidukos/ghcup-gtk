@@ -16,13 +16,13 @@ import GHCup.Types (TargetVersion, TargetVersionReq, Tool)
 
 import Toolchain.GHCup (GhcupEnv)
 import Toolchain.GHCup qualified as GHCup
-import Toolchain.Types (Listings, OpError (..))
+import Toolchain.Types (InstallOptions, Listings, OpError (..))
 
 -- | The ghcup domain operations.
 data Ghcup :: Effect where
   FetchListings :: Ghcup m (Either OpError (Listings, Bool))
   RelistListings :: Ghcup m (Either OpError (Listings, Bool))
-  InstallTool :: Tool -> TargetVersionReq -> Ghcup m (Either OpError ())
+  InstallTool :: Tool -> TargetVersionReq -> InstallOptions -> Ghcup m (Either OpError ())
   UninstallTool :: Tool -> TargetVersion -> Ghcup m (Either OpError ())
   SetDefaultVersion :: Tool -> TargetVersion -> Ghcup m (Either OpError ())
 
@@ -34,8 +34,8 @@ fetchListings = send FetchListings
 relistListings :: (Ghcup :> es) => Eff es (Either OpError (Listings, Bool))
 relistListings = send RelistListings
 
-installTool :: (Ghcup :> es) => Tool -> TargetVersionReq -> Eff es (Either OpError ())
-installTool tool tvr = send (InstallTool tool tvr)
+installTool :: (Ghcup :> es) => Tool -> TargetVersionReq -> InstallOptions -> Eff es (Either OpError ())
+installTool tool tvr opts = send (InstallTool tool tvr opts)
 
 uninstallTool :: (Ghcup :> es) => Tool -> TargetVersion -> Eff es (Either OpError ())
 uninstallTool tool tv = send (UninstallTool tool tv)
@@ -60,7 +60,7 @@ runGhcupIO onLog action =
         ( \_ -> \case
             FetchListings -> liftIO (withEnv GHCup.getListings)
             RelistListings -> liftIO (withEnv GHCup.relistListings)
-            InstallTool tool tvr -> liftIO (withEnv (\env -> GHCup.install env tool tvr))
+            InstallTool tool tvr opts -> liftIO (withEnv (\env -> GHCup.install env tool tvr opts))
             UninstallTool tool tv -> liftIO (withEnv (\env -> GHCup.uninstall env tool tv))
             SetDefaultVersion tool tv -> liftIO (withEnv (\env -> GHCup.setDefault env tool tv))
         )

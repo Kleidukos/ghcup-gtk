@@ -69,3 +69,7 @@ columnview.card > listview > row:last-child {
   background-color: var(--accent-bg-color);
   color: var(--accent-fg-color);
 }
+
+.install-options-content {
+  margin: 12px;
+}
