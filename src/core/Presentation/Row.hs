@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-orphans #-}
+
 module Presentation.Row
   ( Confirmation (..)
   , RowSpec (..)
@@ -9,6 +11,7 @@ module Presentation.Row
   , matchesFilters
   , planRows
   , removeConfirmation
+  , toolShortName
   ) where
 
 import Data.List qualified as List
@@ -22,7 +25,7 @@ import Data.Vector (Vector)
 import Data.Vector qualified as Vector
 import Data.Versions (PVP, Version, prettyPVP, prettyVer)
 import GHCup.Command.List (ListResult (..))
-import GHCup.Types (Tag (..), TargetVersion, TargetVersionReq (..), tVerToText)
+import GHCup.Types (Tag (..), TargetVersion, TargetVersionReq (..), Tool, cabal, ghc, ghcup, hls, stack, tVerToText)
 
 import Config (Filters (..))
 import Toolchain.Curation (FamilyKey, curate, isLatestInFamily, latestPerFamily)
@@ -79,15 +82,10 @@ data ToolRows = ToolRows
   }
   deriving stock (Eq, Show)
 
-planRows :: Map RowKey Progress -> Listings -> Map SupportedTool ToolRows
-planRows busy listings =
-  let curated = curate listings
-  in Map.fromList
-       [ (tool, planTool busy tool (Map.findWithDefault Vector.empty tool curated))
-       | tool <- Vector.toList supportedTools
-       ]
+planRows :: Map RowKey Progress -> Listings -> Map Tool ToolRows
+planRows busy listings = Map.mapWithKey (planTool busy) (curate listings)
 
-planTool :: Map RowKey Progress -> SupportedTool -> Vector ListResult -> ToolRows
+planTool :: Map RowKey Progress -> Tool -> Vector ListResult -> ToolRows
 planTool busy tool toolRows =
   ToolRows
     { rows = Vector.imap (rowSpec busy tool newest) toolRows
@@ -98,7 +96,7 @@ planTool busy tool toolRows =
   where
     newest = latestPerFamily toolRows
 
-rowSpec :: Map RowKey Progress -> SupportedTool -> Map FamilyKey Version -> Int -> ListResult -> RowSpec
+rowSpec :: Map RowKey Progress -> Tool -> Map FamilyKey Version -> Int -> ListResult -> RowSpec
 rowSpec busy tool newest rank lr =
   RowSpec
     { key
@@ -124,10 +122,9 @@ rowSpec busy tool newest rank lr =
       case getBaseVersion lr.lTag of
         Nothing -> ""
         Just pvp -> " / base-" <> prettyPVP pvp
-    title =
-      case tool of
-        GHC -> prettyVer lr.lVer <> basePVP
-        _ -> prettyVer (lVer lr)
+    title
+      | tool == ghc = prettyVer lr.lVer <> basePVP
+      | otherwise = prettyVer (lVer lr)
 
 getBaseVersion :: [Tag] -> Maybe PVP
 getBaseVersion tags = List.foldl' go Nothing tags
@@ -137,8 +134,8 @@ getBaseVersion tags = List.foldl' go Nothing tags
     go Nothing _ = Nothing
     go (Just b) _ = Just b
 
-passesHlsFilter :: SupportedTool -> ListResult -> Bool
-passesHlsFilter tool lr = tool /= GHC || hlsPowered lr
+passesHlsFilter :: Tool -> ListResult -> Bool
+passesHlsFilter tool lr = tool /= ghc || hlsPowered lr
 
 -- | Whether a row survives a filter bar's active filters. Shared by the list
 -- and table renderers.
@@ -165,10 +162,10 @@ mkTagLabel = \case
   Latest -> Just LatestVersion
   _ -> Nothing
 
-subject :: SupportedTool -> ListResult -> Text
-subject tool lr = toolName tool <> " " <> prettyVer (lVer lr)
+subject :: Tool -> ListResult -> Text
+subject tool lr = toolShortName tool <> " " <> prettyVer (lVer lr)
 
-installConfirmation :: SupportedTool -> ListResult -> Confirmation
+installConfirmation :: Tool -> ListResult -> Confirmation
 installConfirmation tool lr =
   Confirmation
     { heading = "Install " <> subject tool lr <> "?"
@@ -183,10 +180,10 @@ jobTitle = \case
   Uninstall tool tv -> done tool tv "uninstalled"
   SetDefault tool tv -> done tool tv "is now the default"
   where
-    done :: SupportedTool -> TargetVersion -> Text -> Text
-    done tool tv outcome = toolName tool <> " " <> tVerToText tv <> " " <> outcome
+    done :: Tool -> TargetVersion -> Text -> Text
+    done tool tv outcome = toolShortName tool <> " " <> tVerToText tv <> " " <> outcome
 
-removeConfirmation :: SupportedTool -> ListResult -> Confirmation
+removeConfirmation :: Tool -> ListResult -> Confirmation
 removeConfirmation tool lr =
   Confirmation
     { heading = "Uninstall " <> subject tool lr <> "?"
@@ -194,3 +191,22 @@ removeConfirmation tool lr =
     , affirmLabel = "Uninstall"
     , destructive = True
     }
+
+instance Display Tool where
+  displayBuilder tool
+    | tool == ghc = "Glasgow Haskell Compiler"
+    | tool == cabal = "Cabal project manager"
+    | tool == hls = "Haskell Language Server"
+    | tool == stack = "Stack"
+    | tool == ghcup = "GHCup"
+    | otherwise = displayBuilder $ toolText tool
+
+-- | Short name for dialog headings and toasts.
+toolShortName :: Tool -> Text
+toolShortName tool
+  | tool == ghc = "GHC"
+  | tool == cabal = "Cabal"
+  | tool == hls = "HLS"
+  | tool == stack = "Stack"
+  | tool == ghcup = "GHCup"
+  | otherwise = toolText tool

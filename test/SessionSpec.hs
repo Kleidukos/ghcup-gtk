@@ -1,6 +1,7 @@
 module SessionSpec (tests) where
 
 import Data.Map.Strict qualified as Map
+import GHCup.Types (cabal, ghc)
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -21,10 +22,10 @@ import Toolchain.Path (PathStatus (..))
 import Toolchain.Types
 
 sampleListings :: Listings
-sampleListings = listingsFor GHC [lr914]
+sampleListings = listingsFor ghc [lr914]
 
 installKey :: RowKey
-installKey = keyOfListing GHC lr914
+installKey = keyOfListing ghc lr914
 
 model0 :: Model
 model0 = initialModel dirs defaultConfig
@@ -43,12 +44,12 @@ tests =
     [ testGroup
         "RowKey"
         [ testCase "job-side and listings-side keys agree for every mutation" $ do
-            keyOfMutation (Install GHC (reqOf lr914)) @?= installKey
-            keyOfMutation (Uninstall GHC (tvOf lr914)) @?= installKey
-            keyOfMutation (SetDefault GHC (tvOf lr914)) @?= installKey
+            keyOfMutation (Install ghc (reqOf lr914)) @?= installKey
+            keyOfMutation (Uninstall ghc (tvOf lr914)) @?= installKey
+            keyOfMutation (SetDefault ghc (tvOf lr914)) @?= installKey
         , testCase "rowKeyText is stable and distinguishes tool and version" $ do
-            rowKeyText installKey @?= "GHC:9.14.1"
-            rowKeyText (keyOfListing Cabal lr914) @?= "Cabal:9.14.1"
+            rowKeyText installKey @?= "ghc:9.14.1"
+            rowKeyText (keyOfListing cabal lr914) @?= "cabal:9.14.1"
         ]
     , testGroup
         "Submitted"

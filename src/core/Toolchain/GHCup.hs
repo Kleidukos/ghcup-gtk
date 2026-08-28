@@ -136,21 +136,17 @@ runList appState = do
       . runE @'[ParseError]
       $ liftE
       $ listVersions
-        (Just (map toGhcupTool (Vector.toList supportedTools)))
+        Nothing
         []
         ShowNone
         False
         NShowNone
         (Nothing, Nothing)
   pure $
-    toOpError "Could not list versions" result <&> \toolListResult ->
-      Map.fromList
-        [ (supported, Vector.fromList (snd rows))
-        | (tool, rows) <- Map.toList toolListResult
-        , Just supported <- [fromGhcupTool tool]
-        ]
+    toOpError "Could not list versions" result
+      <&> Map.map (Vector.fromList . snd)
 
-install :: GhcupEnv -> SupportedTool -> TargetVersionReq -> IO (Either OpError ())
+install :: GhcupEnv -> Tool -> TargetVersionReq -> IO (Either OpError ())
 install env tool tvr = runIn env $ \appState -> do
   result <-
     flip runReaderT appState
@@ -178,23 +174,23 @@ install env tool tvr = runIn env $ \appState -> do
           , MalformedInstallInfo
           , InvalidBuildConfig
           ]
-      $ liftE (installTool (toGhcupTool tool) tvr GHCupInternal False [] Nothing)
+      $ liftE (installTool tool tvr GHCupInternal False [] Nothing)
   pure $ case result of
     VLeft (V (AlreadyInstalled _ _)) -> Right ()
     other -> void (toOpError "Installation failed" other)
 
-uninstall :: GhcupEnv -> SupportedTool -> TargetVersion -> IO (Either OpError ())
+uninstall :: GhcupEnv -> Tool -> TargetVersion -> IO (Either OpError ())
 uninstall env tool tv = runIn env $ \appState ->
   toOpError "Uninstall failed"
     <$> ( flip runReaderT appState
             . runE @'[NotInstalled, UninstallFailed, ParseError, MalformedInstallInfo]
-            $ liftE (rmToolVersion (toGhcupTool tool) tv)
+            $ liftE (rmToolVersion tool tv)
         )
 
-setDefault :: GhcupEnv -> SupportedTool -> TargetVersion -> IO (Either OpError ())
+setDefault :: GhcupEnv -> Tool -> TargetVersion -> IO (Either OpError ())
 setDefault env tool tv = runIn env $ \appState -> do
   result <-
     flip runReaderT appState
       . runE @'[ParseError, NotInstalled]
-      $ liftE (setToolVersion (toGhcupTool tool) tv)
+      $ liftE (setToolVersion tool tv)
   pure (void (toOpError "Could not set default" result))
