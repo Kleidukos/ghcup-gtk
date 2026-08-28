@@ -14,11 +14,12 @@ import Data.IORef
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Vector qualified as Vector
+import GHCup.Types (Tool)
 import GI.Adw qualified as Adw
 
 import Config (Config (..), Filters, TableSort, ViewMode (..), viewMode)
 import Presentation.Row (ToolRows (..))
-import Toolchain.Types (SupportedTool)
+import Toolchain.Types (sortTools)
 import UI.ToolPanes (ToolPane (..), ToolPanes (..))
 import UI.ToolPanes qualified as ToolPanes
 import UI.View (RowCallbacks, View (..))
@@ -46,8 +47,11 @@ data Registry = Registry
   , listCallbacks :: ListView.ListCallbacks
   -- ^ Likewise.
   , modeRef :: IORef ViewMode
-  , renderersRef :: IORef (Map SupportedTool Renderer)
-  , planRef :: IORef (Map SupportedTool ToolRows)
+  , configRef :: IORef Config
+  -- ^ Latest config; pane changes rebuild renderers with current
+  -- filter/sort state.
+  , renderersRef :: IORef (Map Tool Renderer)
+  , planRef :: IORef (Map Tool ToolRows)
   , sensitiveRef :: IORef Bool
   }
 
@@ -58,11 +62,11 @@ build
   -> TableView.TableCallbacks
   -> ListView.ListCallbacks
   -> IO Registry
-build window panes config tableCallbacks listCallbacks = do
-  renderers <- buildRenderers window panes tableCallbacks listCallbacks config
+build window panes config tableCallbacks listCallbacks =
   Registry panes window tableCallbacks listCallbacks
     <$> newIORef (viewMode config)
-    <*> newIORef renderers
+    <*> newIORef config
+    <*> newIORef Map.empty
     <*> newIORef Map.empty
     <*> newIORef True
 
@@ -73,9 +77,10 @@ buildRenderers
   -> TableView.TableCallbacks
   -> ListView.ListCallbacks
   -> Config
-  -> IO (Map SupportedTool Renderer)
+  -> IO (Map Tool Renderer)
 buildRenderers window panes tableCallbacks listCallbacks config = do
-  built <- forM panes.panes $ \pane -> do
+  currentPanes <- readIORef panes.panesRef
+  built <- forM currentPanes $ \pane -> do
     renderer <- case viewMode config of
       Simple ->
         ListRenderer <$> ListView.build window config.listFilters listCallbacks
@@ -86,11 +91,27 @@ buildRenderers window panes tableCallbacks listCallbacks config = do
     pure (pane.tool, renderer)
   pure (Map.fromList (Vector.toList built))
 
-rebuild :: Registry -> RowCallbacks -> Map SupportedTool ToolRows -> IO ()
+rebuild :: Registry -> RowCallbacks -> Map Tool ToolRows -> IO ()
 rebuild registry callbacks plan = do
+  let tools = Vector.fromList (sortTools (Map.keys plan))
+  changed <- ToolPanes.sync registry.panes tools
+  when changed $ do
+    config <- readIORef registry.configRef
+    renderers <-
+      buildRenderers
+        registry.window
+        registry.panes
+        registry.tableCallbacks
+        registry.listCallbacks
+        config
+    writeIORef registry.renderersRef renderers
+    writeIORef registry.planRef Map.empty
+    sensitive <- readIORef registry.sensitiveRef
+    forM_ (Map.elems renderers) $ \renderer -> (viewOf renderer).setSensitive sensitive
   prev <- readIORef registry.planRef
   renderers <- readIORef registry.renderersRef
-  forM_ registry.panes.panes $ \pane -> do
+  panes <- readIORef registry.panes.panesRef
+  forM_ panes $ \pane -> do
     let toolRows = Map.findWithDefault (ToolRows Vector.empty "") pane.tool plan
     set pane.sidebarRow [#subtitle := toolRows.subtitle]
     when (Map.lookup pane.tool prev /= Just toolRows) $
@@ -101,10 +122,11 @@ rebuild registry callbacks plan = do
 switchTo
   :: Registry
   -> RowCallbacks
-  -> Map SupportedTool ToolRows
+  -> Map Tool ToolRows
   -> Config
   -> IO ()
 switchTo registry callbacks plan config = do
+  writeIORef registry.configRef config
   current <- readIORef registry.modeRef
   when (current /= viewMode config) $ do
     renderers <-
@@ -123,6 +145,7 @@ switchTo registry callbacks plan config = do
 
 applyTableState :: Registry -> TableSort -> Filters -> IO ()
 applyTableState registry sort filters = do
+  modifyIORef' registry.configRef (\config -> config {tableSort = sort, tableFilters = filters})
   renderers <- readIORef registry.renderersRef
   forM_ (Map.elems renderers) $ \case
     TableRenderer table -> table.applyState sort filters
@@ -130,6 +153,7 @@ applyTableState registry sort filters = do
 
 applyListState :: Registry -> Filters -> IO ()
 applyListState registry filters = do
+  modifyIORef' registry.configRef (\config -> config {listFilters = filters})
   renderers <- readIORef registry.renderersRef
   forM_ (Map.elems renderers) $ \case
     ListRenderer list -> list.applyFilters filters

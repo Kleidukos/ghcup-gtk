@@ -32,17 +32,34 @@ columnview.card > listview > row:last-child {
 .list-container {
   margin-top: 24px;
   margin-bottom: 24px;
+  margin-left: 12px;
+  margin-right: 12px;
 }
 
 .table-container {
   margin-top: 24px;
   margin-bottom: 24px;
+  margin-left: 12px;
+  margin-right: 12px;
 }
-
 
 .filter-bar {
   margin-top: 6px;
   margin-bottom: 6px;
+  margin-left: 12px;
+  margin-right: 12px;
+}
+
+.sidebar-heading {
+  margin-top: 12px;
+  margin-bottom: 6px;
+  margin-left: 12px;
+  margin-right: 12px;
+}
+
+.loading-spinner {
+  min-width: 48px;
+  min-height: 48px;
 }
 
 .round-pill {

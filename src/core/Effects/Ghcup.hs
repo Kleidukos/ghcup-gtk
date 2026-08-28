@@ -12,19 +12,19 @@ import Data.IORef
 import Data.Text (Text)
 import Effectful
 import Effectful.Dispatch.Dynamic
-import GHCup.Types (TargetVersion, TargetVersionReq)
+import GHCup.Types (TargetVersion, TargetVersionReq, Tool)
 
 import Toolchain.GHCup (GhcupEnv)
 import Toolchain.GHCup qualified as GHCup
-import Toolchain.Types (Listings, OpError (..), SupportedTool)
+import Toolchain.Types (Listings, OpError (..))
 
 -- | The ghcup domain operations.
 data Ghcup :: Effect where
   FetchListings :: Ghcup m (Either OpError (Listings, Bool))
   RelistListings :: Ghcup m (Either OpError (Listings, Bool))
-  InstallTool :: SupportedTool -> TargetVersionReq -> Ghcup m (Either OpError ())
-  UninstallTool :: SupportedTool -> TargetVersion -> Ghcup m (Either OpError ())
-  SetDefaultVersion :: SupportedTool -> TargetVersion -> Ghcup m (Either OpError ())
+  InstallTool :: Tool -> TargetVersionReq -> Ghcup m (Either OpError ())
+  UninstallTool :: Tool -> TargetVersion -> Ghcup m (Either OpError ())
+  SetDefaultVersion :: Tool -> TargetVersion -> Ghcup m (Either OpError ())
 
 type instance DispatchOf Ghcup = Dynamic
 
@@ -34,13 +34,13 @@ fetchListings = send FetchListings
 relistListings :: (Ghcup :> es) => Eff es (Either OpError (Listings, Bool))
 relistListings = send RelistListings
 
-installTool :: (Ghcup :> es) => SupportedTool -> TargetVersionReq -> Eff es (Either OpError ())
+installTool :: (Ghcup :> es) => Tool -> TargetVersionReq -> Eff es (Either OpError ())
 installTool tool tvr = send (InstallTool tool tvr)
 
-uninstallTool :: (Ghcup :> es) => SupportedTool -> TargetVersion -> Eff es (Either OpError ())
+uninstallTool :: (Ghcup :> es) => Tool -> TargetVersion -> Eff es (Either OpError ())
 uninstallTool tool tv = send (UninstallTool tool tv)
 
-setDefaultVersion :: (Ghcup :> es) => SupportedTool -> TargetVersion -> Eff es (Either OpError ())
+setDefaultVersion :: (Ghcup :> es) => Tool -> TargetVersion -> Eff es (Either OpError ())
 setDefaultVersion tool tv = send (SetDefaultVersion tool tv)
 
 runGhcupIO :: (IOE :> es) => (Text -> Eff es ()) -> Eff (Ghcup : es) a -> Eff es a

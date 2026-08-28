@@ -1,12 +1,11 @@
 module PresentationSpec (tests) where
 
-import Data.List (sort)
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as Text
 import Data.Time.Calendar (fromGregorian)
 import Data.Vector qualified as Vector
 import GHCup.Command.List (ListResult (..))
-import GHCup.Types (Tag (..))
+import GHCup.Types (Tag (..), Tool (..), cabal, ghc, ghcup)
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -15,7 +14,7 @@ import Fixtures (dirs, listingsFor, lr914, mkLR, sampleChanges)
 import Presentation.Path
 import Presentation.Row
 import Toolchain.Path (PathStatus (..), sourceLine)
-import Toolchain.Types (Mutation (..), Progress (..), SupportedTool (..), keyOfMutation, reqOf, supportedTools, tvOf)
+import Toolchain.Types (Mutation (..), Progress (..), keyOfMutation, reqOf, tvOf)
 
 tests :: TestTree
 tests =
@@ -24,13 +23,13 @@ tests =
     [ testGroup
         "tool confirmations"
         [ testCase "install: suggested, not destructive, names the version" $ do
-            let spec = installConfirmation GHC lr914
+            let spec = installConfirmation ghc lr914
             spec.heading @?= "Install GHC 9.14.1?"
             spec.body @?= "The download may take several minutes."
             spec.affirmLabel @?= "Install"
             spec.destructive @?= False
         , testCase "uninstall is destructive" $ do
-            let spec = removeConfirmation GHC lr914
+            let spec = removeConfirmation ghc lr914
             spec.heading @?= "Uninstall GHC 9.14.1?"
             spec.body @?= "The files will be removed from your system."
             spec.affirmLabel @?= "Uninstall"
@@ -83,10 +82,10 @@ tests =
         [ testCase "row keys agree with the keys Session mints from mutations" $ do
             let specs = ghcRows [lr914]
             ((.key) <$> Vector.toList specs)
-              @?= [ keyOfMutation (Install GHC (reqOf lr914))
+              @?= [ keyOfMutation (Install ghc (reqOf lr914))
                   ]
             ((.key) <$> Vector.toList specs)
-              @?= [ keyOfMutation (SetDefault GHC (tvOf lr914))
+              @?= [ keyOfMutation (SetDefault ghc (tvOf lr914))
                   ]
         , testCase "old untagged versions stay in the plan: filtering is the views' job" $ do
             let old = mkLR "9.2.8" [] False False
@@ -105,23 +104,28 @@ tests =
                 specs = ghcRows [lr914, inst]
             ((\s -> (s.action.label, s.action.job)) <$> specs)
               @?= Vector.fromList
-                [ ("Install", Install GHC (reqOf lr914))
-                , ("Remove", Uninstall GHC (tvOf inst))
+                [ ("Install", Install ghc (reqOf lr914))
+                , ("Remove", Uninstall ghc (tvOf inst))
                 ]
             ((.setDefault) <$> specs)
               @?= Vector.fromList
-                [ SetDefault GHC (tvOf lr914)
-                , SetDefault GHC (tvOf inst)
+                [ SetDefault ghc (tvOf lr914)
+                , SetDefault ghc (tvOf inst)
                 ]
         , testCase "subtitle names the default version" $ do
             let inst = mkLR "9.10.3" [Recommended] True True
             (ghcPlan [lr914, inst]).subtitle @?= "Default: 9.10.3"
         , testCase "no default, no subtitle" $
             (ghcPlan [lr914]).subtitle @?= ""
-        , testCase "total over supportedTools, even on empty listings" $ do
-            let plan = planRows Map.empty Map.empty
-            Map.keys plan @?= sort (Vector.toList supportedTools)
-            ((.rows) <$> Map.elems plan) @?= replicate 4 Vector.empty
+        , testCase "keyed by the listings' own tools" $ do
+            let listings =
+                  Map.union
+                    (listingsFor ghc [lr914])
+                    (listingsFor (Tool "hlint") [mkLR "3.10" [Latest] False False])
+                plan = planRows Map.empty listings
+            Map.keys plan @?= Map.keys listings
+        , testCase "empty listings produce an empty plan" $
+            Map.keys (planRows Map.empty Map.empty) @?= []
         , testCase "rank is the newest-first position, so it sorts like the version" $ do
             let specs = ghcRows [mkLR "9.2.8" [] False False, lr914]
             ((\s -> (s.title, s.rank)) <$> Vector.toList specs)
@@ -152,22 +156,22 @@ tests =
             ((.statusLabel) <$> Vector.toList specs) @?= ["", "default", "installed"]
         , testCase "non-GHC tools always count as hls-powered" $ do
             let cabalRow = mkLR "3.14.1.0" [Latest] False False
-                specs = case Map.lookup Cabal (planRows Map.empty (listingsFor Cabal [cabalRow])) of
+                specs = case Map.lookup cabal (planRows Map.empty (listingsFor cabal [cabalRow])) of
                   Just toolRows -> toolRows.rows
                   Nothing -> error "planRows lost the cabal entry"
             ((.passesHlsFilter) <$> Vector.toList specs) @?= [True]
         , testCase "a busy map stamps progress onto the matching row" $ do
-            let key = keyOfMutation (Install GHC (reqOf lr914))
+            let key = keyOfMutation (Install ghc (reqOf lr914))
                 busy = Map.singleton key (Progress "unpacking" Nothing)
-                specs = case Map.lookup GHC (planRows busy (listingsFor GHC [lr914])) of
+                specs = case Map.lookup ghc (planRows busy (listingsFor ghc [lr914])) of
                   Just toolRows -> toolRows.rows
                   Nothing -> error "planRows lost the ghc entry"
             ((.progress) <$> Vector.toList specs) @?= [Just (Progress "unpacking" Nothing)]
         , testCase "rows without a stamp carry Nothing" $
             ((.progress) <$> Vector.toList (ghcRows [lr914])) @?= [Nothing]
         , testCase "a stamp for a key outside the listings is dropped" $ do
-            let busy = Map.singleton (keyOfMutation (Install Cabal (reqOf lr914))) (Progress "x" Nothing)
-                specs = case Map.lookup GHC (planRows busy (listingsFor GHC [lr914])) of
+            let busy = Map.singleton (keyOfMutation (Install cabal (reqOf lr914))) (Progress "x" Nothing)
+                specs = case Map.lookup ghc (planRows busy (listingsFor ghc [lr914])) of
                   Just toolRows -> toolRows.rows
                   Nothing -> error "planRows lost the ghc entry"
             ((.progress) <$> Vector.toList specs) @?= [Nothing]
@@ -192,7 +196,7 @@ tests =
       (Vector.head (ghcRows [lr914])) {passesHlsFilter = hls, latestInFamily = latest}
     ghcPlan :: [ListResult] -> ToolRows
     ghcPlan lrs =
-      case Map.lookup GHC (planRows Map.empty (listingsFor GHC lrs)) of
+      case Map.lookup ghc (planRows Map.empty (listingsFor ghc lrs)) of
         Just toolRows -> toolRows
         Nothing -> error "planRows lost the ghc entry"
 

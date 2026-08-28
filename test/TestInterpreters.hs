@@ -14,13 +14,13 @@ import Data.Text qualified as Text
 import Effectful
 import Effectful.Dispatch.Dynamic
 import Effectful.State.Static.Local
-import GHCup.Types (TargetVersion, TargetVersionReq)
+import GHCup.Types (TargetVersion, TargetVersionReq, Tool)
 import System.FilePath ((</>))
 
 import Effects.FileSystem (FileSystem (..))
 import Effects.Ghcup (Ghcup (..))
 import Effects.Notify (Notify (..))
-import Toolchain.Types (Listings, OpError, SupportedTool, UiMsg)
+import Toolchain.Types (Listings, OpError, UiMsg)
 
 -- | Record every emitted 'UiMsg' in order.
 runNotifyCollect :: Eff (Notify : es) a -> Eff es (a, [UiMsg])
@@ -34,9 +34,9 @@ data GhcupHandlers es = GhcupHandlers
   { acquire :: Eff es (Either OpError ())
   , getListings :: Eff es (Either OpError (Listings, Bool))
   , relist :: Eff es (Either OpError (Listings, Bool))
-  , install :: SupportedTool -> TargetVersionReq -> Eff es (Either OpError ())
-  , uninstall :: SupportedTool -> TargetVersion -> Eff es (Either OpError ())
-  , setDefault :: SupportedTool -> TargetVersion -> Eff es (Either OpError ())
+  , install :: Tool -> TargetVersionReq -> Eff es (Either OpError ())
+  , uninstall :: Tool -> TargetVersion -> Eff es (Either OpError ())
+  , setDefault :: Tool -> TargetVersion -> Eff es (Either OpError ())
   }
 
 idleHandlers :: GhcupHandlers es

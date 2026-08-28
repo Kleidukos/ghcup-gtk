@@ -5,10 +5,12 @@ module UI.Shell
 
 import Data.GI.Base
 import Data.Text (Text)
+import Data.Text.Display
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
 import Config (Config (..))
+import Presentation.Row ()
 import UI.HeaderBar
 import UI.PathBanner qualified as PathBanner
 import UI.ToolPanes qualified as ToolPanes
@@ -41,9 +43,8 @@ build app config = do
       [ #spinning := True
       , #halign := Gtk.AlignCenter
       , #valign := Gtk.AlignCenter
-      , #widthRequest := 48
-      , #heightRequest := 48
       ]
+  loadingSpinner.addCssClass "loading-spinner"
   offlinePage <-
     new
       Adw.StatusPage
@@ -96,9 +97,8 @@ build app config = do
   window.addBreakpoint breakpoint
 
   ToolPanes.onToolSelected panes $ \tool -> do
-    set contentPage [#title := ToolPanes.displayName tool]
+    set contentPage [#title := display tool]
     splitView.setShowContent True
-  ToolPanes.selectFirst panes
 
   toastOverlay <- new Adw.ToastOverlay [#child := splitView]
   set window [#content := toastOverlay]
