@@ -41,31 +41,9 @@ data ToolPanes = ToolPanes
 build :: IO ToolPanes
 build = do
   coreList <- sidebarList
-  coreHeading <-
-    new
-      Gtk.Label
-      [ #label := "Core Tools"
-      , #xalign := 0
-      , #visible := False
-      , #marginStart := 12
-      , #marginEnd := 12
-      , #marginTop := 12
-      , #marginBottom := 6
-      , #cssClasses := ["caption-heading", "dim-label"]
-      ]
+  coreHeading <- sidebarHeading "Core Tools"
   thirdPartyList <- sidebarList
-  thirdPartyHeading <-
-    new
-      Gtk.Label
-      [ #label := "Third-party Tools"
-      , #xalign := 0
-      , #visible := False
-      , #marginStart := 12
-      , #marginEnd := 12
-      , #marginTop := 12
-      , #marginBottom := 6
-      , #cssClasses := ["caption-heading", "dim-label"]
-      ]
+  thirdPartyHeading <- sidebarHeading "Third-party Tools"
   sidebar <- new Gtk.Box [#orientation := Gtk.OrientationVertical]
   sidebar.append coreHeading
   sidebar.append coreList
@@ -90,6 +68,14 @@ build = do
       list <- new Gtk.ListBox [#selectionMode := Gtk.SelectionModeSingle]
       list.addCssClass "navigation-sidebar"
       pure list
+    sidebarHeading label =
+      new
+        Gtk.Label
+        [ #label := label
+        , #xalign := 0
+        , #visible := False
+        , #cssClasses := ["sidebar-heading", "caption-heading", "dim-label"]
+        ]
 
 -- | The list a tool's row lives in: default-channel tools on top,
 -- third-party channel tools below.

@@ -90,8 +90,6 @@ build window initialSort initialFilters tableCallbacks = do
       [ #child := columnView
       , #maximumSize := 700
       , #tighteningThreshold := 600
-      , #marginStart := 12
-      , #marginEnd := 12
       , #cssClasses := ["table-container"]
       ]
 
