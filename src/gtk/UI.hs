@@ -234,7 +234,7 @@ installActions app shell modelRef dispatch = do
         , #developerName := "Hécate Moonlight"
         , #comments := "A GTK4 frontend for the ghcup toolchain manager"
         , #website := "https://www.haskell.org/ghcup/"
-        , #licenseType := Gtk.LicenseBsd3
+        , #licenseType := Gtk.LicenseGpl30Only
         ]
     about.present (Just shell.window)
   app.addAction aboutAction
