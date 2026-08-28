@@ -47,6 +47,8 @@ data RowSpec = RowSpec
   , isDefault :: Bool
   , action :: RowAction
   , setDefault :: Mutation
+  , tool :: Tool
+  , installReq :: TargetVersionReq
   , rank :: Int
   , releaseDay :: Maybe Day
   , passesHlsFilter :: Bool
@@ -107,8 +109,10 @@ rowSpec busy tool newest rank lr =
     , action =
         if lInstalled lr
           then RowAction "Remove" (removeConfirmation tool lr) (Uninstall tool (tvOf lr))
-          else RowAction "Install" (installConfirmation tool lr) (Install tool (reqOf lr))
+          else RowAction "Install" (installConfirmation tool lr) (Install tool (reqOf lr) defaultInstallOptions)
     , setDefault = SetDefault tool (tvOf lr)
+    , tool
+    , installReq = reqOf lr
     , rank
     , releaseDay = lReleaseDay lr
     , passesHlsFilter = passesHlsFilter tool lr
@@ -176,7 +180,7 @@ installConfirmation tool lr =
 
 jobTitle :: Mutation -> Text
 jobTitle = \case
-  Install tool (TargetVersionReq tv _) -> done tool tv "installed"
+  Install tool (TargetVersionReq tv _) _ -> done tool tv "installed"
   Uninstall tool tv -> done tool tv "uninstalled"
   SetDefault tool tv -> done tool tv "is now the default"
   where

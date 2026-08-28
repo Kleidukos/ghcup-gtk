@@ -76,16 +76,14 @@ runJob setCurrent = \case
   Mutate mutation -> do
     result <- runMutation mutation
     emit (JobDone mutation result)
-    case result of
-      Right () -> relistAfterMutation
-      Left _ -> pure ()
+    relistAfterMutation
   where
     emitListings = \case
       Right (listings, stale) -> emit (ListingsReady listings stale)
       Left err -> emit (ListingsFailed err)
 
     runMutation = \case
-      Install tool tvr -> installTool tool tvr
+      Install tool tvr opts -> installTool tool tvr opts
       Uninstall tool tv -> uninstallTool tool tv
       SetDefault tool tv -> setDefaultVersion tool tv
 

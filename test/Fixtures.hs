@@ -45,7 +45,7 @@ anError :: OpError
 anError = OpError "boom" "details"
 
 installMutation :: Mutation
-installMutation = Install ghc (reqOf lr914)
+installMutation = Install ghc (reqOf lr914) defaultInstallOptions
 
 installJob :: Job
 installJob = Mutate installMutation
