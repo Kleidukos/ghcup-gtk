@@ -3,7 +3,7 @@ name: ghcup-gtk
 version: 0.1.0.0
 synopsis: GTK installer for the Haskell toolchain
 -- description:
-license: BSD-3-Clause
+license: GPL-3.0-only
 license-file: LICENSE
 author: Hécate Moonlight
 maintainer: hecate+github@glitchbra.in
