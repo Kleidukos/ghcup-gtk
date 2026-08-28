@@ -228,7 +228,7 @@ install env tool tvr opts = runIn env $ \appState -> do
           setResult <-
             flip runReaderT appState
               . runE @'[ParseError, NotInstalled]
-              $ liftE (setToolVersion tool (tvr._tvqTargetVer))
+              $ liftE (setToolVersion tool tvr._tvqTargetVer)
           pure (void (toOpError "Installed, but could not set as default" setResult))
       | otherwise -> pure (Right ())
 

@@ -181,7 +181,7 @@ present window spec onInstall = do
 
   void $ on clearButton #clicked (dispatch IsolateCleared)
 
-  void $ on cancelButton #clicked (dialog.forceClose)
+  void $ on cancelButton #clicked dialog.forceClose
 
   void $ on installButton #clicked $ do
     model <- readIORef modelRef
