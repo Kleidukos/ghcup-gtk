@@ -76,6 +76,7 @@ library core
     ghcup,
     kdl-hs,
     mtl,
+    optparse-applicative,
     pretty,
     resourcet,
     scientific,
@@ -84,7 +85,6 @@ library core
     text-display,
     time,
     variant,
-    optparse-applicative,
     vector,
     versions,
 
