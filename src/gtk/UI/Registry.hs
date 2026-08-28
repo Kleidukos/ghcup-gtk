@@ -1,14 +1,11 @@
 module UI.Registry
   ( Registry
-  , applyListState
-  , applyTableState
+  , ViewState (..)
   , build
-  , rebuild
-  , setSensitive
-  , switchTo
+  , reconcile
   ) where
 
-import Control.Monad (forM, forM_, when)
+import Control.Monad (forM, forM_, unless, when)
 import Data.GI.Base (AttrOp ((:=)), set)
 import Data.IORef
 import Data.Map.Strict (Map)
@@ -17,7 +14,7 @@ import Data.Vector qualified as Vector
 import GHCup.Types (Tool)
 import GI.Adw qualified as Adw
 
-import Config (Config (..), Filters, TableSort, ViewMode (..), viewMode)
+import Config (Config, ViewMode (..), viewMode)
 import Presentation.Row (ToolRows (..))
 import Toolchain.Types (sortTools)
 import UI.ToolPanes (ToolPane (..), ToolPanes (..))
@@ -26,142 +23,93 @@ import UI.View (RowCallbacks, View (..))
 import UI.View.List qualified as ListView
 import UI.View.Table qualified as TableView
 
--- | The renderer a pane holds in the current mode.
-data Renderer
-  = TableRenderer TableView.Table
-  | ListRenderer ListView.ListView
+-- | The slice of the session model the widget tree must reflect.
+data ViewState = ViewState
+  { config :: Config
+  , sensitive :: Bool
+  , plan :: Map Tool ToolRows
+  }
 
-viewOf :: Renderer -> View
-viewOf = \case
-  TableRenderer table -> table.view
-  ListRenderer list -> list.view
-
--- | One live renderer per tool. Only the active mode's renderers exist,
--- becase 'switchTo' destroys them and builds the other mode's.
+-- | One live renderer per tool. Only the active mode's renderers exist:
+-- 'reconcile' destroys them and builds the other mode's when the view
+-- mode changes.
 data Registry = Registry
   { panes :: ToolPanes
   , window :: Adw.ApplicationWindow
-  -- ^ Retained so 'switchTo' can build fresh renderers.
+  -- ^ Retained so 'reconcile' can build fresh renderers.
+  , rowCallbacks :: RowCallbacks
+  -- ^ Likewise.
   , tableCallbacks :: TableView.TableCallbacks
   -- ^ Likewise.
   , listCallbacks :: ListView.ListCallbacks
   -- ^ Likewise.
-  , modeRef :: IORef ViewMode
-  , configRef :: IORef Config
-  -- ^ Latest config; pane changes rebuild renderers with current
-  -- filter/sort state.
-  , renderersRef :: IORef (Map Tool Renderer)
-  , planRef :: IORef (Map Tool ToolRows)
-  , sensitiveRef :: IORef Bool
+  , renderersRef :: IORef (Map Tool View)
+  , appliedRef :: IORef (Maybe ViewState)
+  -- ^ The last state applied to the widgets; 'Nothing' until the first
+  -- 'reconcile', and treated as 'Nothing' again after a renderer rebuild
+  -- so everything is replayed onto the fresh widgets.
   }
 
 build
   :: Adw.ApplicationWindow
   -> ToolPanes
-  -> Config
+  -> RowCallbacks
   -> TableView.TableCallbacks
   -> ListView.ListCallbacks
   -> IO Registry
-build window panes config tableCallbacks listCallbacks =
-  Registry panes window tableCallbacks listCallbacks
-    <$> newIORef (viewMode config)
-    <*> newIORef config
-    <*> newIORef Map.empty
-    <*> newIORef Map.empty
-    <*> newIORef True
+build window panes rowCallbacks tableCallbacks listCallbacks =
+  Registry panes window rowCallbacks tableCallbacks listCallbacks
+    <$> newIORef Map.empty
+    <*> newIORef Nothing
 
 -- | Build one renderer per tool and mount each in its pane
-buildRenderers
-  :: Adw.ApplicationWindow
-  -> ToolPanes
-  -> TableView.TableCallbacks
-  -> ListView.ListCallbacks
-  -> Config
-  -> IO (Map Tool Renderer)
-buildRenderers window panes tableCallbacks listCallbacks config = do
-  currentPanes <- readIORef panes.panesRef
+buildRenderers :: Registry -> Config -> IO (Map Tool View)
+buildRenderers registry config = do
+  currentPanes <- readIORef registry.panes.panesRef
   built <- forM currentPanes $ \pane -> do
-    renderer <- case viewMode config of
+    view <- case viewMode config of
       Simple ->
-        ListRenderer <$> ListView.build window config.listFilters listCallbacks
+        ListView.build registry.window config registry.rowCallbacks registry.listCallbacks
       Advanced ->
-        TableRenderer
-          <$> TableView.build window config.tableSort config.tableFilters tableCallbacks
-    ToolPanes.setChild pane (viewOf renderer).widget
-    pure (pane.tool, renderer)
+        TableView.build registry.window config registry.rowCallbacks registry.tableCallbacks
+    ToolPanes.setChild pane view.widget
+    pure (pane.tool, view)
   pure (Map.fromList (Vector.toList built))
 
-rebuild :: Registry -> RowCallbacks -> Map Tool ToolRows -> IO ()
-rebuild registry callbacks plan = do
-  let tools = Vector.fromList (sortTools (Map.keys plan))
-  changed <- ToolPanes.sync registry.panes tools
-  when changed $ do
-    config <- readIORef registry.configRef
-    renderers <-
-      buildRenderers
-        registry.window
-        registry.panes
-        registry.tableCallbacks
-        registry.listCallbacks
-        config
-    writeIORef registry.renderersRef renderers
-    writeIORef registry.planRef Map.empty
-    sensitive <- readIORef registry.sensitiveRef
-    forM_ (Map.elems renderers) $ \renderer -> (viewOf renderer).setSensitive sensitive
-  prev <- readIORef registry.planRef
-  renderers <- readIORef registry.renderersRef
-  panes <- readIORef registry.panes.panesRef
-  forM_ panes $ \pane -> do
-    let toolRows = Map.findWithDefault (ToolRows Vector.empty "") pane.tool plan
+reconcile :: Registry -> ViewState -> IO ()
+reconcile registry new = do
+  applied <- readIORef registry.appliedRef
+  let tools = Vector.fromList (sortTools (Map.keys new.plan))
+  panesChanged <- ToolPanes.sync registry.panes tools
+  let modeChanged = fmap (viewMode . (.config)) applied /= Just (viewMode new.config)
+      needRebuild = panesChanged || modeChanged
+  renderers <-
+    if needRebuild
+      then do
+        renderers <- buildRenderers registry new.config
+        writeIORef registry.renderersRef renderers
+        pure renderers
+      else readIORef registry.renderersRef
+
+  let prev = if needRebuild then Nothing else applied
+
+  when (fmap (.sensitive) prev /= Just new.sensitive) $ do
+    set registry.panes.sidebar [#sensitive := new.sensitive]
+    forM_ (Map.elems renderers) $ \view ->
+      view.setSensitive new.sensitive
+
+  unless needRebuild $
+    when (fmap (.config) prev /= Just new.config) $
+      forM_ (Map.elems renderers) $ \view ->
+        view.applyConfig new.config
+
+  let prevPlan = maybe Map.empty (.plan) prev
+  currentPanes <- readIORef registry.panes.panesRef
+  forM_ currentPanes $ \pane -> do
+    let toolRows = Map.findWithDefault (ToolRows Vector.empty "") pane.tool new.plan
     set pane.sidebarRow [#subtitle := toolRows.subtitle]
-    when (Map.lookup pane.tool prev /= Just toolRows) $
-      forM_ (Map.lookup pane.tool renderers) $ \renderer ->
-        (viewOf renderer).setRows callbacks toolRows
-  writeIORef registry.planRef plan
+    when (Map.lookup pane.tool prevPlan /= Just toolRows) $
+      forM_ (Map.lookup pane.tool renderers) $ \view ->
+        view.setRows toolRows
 
-switchTo
-  :: Registry
-  -> RowCallbacks
-  -> Map Tool ToolRows
-  -> Config
-  -> IO ()
-switchTo registry callbacks plan config = do
-  writeIORef registry.configRef config
-  current <- readIORef registry.modeRef
-  when (current /= viewMode config) $ do
-    renderers <-
-      buildRenderers
-        registry.window
-        registry.panes
-        registry.tableCallbacks
-        registry.listCallbacks
-        config
-    writeIORef registry.modeRef (viewMode config)
-    writeIORef registry.renderersRef renderers
-    writeIORef registry.planRef Map.empty
-    sensitive <- readIORef registry.sensitiveRef
-    forM_ (Map.elems renderers) $ \renderer -> (viewOf renderer).setSensitive sensitive
-    rebuild registry callbacks plan
-
-applyTableState :: Registry -> TableSort -> Filters -> IO ()
-applyTableState registry sort filters = do
-  modifyIORef' registry.configRef (\config -> config {tableSort = sort, tableFilters = filters})
-  renderers <- readIORef registry.renderersRef
-  forM_ (Map.elems renderers) $ \case
-    TableRenderer table -> table.applyState sort filters
-    ListRenderer _ -> pure ()
-
-applyListState :: Registry -> Filters -> IO ()
-applyListState registry filters = do
-  modifyIORef' registry.configRef (\config -> config {listFilters = filters})
-  renderers <- readIORef registry.renderersRef
-  forM_ (Map.elems renderers) $ \case
-    ListRenderer list -> list.applyFilters filters
-    TableRenderer _ -> pure ()
-
-setSensitive :: Registry -> Bool -> IO ()
-setSensitive registry b = do
-  writeIORef registry.sensitiveRef b
-  set registry.panes.sidebar [#sensitive := b]
-  renderers <- readIORef registry.renderersRef
-  forM_ (Map.elems renderers) $ \renderer -> (viewOf renderer).setSensitive b
+  writeIORef registry.appliedRef (Just new)

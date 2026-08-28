@@ -1,16 +1,14 @@
 module UI.View.Table
-  ( Table (..)
-  , TableCallbacks (..)
+  ( TableCallbacks (..)
   , build
   ) where
 
-import Control.Monad (forM_, void, when)
+import Control.Monad (forM_, void)
 import Data.GI.Base
 import Data.IORef
 import Data.Int (Int32)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (isJust, isNothing)
 import Data.Ord (Down (..))
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -21,26 +19,17 @@ import GI.Adw qualified as Adw
 import GI.GObject qualified as GObject
 import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
-import GI.Pango qualified as Pango
 
-import Config (Filters, SortColumn (..), SortDirection (..), TableSort (..), sortColumnFromName, sortColumnName)
-import Presentation.Row (RowAction (..), RowSpec (..), ToolRows (..), matchesFilters)
-import Toolchain.Types (Mutation (..), Progress (..), rowKeyText)
-import UI.Dialog qualified as Dialog
-import UI.InstallOptionsDialog qualified as InstallOptionsDialog
-import UI.View (FilterBar (..), RowCallbacks (..), View (..), buildFilterBar, captionLabel, emptyStateStack, pillLabel)
+import Config (Config (..), Filters, SortColumn (..), SortDirection (..), TableSort (..), sortColumnFromName, sortColumnName)
+import Presentation.Row (RowSpec (..), ToolRows (..), matchesFilters)
+import Toolchain.Types (rowKeyText)
+import UI.View (FilterBar (..), RowCallbacks, View (..), buildFilterBar, emptyStateStack, pillLabel)
+import UI.View.ActionStrip qualified as ActionStrip
 
 -- | How the table reports state the user changed, for 'Config' to remember.
 data TableCallbacks = TableCallbacks
   { onSortChanged :: TableSort -> IO ()
   , onFiltersChanged :: Filters -> IO ()
-  }
-
--- | A built table: its 'View' plus the handle for applying state this table
--- did not originate.
-data Table = Table
-  { view :: View
-  , applyState :: TableSort -> Filters -> IO ()
   }
 
 -- | The advanced renderer: a sortable, filterable 'Gtk.ColumnView'.
@@ -51,14 +40,13 @@ data Table = Table
 -- callback looks its row up by key.
 build
   :: Adw.ApplicationWindow
-  -> TableSort
-  -> Filters
+  -> Config
+  -> RowCallbacks
   -> TableCallbacks
-  -> IO Table
-build window initialSort initialFilters tableCallbacks = do
+  -> IO View
+build window config rowCallbacks tableCallbacks = do
   specsRef <- newIORef Map.empty
-  filtersRef <- newIORef initialFilters
-  callbacksRef <- newIORef (RowCallbacks (const (pure ())))
+  filtersRef <- newIORef config.tableFilters
 
   defaultGroup <- new Gtk.CheckButton []
 
@@ -106,7 +94,7 @@ build window initialSort initialFilters tableCallbacks = do
   releasedColumn <- textColumn ByReleased "Released" dayText (.releaseDay)
   statusColumn <- textColumn ByStatus "Status" (.statusLabel) (\spec -> (spec.isDefault, spec.installed))
   void $
-    addColumn columnView specsRef "actions" "Actions" (actionsCell window callbacksRef defaultGroup) Nothing
+    addColumn columnView specsRef "actions" "Actions" (actionsCell window rowCallbacks defaultGroup) Nothing
 
   let columns =
         [ (ByVersion, versionColumn)
@@ -116,7 +104,7 @@ build window initialSort initialFilters tableCallbacks = do
 
   viewSorter <- columnView.getSorter
   sorted.setSorter viewSorter
-  applySort columnView columns initialSort
+  applySort columnView columns config.tableSort
 
   forM_ viewSorter $ \sorter ->
     void $ on sorter #changed $ \_change -> do
@@ -142,7 +130,7 @@ build window initialSort initialFilters tableCallbacks = do
         count <- Gio.listModelGetNItems filtered
         setEmpty (count == 0)
 
-  bar <- buildFilterBar initialFilters $ \filters -> do
+  bar <- buildFilterBar config.tableFilters $ \filters -> do
     writeIORef filtersRef filters
     Gtk.filterChanged rowFilter Gtk.FilterChangeDifferent
     syncEmptyState
@@ -156,8 +144,7 @@ build window initialSort initialFilters tableCallbacks = do
   content.append contentStack
   widget <- Gtk.toWidget content
 
-  let setRows callbacks toolRows = do
-        writeIORef callbacksRef callbacks
+  let setRows toolRows = do
         let keyed = [(rowKeyText spec.key, spec) | spec <- Vector.toList toolRows.rows]
         writeIORef specsRef (Map.fromList keyed)
         previous <- Gio.listModelGetNItems items
@@ -168,11 +155,11 @@ build window initialSort initialFilters tableCallbacks = do
         set columnView [#sensitive := b]
         set bar.widget [#sensitive := b]
 
-      applyState sort filters = do
-        applySort columnView columns sort
-        bar.setFilters filters
+      applyConfig newConfig = do
+        applySort columnView columns newConfig.tableSort
+        bar.setFilters newConfig.tableFilters
 
-  pure Table {view = View {widget, setRows, setSensitive}, applyState}
+  pure View {widget, setRows, setSensitive, applyConfig}
 
 -- | Row behind a 'Gtk.StringObject' handed to a signal callback.
 specOfObject :: IORef (Map Text RowSpec) -> GObject.Object -> IO (Maybe RowSpec)
@@ -258,98 +245,12 @@ dayText spec = maybe "–" (Text.pack . show) spec.releaseDay
 
 actionsCell
   :: Adw.ApplicationWindow
-  -> IORef RowCallbacks
+  -> RowCallbacks
   -> Gtk.CheckButton
   -> RowSpec
   -> IO Gtk.Widget
-actionsCell window callbacksRef defaultGroup spec = do
-  box <-
-    new
-      Gtk.Box
-      [ #orientation := Gtk.OrientationHorizontal
-      , #spacing := 6
-      , #halign := Gtk.AlignEnd
-      ]
-  callbacks <- readIORef callbacksRef
-
-  when spec.installed $ do
-    check <-
-      new
-        Gtk.CheckButton
-        [ #label := "Default"
-        , #valign := Gtk.AlignCenter
-        , #active := spec.isDefault
-        , #sensitive := not spec.isDefault
-        ]
-    check.setGroup (Just defaultGroup)
-    void $ on check #toggled $ do
-      active <- check.getActive
-      when (active && not spec.isDefault) $ callbacks.onSubmit spec.setDefault
-    box.append check
-
-  phaseLabel <-
-    new
-      Gtk.Label
-      [ #valign := Gtk.AlignCenter
-      , #visible := isJust spec.progress
-      , #maxWidthChars := 20
-      , #ellipsize := Pango.EllipsizeModeEnd
-      ]
-  captionLabel phaseLabel
-  progressBar <-
-    new Gtk.ProgressBar [#valign := Gtk.AlignCenter, #visible := isJust spec.progress]
-  actionButton <-
-    new
-      Gtk.Button
-      [ #label := spec.action.label
-      , #valign := Gtk.AlignCenter
-      , #visible := isNothing spec.progress
-      ]
-  void $
-    on actionButton #clicked $
-      Dialog.confirm window spec.action.confirmation $ \confirmed ->
-        when confirmed $ callbacks.onSubmit spec.action.job
-
-  box.append phaseLabel
-  box.append progressBar
-  box.append actionButton
-
-  let menuLabel :: Text
-      menuLabel =
-        if spec.installed
-          then "Reinstall with options…"
-          else "Install with options…"
-  optionsItem <-
-    new
-      Gtk.Button
-      [ #label := menuLabel
-      , #cssClasses := ["flat"]
-      ]
-  popover <- new Gtk.Popover []
-  optionsWidget <- Gtk.toWidget optionsItem
-  popover.setChild (Just optionsWidget)
-  menuButton <-
-    new
-      Gtk.MenuButton
-      [ #iconName := "view-more-symbolic"
-      , #valign := Gtk.AlignCenter
-      , #cssClasses := ["flat"]
-      , #visible := isNothing spec.progress
-      ]
-  menuButton.setPopover (Just popover)
-  void $ on optionsItem #clicked $ do
-    popover.popdown
-    InstallOptionsDialog.present window spec $ \opts ->
-      callbacks.onSubmit (Install spec.tool spec.installReq opts)
-  box.append menuButton
-
-  forM_ spec.progress $ \progress -> do
-    phaseLabel.setLabel progress.phase
-    case progress.fraction of
-      Just fraction -> progressBar.setFraction fraction
-      Nothing -> progressBar.pulse
-
-  Gtk.toWidget box
+actionsCell window callbacks defaultGroup spec =
+  ActionStrip.build window callbacks defaultGroup 20 spec
 
 applySort :: Gtk.ColumnView -> [(SortColumn, Gtk.ColumnViewColumn)] -> TableSort -> IO ()
 applySort columnView columns tableSort =

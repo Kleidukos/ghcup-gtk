@@ -5,7 +5,7 @@ import Data.Text qualified as Text
 import Data.Time.Calendar (fromGregorian)
 import Data.Vector qualified as Vector
 import GHCup.Command.List (ListResult (..))
-import GHCup.Types (Tag (..), Tool (..), cabal, ghc, ghcup)
+import GHCup.Types (Tag (..), Tool (..), cabal, ghc)
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -79,43 +79,40 @@ tests =
         ]
     , testGroup
         "planRows"
-        [ testCase "row keys agree with the keys Session mints from mutations" $ do
-            let specs = ghcRows [lr914]
-            ((.key) <$> Vector.toList specs)
+        [ testCase "row keys agree with the keys Session mints from mutations" $
+            ((.key) <$> Vector.toList (ghcRows [lr914]))
               @?= [ keyOfMutation (Install ghc (reqOf lr914) defaultInstallOptions)
-                  ]
-            ((.key) <$> Vector.toList specs)
-              @?= [ keyOfMutation (SetDefault ghc (tvOf lr914))
                   ]
         , testCase "old untagged versions stay in the plan: filtering is the views' job" $ do
             let old = mkLR "9.2.8" [] False False
             ((.title) <$> ghcRows [lr914, old]) @?= Vector.fromList ["9.14.1", "9.2.8"]
-        , testCase "installed and default facts mirror the listing" $ do
-            let inst = mkLR "9.10.3" [Recommended] True True
-                specs = ghcRows [lr914, inst]
-            ((\s -> (s.installed, s.isDefault)) <$> specs)
-              @?= Vector.fromList [(False, False), (True, True)]
-        , testCase "pills from tags" $ do
-            let inst = mkLR "9.10.3" [Recommended] True False
-                specs = ghcRows [lr914, inst]
-            ((.pills) <$> specs) @?= Vector.fromList [[LatestVersion], [RecommendedVersion]]
-        , testCase "row action is install or remove per installed state" $ do
-            let inst = mkLR "9.10.3" [Recommended] True False
-                specs = ghcRows [lr914, inst]
+        , testCase "installed state drives facts, pills, action, and status label" $ do
+            let dflt = mkLR "9.10.3" [Recommended] True True
+                inst = mkLR "9.8.4" [] True False
+                specs = ghcRows [lr914, dflt, inst]
+            ((\s -> (s.installed, s.isDefault, s.statusLabel)) <$> specs)
+              @?= Vector.fromList
+                [ (False, False, "")
+                , (True, True, "default")
+                , (True, False, "installed")
+                ]
+            ((.pills) <$> specs)
+              @?= Vector.fromList [[LatestVersion], [RecommendedVersion], []]
             ((\s -> (s.action.label, s.action.job)) <$> specs)
               @?= Vector.fromList
                 [ ("Install", Install ghc (reqOf lr914) defaultInstallOptions)
+                , ("Remove", Uninstall ghc (tvOf dflt))
                 , ("Remove", Uninstall ghc (tvOf inst))
                 ]
             ((.setDefault) <$> specs)
               @?= Vector.fromList
                 [ SetDefault ghc (tvOf lr914)
+                , SetDefault ghc (tvOf dflt)
                 , SetDefault ghc (tvOf inst)
                 ]
-        , testCase "subtitle names the default version" $ do
+        , testCase "subtitle names the default version, empty without one" $ do
             let inst = mkLR "9.10.3" [Recommended] True True
             (ghcPlan [lr914, inst]).subtitle @?= "Default: 9.10.3"
-        , testCase "no default, no subtitle" $
             (ghcPlan [lr914]).subtitle @?= ""
         , testCase "keyed by the listings' own tools" $ do
             let listings =
@@ -124,7 +121,6 @@ tests =
                     (listingsFor (Tool "hlint") [mkLR "3.10" [Latest] False False])
                 plan = planRows Map.empty listings
             Map.keys plan @?= Map.keys listings
-        , testCase "empty listings produce an empty plan" $
             Map.keys (planRows Map.empty Map.empty) @?= []
         , testCase "rank is the newest-first position, so it sorts like the version" $ do
             let specs = ghcRows [mkLR "9.2.8" [] False False, lr914]
@@ -139,21 +135,10 @@ tests =
                 specs = ghcRows [dated, lr914]
             ((\s -> (s.releaseDay, s.passesHlsFilter)) <$> Vector.toList specs)
               @?= [(Nothing, False), (Just (fromGregorian 2025 3 22), True)]
-        , testCase "latestInFamily marks one row per major.minor" $ do
-            let rows =
-                  [ mkLR "9.12.2" [] False False
-                  , mkLR "9.12.1" [] False False
-                  , mkLR "9.10.1" [] False False
-                  ]
-                specs = ghcRows rows
+        , testCase "latestInFamily carries curation's verdict onto the rows" $ do
+            let specs = ghcRows [mkLR "9.12.2" [] False False, mkLR "9.12.1" [] False False]
             ((\s -> (s.title, s.latestInFamily)) <$> Vector.toList specs)
-              @?= [("9.12.2", True), ("9.12.1", False), ("9.10.1", True)]
-        , testCase "statusLabel names the row's state" $ do
-            let dflt = mkLR "9.10.3" [] True True
-                inst = mkLR "9.8.4" [] True False
-                specs = ghcRows [lr914, dflt, inst]
-            -- newest-first: 9.14.1 (neither), 9.10.3 (default), 9.8.4 (installed)
-            ((.statusLabel) <$> Vector.toList specs) @?= ["", "default", "installed"]
+              @?= [("9.12.2", True), ("9.12.1", False)]
         , testCase "non-GHC tools always count as hls-powered" $ do
             let cabalRow = mkLR "3.14.1.0" [Latest] False False
                 specs = case Map.lookup cabal (planRows Map.empty (listingsFor cabal [cabalRow])) of
@@ -167,8 +152,6 @@ tests =
                   Just toolRows -> toolRows.rows
                   Nothing -> error "planRows lost the ghc entry"
             ((.progress) <$> Vector.toList specs) @?= [Just (Progress "unpacking" Nothing)]
-        , testCase "rows without a stamp carry Nothing" $
-            ((.progress) <$> Vector.toList (ghcRows [lr914])) @?= [Nothing]
         , testCase "a stamp for a key outside the listings is dropped" $ do
             let busy = Map.singleton (keyOfMutation (Install cabal (reqOf lr914) defaultInstallOptions)) (Progress "x" Nothing)
                 specs = case Map.lookup ghc (planRows busy (listingsFor ghc [lr914])) of

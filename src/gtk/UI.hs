@@ -7,6 +7,7 @@ import Control.Monad (forM_, void)
 import Data.GI.Base
 import Data.IORef
 import Data.Int
+import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Version (showVersion)
@@ -83,6 +84,7 @@ data Runtime = Runtime
   , registry :: Registry.Registry
   , worker :: Worker.Handle
   , dirs :: GhcupDirs
+  , modelRef :: IORef Session.Model
   , dispatch :: Session.Event -> IO ()
   }
 
@@ -103,11 +105,11 @@ activate forcedView app = do
     Registry.build
       shell.window
       shell.panes
-      config
+      (rowCallbacks dispatchLater)
       (tableCallbacks dispatchLater)
       (listCallbacks dispatchLater)
 
-  let runtime = Runtime {app, shell, registry, worker, dirs, dispatch}
+  let runtime = Runtime {app, shell, registry, worker, dirs, modelRef, dispatch}
       dispatch event = do
         model <- readIORef modelRef
         let (model', effects) = Session.step event model
@@ -143,12 +145,9 @@ interpretEffect rt = \case
   Session.Enqueue job -> Worker.enqueue rt.worker job
   Session.Hold -> rt.app.hold
   Session.Release -> rt.app.release
-  Session.SetSensitive b -> Registry.setSensitive rt.registry b
-  Session.SwitchPage phase -> rt.shell.stack.setVisibleChildName (pageOf phase)
-  Session.RevealStaleBanner b -> rt.shell.staleBanner.setRevealed b
+  Session.Reconcile -> reconcile rt
   Session.Toast title -> showToast rt.shell title 3
   Session.ErrorToast err -> showErrorToast rt.shell err
-  Session.Rerender plan -> Registry.rebuild rt.registry (callbacks rt) plan
   Session.SaveConfig newConfig ->
     runEff (runFileSystemIO (Config.save newConfig)) >>= \case
       Left e -> hPutStrLn stderr ("ghcup-gtk: could not save config: " <> Text.unpack e)
@@ -157,12 +156,17 @@ interpretEffect rt = \case
   Session.ApplyPathFix changes -> do
     result <- runEff (runFileSystemIO (applyFix changes))
     rt.dispatch (Session.PathFixDone result)
-  Session.SetPathBanner spec ->
-    PathBanner.render rt.shell.pathBanner (rt.dispatch Session.PathFixConfirmed) spec
-  Session.SwitchRenderer plan config ->
-    Registry.switchTo rt.registry (callbacks rt) plan config
-  Session.SetTableState sort filters -> Registry.applyTableState rt.registry sort filters
-  Session.SetListState filters -> Registry.applyListState rt.registry filters
+
+reconcile :: Runtime -> IO ()
+reconcile rt = do
+  model <- readIORef rt.modelRef
+  Registry.reconcile rt.registry (viewState model)
+  rt.shell.stack.setVisibleChildName (pageOf model.phase)
+  rt.shell.staleBanner.setRevealed model.stale
+  PathBanner.render
+    rt.shell.pathBanner
+    (rt.dispatch Session.PathFixConfirmed)
+    (Session.bannerFor model)
   where
     pageOf :: Session.Phase -> Text
     pageOf = \case
@@ -170,8 +174,16 @@ interpretEffect rt = \case
       Session.Offline -> "offline"
       Session.Ready -> "list"
 
-callbacks :: Runtime -> RowCallbacks
-callbacks rt = RowCallbacks {onSubmit = rt.dispatch . Session.Submitted . Mutate}
+viewState :: Session.Model -> Registry.ViewState
+viewState model =
+  Registry.ViewState
+    { config = model.config
+    , sensitive = Map.null model.inFlight
+    , plan = Session.rowPlan model
+    }
+
+rowCallbacks :: (Session.Event -> IO ()) -> RowCallbacks
+rowCallbacks dispatch = RowCallbacks {onSubmit = dispatch . Session.Submitted . Mutate}
 
 tableCallbacks :: (Session.Event -> IO ()) -> TableView.TableCallbacks
 tableCallbacks dispatch =
