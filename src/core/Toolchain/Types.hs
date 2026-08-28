@@ -1,6 +1,7 @@
 module Toolchain.Types
   ( toolText
   , sortTools
+  , isCoreTool
   , Listings
   , GhcupDirs (..)
   , Mutation (..)
@@ -19,7 +20,7 @@ module Toolchain.Types
 
 import Data.List qualified as List
 import Data.Map.Strict (Map)
-import Data.Maybe (fromMaybe, listToMaybe)
+import Data.Maybe (fromMaybe, isJust, listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Vector (Vector)
@@ -69,16 +70,12 @@ keyOfMutation mutation =
       Uninstall tool tv -> (tool, tv)
       SetDefault tool tv -> (tool, tv)
 
--- | Stable text encoding of a 'RowKey', for widget models that can only hold
--- strings
 rowKeyText :: RowKey -> Text
 rowKeyText (RowKey (tool, ver)) = toolText tool <> ":" <> ver
 
 data Progress = Progress
   { phase :: Text
   , fraction :: Maybe Double
-  -- ^ Set when the log line carried a percentage, so renderers can show a
-  -- determinate bar instead of pulsing
   }
   deriving stock (Eq, Show)
 
@@ -110,12 +107,11 @@ data UiMsg
   | JobDone Mutation (Either OpError ())
   deriving stock (Eq, Show)
 
--- | The tool's identifier as it appears in ghcup metadata, e.g. "ghc",
--- "hlint".
 toolText :: Tool -> Text
 toolText (Tool name) = Text.pack name
 
--- | Sidebar order: ghcup's priority ranking for the tools it knows
--- (ghc, cabal, hls, stack, ghcup), then everything else alphabetically.
 sortTools :: [Tool] -> [Tool]
 sortTools = List.sortOn (\tool -> (fromMaybe maxBound (toolPriority tool), toolText tool))
+
+isCoreTool :: Tool -> Bool
+isCoreTool = isJust . toolPriority
