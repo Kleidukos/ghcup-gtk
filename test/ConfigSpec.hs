@@ -32,9 +32,9 @@ tests =
             parseConfig "{{{{" @?= defaultConfig
         , testCase "v1-style bare bool is malformed → default" $
             (parseConfig "list-filter-hls-powered true").listFilters.hlsPoweredOnly @?= False
-        , testCase "fresh install shows only the latest patch per family, in both views" $ do
-            defaultConfig.listFilters @?= Filters False True
-            defaultConfig.tableFilters @?= Filters False True
+        , testCase "fresh install: list view unfiltered, table view fully filtered" $ do
+            defaultConfig.listFilters @?= Filters False False
+            defaultConfig.tableFilters @?= Filters True True
         , testCase "applyUpdate sets only the list filters" $ do
             let c = applyUpdate (SetListFilters (Filters True False)) defaultConfig
             c.listFilters @?= Filters True False
@@ -99,11 +99,11 @@ tests =
             let c = parseConfig "window-width 1024\nwindow-height 768"
             (c.windowWidth, c.windowHeight) @?= (1024, 768)
         , testCase "missing nodes → defaults" $ do
-            (parseConfig "").windowWidth @?= 760
+            (parseConfig "").windowWidth @?= 960
             (parseConfig "").windowHeight @?= 560
         , testCase "a non-positive or non-integral dimension falls back" $ do
-            (parseConfig "window-width -3").windowWidth @?= 760
-            (parseConfig "window-width 12.5").windowWidth @?= 760
+            (parseConfig "window-width -3").windowWidth @?= 960
+            (parseConfig "window-width 12.5").windowWidth @?= 960
         , testCase "applyUpdate sets both dimensions" $ do
             let c = applyUpdate (SetWindowSize 800 600) defaultConfig
             (c.windowWidth, c.windowHeight) @?= (800, 600)

@@ -66,9 +66,9 @@ defaultConfig =
   Config
     { advancedInterface = False
     , tableSort = TableSort ByVersion Descending
-    , tableFilters = Filters False True
-    , listFilters = Filters False True
-    , windowWidth = 760
+    , tableFilters = Filters True True
+    , listFilters = Filters False False
+    , windowWidth = 960
     , windowHeight = 560
     }
 
