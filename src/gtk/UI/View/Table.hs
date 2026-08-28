@@ -59,6 +59,8 @@ build window initialSort initialFilters tableCallbacks = do
   filtersRef <- newIORef initialFilters
   callbacksRef <- newIORef (RowCallbacks (const (pure ())))
 
+  defaultGroup <- new Gtk.CheckButton []
+
   items <- Gtk.stringListNew (Just [])
 
   rowFilter <- Gtk.customFilterNew . Just $ \obj -> do
@@ -73,15 +75,18 @@ build window initialSort initialFilters tableCallbacks = do
   sorted <- new Gtk.SortListModel [#model := filtered]
   selection <- new Gtk.NoSelection [#model := sorted]
 
-  columnView <- new Gtk.ColumnView
-    [#showRowSeparators := True
-    , #cssClasses := ["zebra-stripes", "card"]
-    ]
+  columnView <-
+    new
+      Gtk.ColumnView
+      [ #showRowSeparators := True
+      , #cssClasses := ["zebra-stripes", "card"]
+      ]
 
   columnView.setModel (Just selection)
 
   clamp <-
-    new Adw.Clamp
+    new
+      Adw.Clamp
       [ #child := columnView
       , #maximumSize := 700
       , #tighteningThreshold := 600
@@ -102,7 +107,7 @@ build window initialSort initialFilters tableCallbacks = do
   releasedColumn <- textColumn ByReleased "Released" dayText (.releaseDay)
   statusColumn <- textColumn ByStatus "Status" (.statusLabel) (\spec -> (spec.isDefault, spec.installed))
   void $
-    addColumn columnView specsRef "actions" "Actions" (actionsCell window callbacksRef) Nothing
+    addColumn columnView specsRef "actions" "Actions" (actionsCell window callbacksRef defaultGroup) Nothing
 
   let columns =
         [ (ByVersion, versionColumn)
@@ -255,9 +260,10 @@ dayText spec = maybe "–" (Text.pack . show) spec.releaseDay
 actionsCell
   :: Adw.ApplicationWindow
   -> IORef RowCallbacks
+  -> Gtk.CheckButton
   -> RowSpec
   -> IO Gtk.Widget
-actionsCell window callbacksRef spec = do
+actionsCell window callbacksRef defaultGroup spec = do
   box <-
     new
       Gtk.Box
@@ -276,6 +282,7 @@ actionsCell window callbacksRef spec = do
         , #active := spec.isDefault
         , #sensitive := not spec.isDefault
         ]
+    check.setGroup (Just defaultGroup)
     void $ on check #toggled $ do
       active <- check.getActive
       when (active && not spec.isDefault) $ callbacks.onSubmit spec.setDefault

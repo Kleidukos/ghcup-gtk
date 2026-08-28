@@ -8,10 +8,20 @@ columnview.zebra-stripes > listview > row:nth-child(odd) {
 
 columnview.card > header > button:first-child {
   border-top-left-radius: 12px;
+  padding-left: 14px;
 }
 
 columnview.card > header > button:last-child {
   border-top-right-radius: 12px;
+  padding-right: 14px;
+}
+
+columnview.card > listview > row > cell:first-child {
+  padding-left: 14px;
+}
+
+columnview.card > listview > row > cell:last-child {
+  padding-right: 14px;
 }
 
 columnview.card > listview > row:last-child {
