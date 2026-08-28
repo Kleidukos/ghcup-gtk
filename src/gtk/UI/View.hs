@@ -34,12 +34,8 @@ data View = View
 data FilterBar = FilterBar
   { widget :: Gtk.Widget
   , setFilters :: Filters -> IO ()
-  -- ^ Sync the checkboxes to filters this bar did not originate.
   }
 
--- | The callback fires only on an actual state change, whether from the user
--- or from 'setFilters': GTK's setActive is a no-op on the current value, so
--- echoes fan out no further.
 buildFilterBar :: Filters -> (Filters -> IO ()) -> IO FilterBar
 buildFilterBar initialFilters onChanged = do
   hlsCheck <-
@@ -73,8 +69,6 @@ buildFilterBar initialFilters onChanged = do
         latestCheck.setActive filters.latestPatchOnly
   pure FilterBar {widget, setFilters}
 
--- | Wrap a renderer's content in a stack that swaps to a status page when
--- the active filters hide every row.
 emptyStateStack :: Gtk.Widget -> IO (Gtk.Stack, Bool -> IO ())
 emptyStateStack content = do
   emptyPage <-
