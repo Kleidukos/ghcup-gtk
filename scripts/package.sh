@@ -8,6 +8,9 @@ set -euo pipefail
 #   No arguments: build every format native to the host OS.
 #
 # Output lands in dist-package/out/.
+#
+# Make sure you keep the usage of the tools (tar, etc) compatible
+# with both GNU and macOS.
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -55,14 +58,20 @@ STAGING="dist-package/root"
 rm -rf dist-package
 mkdir -p dist-package/out
 
-install -D -m755 "$BIN" "${STAGING}${PREFIX}/bin/ghcup-gtk"
+install_file() {
+  local mode="$1" src="$2" dst="$3"
+  mkdir -p "$(dirname "$dst")"
+  install -m "$mode" "$src" "$dst"
+}
+
+install_file 755 "$BIN" "${STAGING}${PREFIX}/bin/ghcup-gtk"
 strip "${STAGING}${PREFIX}/bin/ghcup-gtk"
-install -D -m644 data/style.css "${STAGING}${PREFIX}/share/ghcup-gtk/data/style.css"
+install_file 644 data/style.css "${STAGING}${PREFIX}/share/ghcup-gtk/data/style.css"
 
 if [ "$OS" = "Linux" ]; then
-  install -D -m644 data/org.haskell.GhcupGtk.desktop \
+  install_file 644 data/org.haskell.GhcupGtk.desktop \
     "${STAGING}${PREFIX}/share/applications/org.haskell.GhcupGtk.desktop"
-  install -D -m644 data/org.haskell.GhcupGtk.svg \
+  install_file 644 data/org.haskell.GhcupGtk.svg \
     "${STAGING}${PREFIX}/share/icons/hicolor/scalable/apps/org.haskell.GhcupGtk.svg"
 fi
 
