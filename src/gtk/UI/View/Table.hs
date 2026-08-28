@@ -73,8 +73,22 @@ build window initialSort initialFilters tableCallbacks = do
   sorted <- new Gtk.SortListModel [#model := filtered]
   selection <- new Gtk.NoSelection [#model := sorted]
 
-  columnView <- new Gtk.ColumnView [#showRowSeparators := True, #cssClasses := ["zebra-stripes"]]
+  columnView <- new Gtk.ColumnView
+    [#showRowSeparators := True
+    , #cssClasses := ["zebra-stripes", "card"]
+    ]
+
   columnView.setModel (Just selection)
+
+  clamp <-
+    new Adw.Clamp
+      [ #child := columnView
+      , #maximumSize := 700
+      , #tighteningThreshold := 600
+      , #marginStart := 12
+      , #marginEnd := 12
+      , #cssClasses := ["table-container"]
+      ]
 
   -- Version sorts on RowSpec.rank, which counts down from the newest row, so
   -- ascending on Down rank is ascending by version. No version parsing here.
@@ -110,7 +124,13 @@ build window initialSort initialFilters tableCallbacks = do
         forM_ (mid >>= sortColumnFromName) $ \sortColumn ->
           tableCallbacks.onSortChanged (TableSort sortColumn (directionOf order))
 
-  scrolled <- new Gtk.ScrolledWindow [#child := columnView, #vexpand := True]
+  scrolled <-
+    new
+      Gtk.ScrolledWindow
+      [ #child := clamp
+      , #vexpand := True
+      , #hscrollbarPolicy := Gtk.PolicyTypeNever
+      ]
   scrolledWidget <- Gtk.toWidget scrolled
   (contentStack, setEmpty) <- emptyStateStack scrolledWidget
 

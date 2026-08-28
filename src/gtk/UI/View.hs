@@ -51,6 +51,8 @@ buildFilterBar initialFilters onChanged = do
       Gtk.Box
       [ #orientation := Gtk.OrientationHorizontal
       , #spacing := 12
+      , #marginStart := 12
+      , #marginEnd := 12
       ]
   bar.addCssClass "filter-bar"
   bar.append hlsCheck
