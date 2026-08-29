@@ -145,10 +145,10 @@ build window config rowCallbacks tableCallbacks = do
   widget <- Gtk.toWidget content
 
   let setRows toolRows = do
-        let keyed = [(rowKeyText spec.key, spec) | spec <- Vector.toList toolRows.rows]
-        writeIORef specsRef (Map.fromList keyed)
+        let keyed = Vector.map (\spec -> (rowKeyText spec.key, spec)) toolRows.rows
+        writeIORef specsRef (Map.fromList (Vector.toList keyed))
         previous <- Gio.listModelGetNItems items
-        items.splice 0 previous (Just (map fst keyed))
+        items.splice 0 previous (Just (Vector.toList (Vector.map fst keyed)))
         syncEmptyState
 
       setSensitive b = do

@@ -4,6 +4,7 @@
 module UI (startUI) where
 
 import Control.Monad (forM_, void)
+import Data.Function ((&))
 import Data.GI.Base
 import Data.IORef
 import Data.Int
@@ -183,19 +184,19 @@ viewState model =
     }
 
 rowCallbacks :: (Session.Event -> IO ()) -> RowCallbacks
-rowCallbacks dispatch = RowCallbacks {onSubmit = dispatch . Session.Submitted . Mutate}
+rowCallbacks dispatch = RowCallbacks {onSubmit = \op -> Mutate op & Session.Submitted & dispatch}
 
 tableCallbacks :: (Session.Event -> IO ()) -> TableView.TableCallbacks
 tableCallbacks dispatch =
   TableView.TableCallbacks
-    { onSortChanged = dispatch . Session.ConfigChanged . Config.SetTableSort
-    , onFiltersChanged = dispatch . Session.ConfigChanged . Config.SetTableFilters
+    { onSortChanged = \sort -> Config.SetTableSort sort & Session.ConfigChanged & dispatch
+    , onFiltersChanged = \filters -> Config.SetTableFilters filters & Session.ConfigChanged & dispatch
     }
 
 listCallbacks :: (Session.Event -> IO ()) -> ListView.ListCallbacks
 listCallbacks dispatch =
   ListView.ListCallbacks
-    { onFiltersChanged = dispatch . Session.ConfigChanged . Config.SetListFilters
+    { onFiltersChanged = \filters -> Config.SetListFilters filters & Session.ConfigChanged & dispatch
     }
 
 runPathCheck :: Runtime -> IO ()

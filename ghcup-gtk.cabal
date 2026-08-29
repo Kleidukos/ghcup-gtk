@@ -58,6 +58,9 @@ library core
     Effects.FileSystem
     Effects.Ghcup
     Effects.Notify
+    Presentation.CompileForm
+    Presentation.CompileForm.Ghc
+    Presentation.CompileForm.Hls
     Presentation.InstallForm
     Presentation.Path
     Presentation.Row
@@ -96,6 +99,7 @@ library
   -- cabal-gild: discover src/gtk
   exposed-modules:
     UI
+    UI.CompileOptionsDialog
     UI.Dialog
     UI.HeaderBar
     UI.InstallOptionsDialog
@@ -161,6 +165,7 @@ test-suite ghcup-gtk-test
   hs-source-dirs: test
   -- cabal-gild: discover test/ --exclude test/Main.hs
   other-modules:
+    CompileFormSpec
     ConfigSpec
     Fixtures
     InstallFormSpec

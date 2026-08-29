@@ -9,6 +9,8 @@ module Presentation.InstallForm
   , toOptions
   ) where
 
+import Data.Bifunctor (bimap)
+import Data.Function ((&))
 import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -86,7 +88,7 @@ setDefaultLocked model = isJust model.isolate
 parsedUrl :: FormModel -> Either Text (Maybe URI)
 parsedUrl model
   | Text.null stripped = Right Nothing
-  | otherwise = either (Left . Text.pack) (Right . Just) (uriParser (Text.unpack stripped))
+  | otherwise = Text.unpack stripped & uriParser & bimap Text.pack Just
   where
     stripped = Text.strip model.url
 
