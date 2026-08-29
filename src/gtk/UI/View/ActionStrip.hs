@@ -86,6 +86,16 @@ build window callbacks defaultGroup phaseWidth spec = do
   popover <- new Gtk.Popover []
   optionsWidget <- Gtk.toWidget optionsItem
   popover.setChild (Just optionsWidget)
+
+  compileFromSourceItem <-
+    new
+      Gtk.Button
+      [ #label := "Compile from source"
+      , #cssClasses := ["flat"]
+      ]
+  compileFromSourceWidget <- Gtk.toWidget compileFromSourceItem
+  -- popover.setChild (Just compileFromSourceWidget)
+
   menuButton <-
     new
       Gtk.MenuButton
@@ -99,6 +109,8 @@ build window callbacks defaultGroup phaseWidth spec = do
     popover.popdown
     InstallOptionsDialog.present window spec $ \opts ->
       callbacks.onSubmit (Install spec.tool spec.installReq opts)
+  -- void $ on compileFromSourceItem #clicked $ do
+
   box.append menuButton
 
   forM_ spec.progress $ \progress -> do

@@ -206,7 +206,6 @@ instance Display Tool where
     | tool == ghcup = "GHCup"
     | otherwise = displayBuilder $ toolText tool
 
--- | \"Install\" or \"Reinstall\"; the one place this verb is derived.
 installVerb :: RowSpec -> Text
 installVerb spec = if spec.installed then "Reinstall" else "Install"
 
