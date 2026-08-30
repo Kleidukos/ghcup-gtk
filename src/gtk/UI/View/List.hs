@@ -10,20 +10,17 @@ import GHCup.Types (Tool)
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
-import Config (Config (..))
-import Presentation.Filter (activeFilters, filtersFor)
+import Presentation.Filter (defaultFilters, filtersFor)
 import Presentation.Row (ToolRows (..), matchesFilters)
-import UI.View (FilterBar (..), FiltersChanged, RowCallbacks, View (..), buildFilterBar, emptyStateStack)
+import UI.View (RowCallbacks, View (..), buildFilterBar, emptyStateStack)
 import UI.View.List.Row qualified as Row
 
 build
   :: Tool
-  -> Config
   -> RowCallbacks
-  -> FiltersChanged
   -> IO View
-build tool config rowCallbacks onFiltersChanged = do
-  let initial = activeFilters tool config.toolFilters
+build tool rowCallbacks = do
+  let initial = defaultFilters tool
   filtersRef <- newIORef initial
   rowsRef <- newIORef Nothing
 
@@ -61,10 +58,13 @@ build tool config rowCallbacks onFiltersChanged = do
               listBox.append row
             setEmpty (Vector.null visible)
 
-  bar <- buildFilterBar (filtersFor tool) initial (onFiltersChanged tool)
+  let onFiltersChanged filters = do
+        writeIORef filtersRef filters
+        render
+  bar <- buildFilterBar (filtersFor tool) initial onFiltersChanged
 
   content <- new Gtk.Box [#orientation := Gtk.OrientationVertical]
-  content.append bar.widget
+  content.append bar
   content.append contentStack
   widget <- Gtk.toWidget content
 
@@ -74,12 +74,8 @@ build tool config rowCallbacks onFiltersChanged = do
 
       setSensitive b = do
         set listBox [#sensitive := b]
-        set bar.widget [#sensitive := b]
+        set bar [#sensitive := b]
 
-      applyConfig newConfig = do
-        let filters = activeFilters tool newConfig.toolFilters
-        writeIORef filtersRef filters
-        bar.setFilters filters
-        render
+      applyConfig _ = pure ()
 
   pure View {widget, setRows, setSensitive, applyConfig}

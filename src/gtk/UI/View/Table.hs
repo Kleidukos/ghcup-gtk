@@ -23,10 +23,10 @@ import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
 
 import Config (Config (..), SortColumn (..), SortDirection (..), TableSort (..), sortColumnFromName, sortColumnName)
-import Presentation.Filter (activeFilters, filtersFor)
+import Presentation.Filter (advancedFiltersFor, defaultFilters)
 import Presentation.Row (RowSpec (..), ToolRows (..), matchesFilters, statusLabel)
 import Toolchain.Types (rowKeyText)
-import UI.View (FilterBar (..), FiltersChanged, RowCallbacks, View (..), buildFilterBar, emptyStateStack, pillLabel)
+import UI.View (RowCallbacks, View (..), buildFilterBar, emptyStateStack, pillLabel)
 import UI.View.ActionStrip qualified as ActionStrip
 
 -- | How the table reports state the user changed, for 'Config' to remember.
@@ -45,11 +45,10 @@ build
   -> Config
   -> RowCallbacks
   -> TableCallbacks
-  -> FiltersChanged
   -> IO View
-build tool config rowCallbacks tableCallbacks onFiltersChanged = do
+build tool config rowCallbacks tableCallbacks = do
   specsRef <- newIORef Map.empty
-  let initial = activeFilters tool config.toolFilters
+  let initial = defaultFilters tool
   filtersRef <- newIORef initial
   installedGhcsRef <- newIORef []
 
@@ -135,13 +134,17 @@ build tool config rowCallbacks tableCallbacks onFiltersChanged = do
         count <- Gio.listModelGetNItems filtered
         setEmpty (count == 0)
 
-  bar <- buildFilterBar (filtersFor tool) initial (onFiltersChanged tool)
+  let onFiltersChanged filters = do
+        writeIORef filtersRef filters
+        Gtk.filterChanged rowFilter Gtk.FilterChangeDifferent
+        syncEmptyState
+  bar <- buildFilterBar (advancedFiltersFor tool) initial onFiltersChanged
 
   void $ on filtered #itemsChanged $ \_position _removed _added -> syncEmptyState
   syncEmptyState
 
   content <- new Gtk.Box [#orientation := Gtk.OrientationVertical]
-  content.append bar.widget
+  content.append bar
   content.append contentStack
   widget <- Gtk.toWidget content
 
@@ -155,15 +158,10 @@ build tool config rowCallbacks tableCallbacks onFiltersChanged = do
 
       setSensitive b = do
         set columnView [#sensitive := b]
-        set bar.widget [#sensitive := b]
+        set bar [#sensitive := b]
 
-      applyConfig newConfig = do
+      applyConfig newConfig =
         applySort columnView columns newConfig.tableSort
-        let filters = activeFilters tool newConfig.toolFilters
-        writeIORef filtersRef filters
-        bar.setFilters filters
-        Gtk.filterChanged rowFilter Gtk.FilterChangeDifferent
-        syncEmptyState
 
   pure View {widget, setRows, setSensitive, applyConfig}
 

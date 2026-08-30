@@ -18,7 +18,7 @@ import Presentation.Row (ToolRows (..))
 import Toolchain.Types (sortTools)
 import UI.ToolPanes (ToolPane (..), ToolPanes (..))
 import UI.ToolPanes qualified as ToolPanes
-import UI.View (FiltersChanged, RowCallbacks, View (..))
+import UI.View (RowCallbacks, View (..))
 import UI.View.List qualified as ListView
 import UI.View.Table qualified as TableView
 
@@ -38,8 +38,6 @@ data Registry = Registry
   -- ^ Retained so 'reconcile' can build fresh renderers.
   , tableCallbacks :: TableView.TableCallbacks
   -- ^ Likewise.
-  , onFiltersChanged :: FiltersChanged
-  -- ^ Likewise.
   , renderersRef :: IORef (Map Tool View)
   , appliedRef :: IORef (Maybe ViewState)
   -- ^ The last state applied to the widgets; 'Nothing' until the first
@@ -51,10 +49,9 @@ build
   :: ToolPanes
   -> RowCallbacks
   -> TableView.TableCallbacks
-  -> FiltersChanged
   -> IO Registry
-build panes rowCallbacks tableCallbacks onFiltersChanged =
-  Registry panes rowCallbacks tableCallbacks onFiltersChanged
+build panes rowCallbacks tableCallbacks =
+  Registry panes rowCallbacks tableCallbacks
     <$> newIORef Map.empty
     <*> newIORef Nothing
 
@@ -65,9 +62,9 @@ buildRenderers registry config = do
   built <- forM currentPanes $ \pane -> do
     view <- case config.viewMode of
       Simple ->
-        ListView.build pane.tool config registry.rowCallbacks registry.onFiltersChanged
+        ListView.build pane.tool registry.rowCallbacks
       Advanced ->
-        TableView.build pane.tool config registry.rowCallbacks registry.tableCallbacks registry.onFiltersChanged
+        TableView.build pane.tool config registry.rowCallbacks registry.tableCallbacks
     ToolPanes.setChild pane view.widget
     pure (pane.tool, view)
   pure (Map.fromList (Vector.toList built))

@@ -9,13 +9,11 @@ import Data.GI.Base
 import Data.IORef
 import Data.Int
 import Data.Map.Strict qualified as Map
-import Data.Set (Set)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Version (showVersion)
 import Data.Word (Word32)
 import Effectful
-import GHCup.Types (Tool)
 import GI.Adw qualified as Adw
 import GI.GLib qualified as GLib
 import GI.Gdk qualified as Gdk
@@ -31,7 +29,6 @@ import CLI qualified
 import Config qualified
 import Effects.FileSystem (runFileSystemIO)
 import Paths_ghcup_gtk qualified as Paths
-import Presentation.Filter (FilterKind)
 import Session qualified
 import Toolchain.GHCup qualified as GHCup
 import Toolchain.Path (applyFix, checkPath)
@@ -109,7 +106,6 @@ activate forcedView app = do
       shell.panes
       (rowCallbacks dispatchLater)
       (tableCallbacks dispatchLater)
-      (filtersChanged dispatchLater)
 
   let runtime = Runtime {app, shell, registry, worker, dirs, modelRef, dispatch}
       dispatch event = do
@@ -199,10 +195,6 @@ tableCallbacks dispatch =
   TableView.TableCallbacks
     { onSortChanged = \sort -> Config.SetTableSort sort & Session.ConfigChanged & dispatch
     }
-
-filtersChanged :: (Session.Event -> IO ()) -> Tool -> Set FilterKind -> IO ()
-filtersChanged dispatch tool filters =
-  Config.SetToolFilters tool filters & Session.ConfigChanged & dispatch
 
 runPathCheck :: Runtime -> IO ()
 runPathCheck rt = do

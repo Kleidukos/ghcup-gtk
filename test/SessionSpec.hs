@@ -1,7 +1,6 @@
 module SessionSpec (tests) where
 
 import Data.Map.Strict qualified as Map
-import Data.Set qualified as Set
 import GHCup.Types (cabal, ghc, hls)
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -13,7 +12,6 @@ import Config
   , defaultConfig
   )
 import Fixtures (anError, defaultCompileGhcOptions, defaultCompileHlsOptions, dirs, installJob, installMutation, listingsFor, lr914, sampleChanges)
-import Presentation.Filter (FilterKind (..))
 import Presentation.Path (appliedBanner, pathBanner)
 import Presentation.Row (Confirmation (..), RowAction (..), planRows)
 import Session
@@ -148,9 +146,7 @@ tests =
             filter (== Reconcile) effects @?= []
         , testCase "an echoed config update emits nothing, which is what stops the sort-save-apply-sort loop" $ do
             let (ready, _) = step (WorkerMsg (ListingsReady sampleListings Fresh)) model0
-                (withToolFilters, _) = step (ConfigChanged (SetToolFilters ghc (Set.singleton HlsPoweredOnly))) ready
             snd (step (ConfigChanged (SetTableSort defaultConfig.tableSort)) ready) @?= []
-            snd (step (ConfigChanged (SetToolFilters ghc (Set.singleton HlsPoweredOnly))) withToolFilters) @?= []
             snd (step (ConfigChanged (SetViewMode Simple)) ready) @?= []
         ]
     , testGroup

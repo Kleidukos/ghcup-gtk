@@ -17,22 +17,16 @@ module Config
   ) where
 
 import Data.Either (fromRight)
-import Data.Map.Strict qualified as Map
-import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Maybe (fromMaybe)
 import Data.Scientific qualified as Scientific
-import Data.Set (Set)
-import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Effectful
-import GHCup.Types (Tool (..))
 import KDL qualified
 import System.Directory (XdgDirectory (..))
 import System.FilePath ((</>))
 
 import Effects.FileSystem
-import Presentation.Filter (FilterKind, ToolFilters, filterFromName, filterName)
-import Toolchain.Types (toolText)
 
 data SortColumn = ByVersion | ByReleased | ByStatus
   deriving stock (Eq, Show)
@@ -52,7 +46,6 @@ data ViewMode = Simple | Advanced
 data Config = Config
   { viewMode :: ViewMode
   , tableSort :: TableSort
-  , toolFilters :: ToolFilters
   , windowWidth :: Int
   , windowHeight :: Int
   }
@@ -63,7 +56,6 @@ defaultConfig =
   Config
     { viewMode = Simple
     , tableSort = TableSort ByVersion Descending
-    , toolFilters = Map.empty
     , windowWidth = 960
     , windowHeight = 560
     }
@@ -72,7 +64,6 @@ defaultConfig =
 data ConfigUpdate
   = SetViewMode ViewMode
   | SetTableSort TableSort
-  | SetToolFilters Tool (Set FilterKind)
   | SetWindowSize Int Int
   deriving stock (Eq, Show)
 
@@ -80,7 +71,6 @@ applyUpdate :: ConfigUpdate -> Config -> Config
 applyUpdate update config = case update of
   SetViewMode mode -> config {viewMode = mode}
   SetTableSort sort -> config {tableSort = sort}
-  SetToolFilters tool filters -> config {toolFilters = Map.insert tool filters config.toolFilters}
   SetWindowSize width height -> config {windowWidth = width, windowHeight = height}
 
 parseConfigEither :: Text -> Either Text Config
@@ -97,23 +87,11 @@ parseConfigEither input = configOf <$> KDL.parse input
                     then Descending
                     else Ascending
               }
-        , toolFilters = toolFiltersOf doc
         , windowWidth = int "window-width" defaultConfig.windowWidth doc
         , windowHeight = int "window-height" defaultConfig.windowHeight doc
         }
 
     sortColumn doc = sortColumnFromName =<< stringArg "table-sort-column" doc
-
-    toolFiltersOf doc =
-      Map.fromList (mapMaybe toolFiltersNode (KDL.filterNodes "tool-filters" doc))
-
-    toolFiltersNode n = case n.entries of
-      KDL.Entry {name = Nothing, value = KDL.Value {data_ = KDL.String toolName}} : rest ->
-        Just (Tool (Text.unpack toolName), Set.fromList (mapMaybe filterFromName (argStrings rest)))
-      _ -> Nothing
-
-    argStrings entries =
-      [s | KDL.Entry {name = Nothing, value = KDL.Value {data_ = KDL.String s}} <- entries]
 
     bool name fallback doc = fromMaybe fallback (boolArg name doc)
 
@@ -144,11 +122,9 @@ renderConfig config =
           [ stringNode "view-mode" (viewModeName config.viewMode)
           , stringNode "table-sort-column" (sortColumnName config.tableSort.column)
           , boolNode "table-sort-descending" (config.tableSort.direction == Descending)
+          , intNode "window-width" config.windowWidth
+          , intNode "window-height" config.windowHeight
           ]
-            <> toolFilterNodes config.toolFilters
-            <> [ intNode "window-width" config.windowWidth
-               , intNode "window-height" config.windowHeight
-               ]
       , ext = KDL.def
       }
 
@@ -175,12 +151,6 @@ sortColumnFromName = \case
   "released" -> Just ByReleased
   "status" -> Just ByStatus
   _ -> Nothing
-
-toolFilterNodes :: ToolFilters -> [KDL.Node]
-toolFilterNodes toolFilters =
-  [ node "tool-filters" (KDL.String <$> toolText tool : map filterName (Set.toAscList filters))
-  | (tool, filters) <- Map.toAscList toolFilters
-  ]
 
 boolNode :: Text -> Bool -> KDL.Node
 boolNode name value = node name [KDL.Bool value]

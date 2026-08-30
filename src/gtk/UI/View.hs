@@ -1,7 +1,5 @@
 module UI.View
-  ( FilterBar (..)
-  , FiltersChanged
-  , RowCallbacks (..)
+  ( RowCallbacks (..)
   , View (..)
   , buildFilterBar
   , captionLabel
@@ -14,7 +12,6 @@ import Data.GI.Base
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
-import GHCup.Types (Tool)
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
@@ -37,15 +34,8 @@ data View = View
   , applyConfig :: Config -> IO ()
   }
 
-type FiltersChanged = Tool -> Set FilterKind -> IO ()
-
 -- | The filter checkboxes shared by the list and table renderers.
-data FilterBar = FilterBar
-  { widget :: Gtk.Widget
-  , setFilters :: Set FilterKind -> IO ()
-  }
-
-buildFilterBar :: [FilterKind] -> Set FilterKind -> (Set FilterKind -> IO ()) -> IO FilterBar
+buildFilterBar :: [FilterKind] -> Set FilterKind -> (Set FilterKind -> IO ()) -> IO Gtk.Widget
 buildFilterBar kinds initial onChanged = do
   checks <- traverse checkOf kinds
   bar <-
@@ -60,10 +50,7 @@ buildFilterBar kinds initial onChanged = do
         Set.fromList . map fst <$> filterM (\(_, check) -> check.getActive) checks
   forM_ checks $ \(_, check) ->
     void $ on check #toggled (currentFilters >>= onChanged)
-  widget <- Gtk.toWidget bar
-  let setFilters filters =
-        forM_ checks $ \(kind, check) -> check.setActive (Set.member kind filters)
-  pure FilterBar {widget, setFilters}
+  Gtk.toWidget bar
   where
     checkOf kind = do
       check <- new Gtk.CheckButton [#label := filterLabel kind, #active := Set.member kind initial]

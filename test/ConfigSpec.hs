@@ -3,17 +3,14 @@ module ConfigSpec (tests) where
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (isJust)
-import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Effectful
-import GHCup.Types (Tool (..), cabal, ghc)
 import Test.Tasty
 import Test.Tasty.HUnit
 
 import Config
 import Effects.FileSystem (FileSystem)
-import Presentation.Filter (FilterKind (..), defaultFilters)
 import TestInterpreters (runFileSystemPure)
 
 configPath :: FilePath
@@ -27,48 +24,6 @@ tests =
   testGroup
     "Config"
     [ testGroup
-        "tool filters"
-        [ testCase "parses one tool-filters node per tool" $ do
-            let c = parseConfig "tool-filters \"ghc\" \"hls-powered\" \"show-nightlies\"\ntool-filters \"cabal\" \"latest-patch\""
-            c.toolFilters
-              @?= Map.fromList
-                [ (ghc, Set.fromList [HlsPoweredOnly, ShowNightlies])
-                , (cabal, Set.singleton LatestPatchOnly)
-                ]
-        , testCase "unknown filter names are dropped, tool entry kept" $
-            (parseConfig "tool-filters \"ghc\" \"colour\"").toolFilters
-              @?= Map.singleton ghc Set.empty
-        , testCase "a node without arguments is skipped" $
-            (parseConfig "tool-filters").toolFilters @?= Map.empty
-        , testCase "a node whose first argument is not a string is skipped" $
-            (parseConfig "tool-filters #true \"hls-powered\"").toolFilters @?= Map.empty
-        , testCase "non-string trailing arguments are dropped" $
-            (parseConfig "tool-filters \"ghc\" 42 \"latest-patch\"").toolFilters
-              @?= Map.singleton ghc (Set.singleton LatestPatchOnly)
-        , testCase "duplicate nodes for a tool: last wins" $
-            (parseConfig "tool-filters \"ghc\" \"hls-powered\"\ntool-filters \"ghc\" \"latest-patch\"").toolFilters
-              @?= Map.singleton ghc (Set.singleton LatestPatchOnly)
-        , testCase "legacy filter keys are ignored" $ do
-            parseConfig "filter-hls-powered #true" @?= defaultConfig
-            parseConfig "list-filter-latest-patch #false" @?= defaultConfig
-        , testCase "fresh install: no per-tool state, defaults rule" $
-            defaultConfig.toolFilters @?= Map.empty
-        , testCase "applyUpdate inserts only its own tool" $ do
-            let c = applyUpdate (SetToolFilters ghc (Set.singleton ShowCross)) defaultConfig
-            c.toolFilters @?= Map.singleton ghc (Set.singleton ShowCross)
-            c.viewMode @?= defaultConfig.viewMode
-        , testCase "round-trips tool filters, including third-party tools" $ do
-            let c =
-                  defaultConfig
-                    { toolFilters =
-                        Map.fromList
-                          [ (ghc, defaultFilters ghc)
-                          , (Tool "hlint", Set.fromList [LatestPatchOnly, ShowPrereleases])
-                          ]
-                    }
-            parseConfig (renderConfig c) @?= c
-        ]
-    , testGroup
         "view mode"
         [ testCase "parses view-mode \"advanced\"" $
             (parseConfig "view-mode \"advanced\"").viewMode @?= Advanced
@@ -92,7 +47,6 @@ tests =
                   Config
                     { viewMode = Advanced
                     , tableSort = TableSort ByStatus Ascending
-                    , toolFilters = Map.singleton ghc (Set.fromList [HlsPoweredOnly, ShowCross])
                     , windowWidth = 1024
                     , windowHeight = 768
                     }
@@ -102,16 +56,16 @@ tests =
             -- the "old config.kdl without the new keys" case: every missing
             -- node falls back, so an upgrade changes nothing
             parseConfig "" @?= defaultConfig
-        , testCase "retired nodes (show-old-versions, advanced-interface) are ignored" $ do
+        , testCase "retired nodes (show-old-versions, advanced-interface, tool-filters) are ignored" $ do
             parseConfig "show-old-versions #true" @?= defaultConfig
             parseConfig "advanced-interface #true" @?= defaultConfig
+            parseConfig "tool-filters \"ghc\" \"hls-powered\"" @?= defaultConfig
         , testCase "a missing direction node keeps the default direction" $
             (parseConfig "table-sort-column \"released\"").tableSort
               @?= TableSort ByReleased Descending
         , testCase "applyUpdate touches only its own setting" $ do
             let sorted = applyUpdate (SetTableSort (TableSort ByReleased Ascending)) defaultConfig
             sorted.tableSort @?= TableSort ByReleased Ascending
-            sorted.toolFilters @?= defaultConfig.toolFilters
             sorted.viewMode @?= Simple
             (applyUpdate (SetViewMode Advanced) defaultConfig).viewMode @?= Advanced
         ]
@@ -134,9 +88,9 @@ tests =
             config @?= defaultConfig
             warning @?= Nothing
         , testCase "good file is read" $ do
-            let files = Map.singleton configPath "tool-filters \"ghc\" \"show-nightlies\""
+            let files = Map.singleton configPath "view-mode \"advanced\""
                 ((config, warning), _) = runFs files load
-            config.toolFilters @?= Map.singleton ghc (Set.singleton ShowNightlies)
+            config.viewMode @?= Advanced
             warning @?= Nothing
         , testCase "malformed file → defaults plus a warning naming the file" $ do
             let files = Map.singleton configPath "{{{{"
@@ -151,7 +105,7 @@ tests =
             config @?= defaultConfig
             isJust warning @? "expected a warning"
         , testCase "save-then-load round-trip" $ do
-            let c = defaultConfig {toolFilters = Map.singleton ghc (Set.singleton ShowCross)}
+            let c = defaultConfig {viewMode = Advanced}
                 ((saved, (loaded, warning)), _) =
                   runFs Map.empty $ do
                     saveResult <- save c
