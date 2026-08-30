@@ -50,6 +50,10 @@ columnview.card > listview > row:last-child {
   margin-right: 12px;
 }
 
+.filter-popover-content {
+  margin: 6px;
+}
+
 .sidebar-heading {
   margin-top: 12px;
   margin-bottom: 6px;

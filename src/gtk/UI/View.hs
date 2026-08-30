@@ -12,6 +12,7 @@ import Data.GI.Base
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
+import Data.Text qualified as Text
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
@@ -34,27 +35,49 @@ data View = View
   , applyConfig :: Config -> IO ()
   }
 
--- | The filter checkboxes shared by the list and table renderers.
+-- | The filter funnel shared by the list and table renderers: a menu
+-- button whose popover holds one check button per filter, with a pill
+-- showing how many are active.
 buildFilterBar :: [FilterKind] -> Set FilterKind -> (Set FilterKind -> IO ()) -> IO Gtk.Widget
 buildFilterBar kinds initial onChanged = do
   checks <- traverse checkOf kinds
-  bar <-
-    new
-      Gtk.Box
-      [ #orientation := Gtk.OrientationHorizontal
-      , #spacing := 12
-      ]
-  bar.addCssClass "filter-bar"
-  forM_ checks $ \(_, check) -> bar.append check
+
+  list <- new Gtk.Box [#orientation := Gtk.OrientationVertical, #spacing := 4]
+  list.addCssClass "filter-popover-content"
+  forM_ checks $ \(_, check) -> list.append check
+  popover <- new Gtk.Popover [#child := list]
+
+  icon <- new Gtk.Image [#iconName := "funnel-symbolic"]
+  label <- new Gtk.Label [#label := "Filters"]
+  let activeCount = length (filter ((`Set.member` initial) . fst) checks)
+  badge <- pillLabel (countText activeCount)
+  set badge [#visible := activeCount > 0]
+
+  content <- new Gtk.Box [#orientation := Gtk.OrientationHorizontal, #spacing := 6]
+  content.append icon
+  content.append label
+  content.append badge
+
+  button <- new Gtk.MenuButton [#popover := popover, #child := content]
+
   let currentFilters =
         Set.fromList . map fst <$> filterM (\(_, check) -> check.getActive) checks
   forM_ checks $ \(_, check) ->
-    void $ on check #toggled (currentFilters >>= onChanged)
+    void $ on check #toggled $ do
+      filters <- currentFilters
+      set badge [#label := countText (Set.size filters), #visible := not (Set.null filters)]
+      onChanged filters
+
+  bar <- new Gtk.Box [#orientation := Gtk.OrientationHorizontal]
+  bar.addCssClass "filter-bar"
+  bar.append button
   Gtk.toWidget bar
   where
     checkOf kind = do
       check <- new Gtk.CheckButton [#label := filterLabel kind, #active := Set.member kind initial]
       pure (kind, check)
+
+    countText = Text.pack . show
 
 emptyStateStack :: Gtk.Widget -> IO (Gtk.Stack, Bool -> IO ())
 emptyStateStack content = do

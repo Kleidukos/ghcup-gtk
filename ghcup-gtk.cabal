@@ -10,7 +10,10 @@ maintainer: hecate+github@glitchbra.in
 -- copyright:
 category: Distribution
 build-type: Simple
-data-files: data/style.css
+data-files:
+  data/icons/funnel-symbolic.svg
+  data/style.css
+
 extra-doc-files: CHANGELOG.md
 tested-with: ghc ==9.14.1
 
