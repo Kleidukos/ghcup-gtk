@@ -5,7 +5,8 @@ Logic in `src/core/Toolchain/Path.hs`, user-facing text in
 
 Runs through the core loop: `PathChecked`, `PathFixConfirmed`, and
 `PathFixDone` events drive the state machine, which tracks a `PathModel`
-and emits `CheckPath`, `ApplyPathFix`, and `SetPathBanner` effects.
+and emits `CheckPath` and `ApplyPathFix` effects. The banner itself is
+derived from the model (`Session.bannerFor`) on every `Reconcile`.
 
 ## Detection
 

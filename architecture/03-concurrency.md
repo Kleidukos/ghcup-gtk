@@ -48,7 +48,9 @@ for `RefreshListings`.
 Jobs run via the `Ghcup` effect: the production interpreter delegates to
 `Toolchain.GHCup`; tests interpret the same effect with pure handlers. Any
 exception is caught and becomes `JobDone … (Left err)` rather than killing
-the thread. Emission toward the UI goes through the `Notify` effect.
+the thread. Job results and listings are emitted through the `Notify`
+effect; progress lines reach the UI straight from the log sink, a plain
+`IO` closure over the same notifier callback.
 
 ### 3. Relist after mutations
 After a successful install/uninstall/set-default, the worker re-queries the

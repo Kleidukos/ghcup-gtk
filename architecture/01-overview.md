@@ -6,6 +6,7 @@ Graphical frontend for the `ghcup` library:
 
 - lists available and installed versions of GHC, Cabal, HLS, Stack, etc;
 - installs, uninstalls, sets defaults;
+- compiles GHC and HLS from source, with the same options as ghcup's TUI;
 - warns when the ghcup bin directory is not on `PATH` and offers to fix it;
 - works offline via cached metadata.
 
