@@ -1,32 +1,30 @@
 module UI.View.List
-  ( ListCallbacks (..)
-  , build
+  ( build
   ) where
 
 import Control.Monad (forM_)
 import Data.GI.Base
 import Data.IORef
 import Data.Vector qualified as Vector
+import GHCup.Types (Tool)
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
-import Config (Config (..), Filters)
+import Config (Config (..))
+import Presentation.Filter (activeFilters, filtersFor)
 import Presentation.Row (ToolRows (..), matchesFilters)
-import UI.View (FilterBar (..), RowCallbacks, View (..), buildFilterBar, emptyStateStack)
+import UI.View (FilterBar (..), FiltersChanged, RowCallbacks, View (..), buildFilterBar, emptyStateStack)
 import UI.View.List.Row qualified as Row
 
--- | How the list reports filter changes
-newtype ListCallbacks = ListCallbacks
-  { onFiltersChanged :: Filters -> IO ()
-  }
-
 build
-  :: Config
+  :: Tool
+  -> Config
   -> RowCallbacks
-  -> ListCallbacks
+  -> FiltersChanged
   -> IO View
-build config rowCallbacks listCallbacks = do
-  filtersRef <- newIORef config.listFilters
+build tool config rowCallbacks onFiltersChanged = do
+  let initial = activeFilters tool config.toolFilters
+  filtersRef <- newIORef initial
   rowsRef <- newIORef Nothing
 
   defaultGroup <- new Gtk.CheckButton []
@@ -63,7 +61,7 @@ build config rowCallbacks listCallbacks = do
               listBox.append row
             setEmpty (Vector.null visible)
 
-  bar <- buildFilterBar config.listFilters listCallbacks.onFiltersChanged
+  bar <- buildFilterBar (filtersFor tool) initial (onFiltersChanged tool)
 
   content <- new Gtk.Box [#orientation := Gtk.OrientationVertical]
   content.append bar.widget
@@ -79,8 +77,9 @@ build config rowCallbacks listCallbacks = do
         set bar.widget [#sensitive := b]
 
       applyConfig newConfig = do
-        writeIORef filtersRef newConfig.listFilters
-        bar.setFilters newConfig.listFilters
+        let filters = activeFilters tool newConfig.toolFilters
+        writeIORef filtersRef filters
+        bar.setFilters filters
         render
 
   pure View {widget, setRows, setSensitive, applyConfig}

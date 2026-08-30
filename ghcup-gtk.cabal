@@ -61,6 +61,7 @@ library core
     Presentation.CompileForm
     Presentation.CompileForm.Ghc
     Presentation.CompileForm.Hls
+    Presentation.Filter
     Presentation.InstallForm
     Presentation.Path
     Presentation.Row
@@ -169,6 +170,7 @@ test-suite ghcup-gtk-test
   other-modules:
     CompileFormSpec
     ConfigSpec
+    FilterSpec
     Fixtures
     InstallFormSpec
     PresentationSpec

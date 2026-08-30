@@ -3,14 +3,17 @@ module ConfigSpec (tests) where
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (isJust)
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Effectful
+import GHCup.Types (Tool (..), cabal, ghc)
 import Test.Tasty
 import Test.Tasty.HUnit
 
 import Config
 import Effects.FileSystem (FileSystem)
+import Presentation.Filter (FilterKind (..), defaultFilters)
 import TestInterpreters (runFileSystemPure)
 
 configPath :: FilePath
@@ -24,21 +27,46 @@ tests =
   testGroup
     "Config"
     [ testGroup
-        "list filters"
-        [ testCase "parses the filters independently" $ do
-            let c = parseConfig "list-filter-hls-powered #true\nlist-filter-latest-patch #false"
-            c.listFilters @?= Filters True False
-        , testCase "malformed document → the whole default config" $
-            parseConfig "{{{{" @?= defaultConfig
-        , testCase "v1-style bare bool is malformed → default" $
-            (parseConfig "list-filter-hls-powered true").listFilters.hlsPoweredOnly @?= False
-        , testCase "fresh install: list view unfiltered, table view fully filtered" $ do
-            defaultConfig.listFilters @?= Filters False False
-            defaultConfig.tableFilters @?= Filters True True
-        , testCase "applyUpdate sets only the list filters" $ do
-            let c = applyUpdate (SetListFilters (Filters True False)) defaultConfig
-            c.listFilters @?= Filters True False
-            c.tableFilters @?= defaultConfig.tableFilters
+        "tool filters"
+        [ testCase "parses one tool-filters node per tool" $ do
+            let c = parseConfig "tool-filters \"ghc\" \"hls-powered\" \"show-nightlies\"\ntool-filters \"cabal\" \"latest-patch\""
+            c.toolFilters
+              @?= Map.fromList
+                [ (ghc, Set.fromList [HlsPoweredOnly, ShowNightlies])
+                , (cabal, Set.singleton LatestPatchOnly)
+                ]
+        , testCase "unknown filter names are dropped, tool entry kept" $
+            (parseConfig "tool-filters \"ghc\" \"colour\"").toolFilters
+              @?= Map.singleton ghc Set.empty
+        , testCase "a node without arguments is skipped" $
+            (parseConfig "tool-filters").toolFilters @?= Map.empty
+        , testCase "a node whose first argument is not a string is skipped" $
+            (parseConfig "tool-filters #true \"hls-powered\"").toolFilters @?= Map.empty
+        , testCase "non-string trailing arguments are dropped" $
+            (parseConfig "tool-filters \"ghc\" 42 \"latest-patch\"").toolFilters
+              @?= Map.singleton ghc (Set.singleton LatestPatchOnly)
+        , testCase "duplicate nodes for a tool: last wins" $
+            (parseConfig "tool-filters \"ghc\" \"hls-powered\"\ntool-filters \"ghc\" \"latest-patch\"").toolFilters
+              @?= Map.singleton ghc (Set.singleton LatestPatchOnly)
+        , testCase "legacy filter keys are ignored" $ do
+            parseConfig "filter-hls-powered #true" @?= defaultConfig
+            parseConfig "list-filter-latest-patch #false" @?= defaultConfig
+        , testCase "fresh install: no per-tool state, defaults rule" $
+            defaultConfig.toolFilters @?= Map.empty
+        , testCase "applyUpdate inserts only its own tool" $ do
+            let c = applyUpdate (SetToolFilters ghc (Set.singleton ShowCross)) defaultConfig
+            c.toolFilters @?= Map.singleton ghc (Set.singleton ShowCross)
+            c.viewMode @?= defaultConfig.viewMode
+        , testCase "round-trips tool filters, including third-party tools" $ do
+            let c =
+                  defaultConfig
+                    { toolFilters =
+                        Map.fromList
+                          [ (ghc, defaultFilters ghc)
+                          , (Tool "hlint", Set.fromList [LatestPatchOnly, ShowPrereleases])
+                          ]
+                    }
+            parseConfig (renderConfig c) @?= c
         ]
     , testGroup
         "view mode"
@@ -59,16 +87,12 @@ tests =
             (parseConfig "table-sort-column \"status\"").tableSort.column @?= ByStatus
         , testCase "an unknown sort column falls back to version" $
             (parseConfig "table-sort-column \"colour\"").tableSort.column @?= ByVersion
-        , testCase "parses the filters independently" $ do
-            let c = parseConfig "filter-hls-powered #true\nfilter-latest-patch #false"
-            c.tableFilters @?= Filters True False
         , testCase "round-trips every setting, and the defaults" $ do
             let c =
                   Config
                     { viewMode = Advanced
                     , tableSort = TableSort ByStatus Ascending
-                    , tableFilters = Filters True True
-                    , listFilters = Filters True False
+                    , toolFilters = Map.singleton ghc (Set.fromList [HlsPoweredOnly, ShowCross])
                     , windowWidth = 1024
                     , windowHeight = 768
                     }
@@ -87,11 +111,9 @@ tests =
         , testCase "applyUpdate touches only its own setting" $ do
             let sorted = applyUpdate (SetTableSort (TableSort ByReleased Ascending)) defaultConfig
             sorted.tableSort @?= TableSort ByReleased Ascending
-            sorted.tableFilters @?= defaultConfig.tableFilters
+            sorted.toolFilters @?= defaultConfig.toolFilters
             sorted.viewMode @?= Simple
             (applyUpdate (SetViewMode Advanced) defaultConfig).viewMode @?= Advanced
-            (applyUpdate (SetTableFilters (Filters True False)) defaultConfig).tableFilters
-              @?= Filters True False
         ]
     , testGroup
         "window size"
@@ -112,9 +134,9 @@ tests =
             config @?= defaultConfig
             warning @?= Nothing
         , testCase "good file is read" $ do
-            let files = Map.singleton configPath "list-filter-hls-powered #true"
+            let files = Map.singleton configPath "tool-filters \"ghc\" \"show-nightlies\""
                 ((config, warning), _) = runFs files load
-            config.listFilters.hlsPoweredOnly @?= True
+            config.toolFilters @?= Map.singleton ghc (Set.singleton ShowNightlies)
             warning @?= Nothing
         , testCase "malformed file → defaults plus a warning naming the file" $ do
             let files = Map.singleton configPath "{{{{"
@@ -129,7 +151,7 @@ tests =
             config @?= defaultConfig
             isJust warning @? "expected a warning"
         , testCase "save-then-load round-trip" $ do
-            let c = defaultConfig {listFilters = Filters True False}
+            let c = defaultConfig {toolFilters = Map.singleton ghc (Set.singleton ShowCross)}
                 ((saved, (loaded, warning)), _) =
                   runFs Map.empty $ do
                     saveResult <- save c

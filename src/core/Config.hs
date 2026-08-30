@@ -3,7 +3,6 @@ module Config
   , ConfigUpdate (..)
   , SortColumn (..)
   , SortDirection (..)
-  , Filters (..)
   , TableSort (..)
   , ViewMode (..)
   , applyUpdate
@@ -18,16 +17,22 @@ module Config
   ) where
 
 import Data.Either (fromRight)
-import Data.Maybe (fromMaybe)
+import Data.Map.Strict qualified as Map
+import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Scientific qualified as Scientific
+import Data.Set (Set)
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Effectful
+import GHCup.Types (Tool (..))
 import KDL qualified
 import System.Directory (XdgDirectory (..))
 import System.FilePath ((</>))
 
 import Effects.FileSystem
+import Presentation.Filter (FilterKind, ToolFilters, filterFromName, filterName)
+import Toolchain.Types (toolText)
 
 data SortColumn = ByVersion | ByReleased | ByStatus
   deriving stock (Eq, Show)
@@ -41,20 +46,13 @@ data TableSort = TableSort
   }
   deriving stock (Eq, Show)
 
-data Filters = Filters
-  { hlsPoweredOnly :: Bool
-  , latestPatchOnly :: Bool
-  }
-  deriving stock (Eq, Show)
-
 data ViewMode = Simple | Advanced
   deriving stock (Eq, Ord, Show)
 
 data Config = Config
   { viewMode :: ViewMode
   , tableSort :: TableSort
-  , tableFilters :: Filters
-  , listFilters :: Filters
+  , toolFilters :: ToolFilters
   , windowWidth :: Int
   , windowHeight :: Int
   }
@@ -65,8 +63,7 @@ defaultConfig =
   Config
     { viewMode = Simple
     , tableSort = TableSort ByVersion Descending
-    , tableFilters = Filters True True
-    , listFilters = Filters False False
+    , toolFilters = Map.empty
     , windowWidth = 960
     , windowHeight = 560
     }
@@ -75,8 +72,7 @@ defaultConfig =
 data ConfigUpdate
   = SetViewMode ViewMode
   | SetTableSort TableSort
-  | SetTableFilters Filters
-  | SetListFilters Filters
+  | SetToolFilters Tool (Set FilterKind)
   | SetWindowSize Int Int
   deriving stock (Eq, Show)
 
@@ -84,8 +80,7 @@ applyUpdate :: ConfigUpdate -> Config -> Config
 applyUpdate update config = case update of
   SetViewMode mode -> config {viewMode = mode}
   SetTableSort sort -> config {tableSort = sort}
-  SetTableFilters filters -> config {tableFilters = filters}
-  SetListFilters filters -> config {listFilters = filters}
+  SetToolFilters tool filters -> config {toolFilters = Map.insert tool filters config.toolFilters}
   SetWindowSize width height -> config {windowWidth = width, windowHeight = height}
 
 parseConfigEither :: Text -> Either Text Config
@@ -102,19 +97,23 @@ parseConfigEither input = configOf <$> KDL.parse input
                     then Descending
                     else Ascending
               }
-        , tableFilters = filtersOf "filter-hls-powered" "filter-latest-patch" defaultConfig.tableFilters doc
-        , listFilters = filtersOf "list-filter-hls-powered" "list-filter-latest-patch" defaultConfig.listFilters doc
+        , toolFilters = toolFiltersOf doc
         , windowWidth = int "window-width" defaultConfig.windowWidth doc
         , windowHeight = int "window-height" defaultConfig.windowHeight doc
         }
 
     sortColumn doc = sortColumnFromName =<< stringArg "table-sort-column" doc
 
-    filtersOf hlsKey latestKey fallback doc =
-      Filters
-        { hlsPoweredOnly = bool hlsKey fallback.hlsPoweredOnly doc
-        , latestPatchOnly = bool latestKey fallback.latestPatchOnly doc
-        }
+    toolFiltersOf doc =
+      Map.fromList (mapMaybe toolFiltersNode (KDL.filterNodes "tool-filters" doc))
+
+    toolFiltersNode n = case n.entries of
+      KDL.Entry {name = Nothing, value = KDL.Value {data_ = KDL.String toolName}} : rest ->
+        Just (Tool (Text.unpack toolName), Set.fromList (mapMaybe filterFromName (argStrings rest)))
+      _ -> Nothing
+
+    argStrings entries =
+      [s | KDL.Entry {name = Nothing, value = KDL.Value {data_ = KDL.String s}} <- entries]
 
     bool name fallback doc = fromMaybe fallback (boolArg name doc)
 
@@ -146,10 +145,7 @@ renderConfig config =
           , stringNode "table-sort-column" (sortColumnName config.tableSort.column)
           , boolNode "table-sort-descending" (config.tableSort.direction == Descending)
           ]
-            -- The table keys keep their unprefixed legacy names so existing
-            -- config files stay valid; only the list keys carry a prefix.
-            <> filterNodes "filter-hls-powered" "filter-latest-patch" config.tableFilters
-            <> filterNodes "list-filter-hls-powered" "list-filter-latest-patch" config.listFilters
+            <> toolFilterNodes config.toolFilters
             <> [ intNode "window-width" config.windowWidth
                , intNode "window-height" config.windowHeight
                ]
@@ -180,36 +176,37 @@ sortColumnFromName = \case
   "status" -> Just ByStatus
   _ -> Nothing
 
-filterNodes :: Text -> Text -> Filters -> [KDL.Node]
-filterNodes hlsKey latestKey filters =
-  [ boolNode hlsKey filters.hlsPoweredOnly
-  , boolNode latestKey filters.latestPatchOnly
+toolFilterNodes :: ToolFilters -> [KDL.Node]
+toolFilterNodes toolFilters =
+  [ node "tool-filters" (KDL.String <$> toolText tool : map filterName (Set.toAscList filters))
+  | (tool, filters) <- Map.toAscList toolFilters
   ]
 
 boolNode :: Text -> Bool -> KDL.Node
-boolNode name value = node name (KDL.Bool value)
+boolNode name value = node name [KDL.Bool value]
 
 stringNode :: Text -> Text -> KDL.Node
-stringNode name value = node name (KDL.String value)
+stringNode name value = node name [KDL.String value]
 
 intNode :: Text -> Int -> KDL.Node
-intNode name value = node name (KDL.Number (fromIntegral value))
+intNode name value = node name [KDL.Number (fromIntegral value)]
 
-node :: Text -> KDL.ValueData -> KDL.Node
-node name value =
+node :: Text -> [KDL.ValueData] -> KDL.Node
+node name values =
   KDL.Node
     { ann = Nothing
     , name = KDL.toIdentifier name
-    , entries =
-        [ KDL.Entry
-            { name = Nothing
-            , value = KDL.Value {ann = Nothing, data_ = value, ext = KDL.def}
-            , ext = KDL.def
-            }
-        ]
+    , entries = entryOf <$> values
     , children = Nothing
     , ext = KDL.def
     }
+  where
+    entryOf value =
+      KDL.Entry
+        { name = Nothing
+        , value = KDL.Value {ann = Nothing, data_ = value, ext = KDL.def}
+        , ext = KDL.def
+        }
 
 configFile :: (FileSystem :> es) => Eff es FilePath
 configFile = do

@@ -1,6 +1,7 @@
 module PresentationSpec (tests) where
 
 import Data.Map.Strict qualified as Map
+import Data.Set qualified as Set
 import Data.Text qualified as Text
 import Data.Time.Calendar (fromGregorian)
 import Data.Vector qualified as Vector
@@ -9,8 +10,8 @@ import GHCup.Types (Tag (..), Tool (..), cabal, ghc)
 import Test.Tasty
 import Test.Tasty.HUnit
 
-import Config (Filters (..))
 import Fixtures (dirs, listingsFor, lr914, mkLR, sampleChanges)
+import Presentation.Filter
 import Presentation.Path
 import Presentation.Row
 import Toolchain.Path (PathStatus (..), sourceLine)
@@ -158,19 +159,50 @@ tests =
                   Just toolRows -> toolRows.rows
                   Nothing -> error "planRows lost the ghc entry"
             ((.progress) <$> Vector.toList specs) @?= [Nothing]
+        , testCase "prerelease, nightly, and cross facts mirror the listing" $ do
+            let pre = mkLR "9.15.0.20260801" [Prerelease] False False
+                nightly = mkLR "9.15.20260830" [LatestNightly] False False
+                crossed = (mkLR "9.14.1" [] False False) {lCross = Just "aarch64-linux"}
+                specs = ghcRows [pre, nightly, crossed]
+            ((\s -> (s.isPrerelease, s.isNightly, s.crossTarget)) <$> Vector.toList specs)
+              @?= [ (False, True, Nothing)
+                  , (True, False, Nothing)
+                  , (False, False, Just "aarch64-linux")
+                  ]
+        , testCase "prerelease and nightly tags become pills" $ do
+            let pre = mkLR "9.15.0.20260801" [Prerelease] False False
+                latestPre = mkLR "9.15.0.20260802" [LatestPrerelease] False False
+                nightly = mkLR "9.15.20260830" [Nightly] False False
+                specs = ghcRows [latestPre, pre, nightly]
+            ((.pills) <$> Vector.toList specs)
+              @?= [[NightlyVersion], [PrereleaseVersion], [PrereleaseVersion]]
+        , testCase "a cross row's title carries the target" $ do
+            let crossed = (mkLR "9.14.1" [] False False) {lCross = Just "aarch64-linux"}
+            ((.title) <$> Vector.toList (ghcRows [crossed, lr914]))
+              @?= ["aarch64-linux-9.14.1", "9.14.1"]
         ]
     , testGroup
         "matchesFilters"
-        [ testCase "no active filter keeps every row" $
-            matchesFilters (Filters False False) (sampleSpec False False) @? "kept"
+        [ testCase "no active filter keeps regular rows, hides special categories" $ do
+            matchesFilters Set.empty (sampleSpec False False) @?= True
+            matchesFilters Set.empty ((sampleSpec False False) {isPrerelease = True}) @?= False
+            matchesFilters Set.empty ((sampleSpec False False) {isNightly = True}) @?= False
+            matchesFilters Set.empty ((sampleSpec False False) {crossTarget = Just "aarch64-linux"}) @?= False
         , testCase "hls filter drops rows that fail it" $ do
-            matchesFilters (Filters True False) (sampleSpec False True) @?= False
-            matchesFilters (Filters True False) (sampleSpec True True) @?= True
+            matchesFilters (Set.singleton HlsPoweredOnly) (sampleSpec False True) @?= False
+            matchesFilters (Set.singleton HlsPoweredOnly) (sampleSpec True True) @?= True
         , testCase "latest-patch filter drops older patches" $ do
-            matchesFilters (Filters False True) (sampleSpec True False) @?= False
-            matchesFilters (Filters False True) (sampleSpec True True) @?= True
-        , testCase "both filters must pass together" $
-            matchesFilters (Filters True True) (sampleSpec False True) @?= False
+            matchesFilters (Set.singleton LatestPatchOnly) (sampleSpec True False) @?= False
+            matchesFilters (Set.singleton LatestPatchOnly) (sampleSpec True True) @?= True
+        , testCase "show filters reveal their category" $ do
+            matchesFilters (Set.singleton ShowPrereleases) ((sampleSpec False False) {isPrerelease = True}) @?= True
+            matchesFilters (Set.singleton ShowNightlies) ((sampleSpec False False) {isNightly = True}) @?= True
+            matchesFilters (Set.singleton ShowCross) ((sampleSpec False False) {crossTarget = Just "aarch64-linux"}) @?= True
+        , testCase "restrictive filters must all pass together" $
+            matchesFilters (Set.fromList [HlsPoweredOnly, LatestPatchOnly]) (sampleSpec False True) @?= False
+        , testCase "restrictive and additive filters compose" $ do
+            matchesFilters (Set.fromList [LatestPatchOnly, ShowPrereleases]) ((sampleSpec True True) {isPrerelease = True}) @?= True
+            matchesFilters (Set.fromList [LatestPatchOnly, ShowPrereleases]) ((sampleSpec True False) {isPrerelease = True}) @?= False
         ]
     ]
   where

@@ -25,7 +25,9 @@ import Data.Function ((&))
 import Data.List qualified as List
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (mapMaybe)
+import Data.Maybe (isNothing, mapMaybe)
+import Data.Set (Set)
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text.Display
 import Data.Time.Calendar (Day)
@@ -35,7 +37,7 @@ import Data.Versions (PVP, Version, prettyPVP, prettyVer)
 import GHCup.Command.List (ListResult (..))
 import GHCup.Types (Tag (..), TargetVersion, TargetVersionReq (..), Tool, cabal, ghc, ghcup, hls, stack, tVerToText)
 
-import Config (Filters (..))
+import Presentation.Filter (FilterKind (..))
 import Toolchain.Curation (FamilyKey, curate, isLatestInFamily, latestPerFamily)
 import Toolchain.Types
 
@@ -62,6 +64,9 @@ data RowSpec = RowSpec
   , progress :: Maybe Progress
   -- ^ Set while a mutation is running on this row; renderers draw it as a
   -- pulsing bar plus the latest log line.
+  , isPrerelease :: Bool
+  , isNightly :: Bool
+  , crossTarget :: Maybe Text
   }
   deriving stock (Eq, Show)
 
@@ -69,12 +74,16 @@ data Pill
   = HlsPowered
   | RecommendedVersion
   | LatestVersion
+  | PrereleaseVersion
+  | NightlyVersion
   deriving stock (Eq, Ord, Show)
 
 instance Display Pill where
   displayBuilder HlsPowered = "hls-powered"
   displayBuilder RecommendedVersion = "recommended"
   displayBuilder LatestVersion = "latest"
+  displayBuilder PrereleaseVersion = "prerelease"
+  displayBuilder NightlyVersion = "nightly"
 
 data RowAction = RowAction
   { label :: Text
@@ -126,6 +135,9 @@ rowSpec busy tool newest rank lr =
     , passesHlsFilter = passesHlsFilter tool lr
     , latestInFamily = isLatestInFamily newest lr
     , progress = Map.lookup key busy
+    , isPrerelease = Prerelease `elem` lr.lTag || LatestPrerelease `elem` lr.lTag
+    , isNightly = Nightly `elem` lr.lTag || LatestNightly `elem` lr.lTag
+    , crossTarget = lr.lCross
     }
   where
     key = keyOfListing tool lr
@@ -134,8 +146,8 @@ rowSpec busy tool newest rank lr =
         Nothing -> ""
         Just pvp -> " / base-" <> prettyPVP pvp
     title
-      | tool == ghc = prettyVer lr.lVer <> basePVP
-      | otherwise = prettyVer (lVer lr)
+      | tool == ghc = tVerToText (tvOf lr) <> basePVP
+      | otherwise = tVerToText (tvOf lr)
 
 getBaseVersion :: [Tag] -> Maybe PVP
 getBaseVersion tags = List.foldl' go Nothing tags
@@ -148,12 +160,19 @@ getBaseVersion tags = List.foldl' go Nothing tags
 passesHlsFilter :: Tool -> ListResult -> Bool
 passesHlsFilter tool lr = tool /= ghc || hlsPowered lr
 
--- | Whether a row survives a filter bar's active filters. Shared by the list
--- and table renderers.
-matchesFilters :: Filters -> RowSpec -> Bool
-matchesFilters filters spec =
-  (not filters.hlsPoweredOnly || spec.passesHlsFilter)
-    && (not filters.latestPatchOnly || spec.latestInFamily)
+-- | Whether a row survives a bar's active filters. Shared by the list and
+-- table renderers.
+matchesFilters :: Set FilterKind -> RowSpec -> Bool
+matchesFilters active spec =
+  and
+    [ not (on HlsPoweredOnly) || spec.passesHlsFilter
+    , not (on LatestPatchOnly) || spec.latestInFamily
+    , on ShowPrereleases || not spec.isPrerelease
+    , on ShowNightlies || not spec.isNightly
+    , on ShowCross || isNothing spec.crossTarget
+    ]
+  where
+    on kind = Set.member kind active
 
 statusLabel :: RowSpec -> Text
 statusLabel spec
@@ -191,6 +210,10 @@ mkTagLabel :: Tag -> Maybe Pill
 mkTagLabel = \case
   Recommended -> Just RecommendedVersion
   Latest -> Just LatestVersion
+  Prerelease -> Just PrereleaseVersion
+  LatestPrerelease -> Just PrereleaseVersion
+  Nightly -> Just NightlyVersion
+  LatestNightly -> Just NightlyVersion
   _ -> Nothing
 
 subject :: RowSpec -> Text
