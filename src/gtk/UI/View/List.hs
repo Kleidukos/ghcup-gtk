@@ -21,12 +21,11 @@ newtype ListCallbacks = ListCallbacks
   }
 
 build
-  :: Adw.ApplicationWindow
-  -> Config
+  :: Config
   -> RowCallbacks
   -> ListCallbacks
   -> IO View
-build window config rowCallbacks listCallbacks = do
+build config rowCallbacks listCallbacks = do
   filtersRef <- newIORef config.listFilters
   rowsRef <- newIORef Nothing
 
@@ -60,14 +59,11 @@ build window config rowCallbacks listCallbacks = do
           Just toolRows -> do
             let visible = Vector.filter (matchesFilters filters) toolRows.rows
             forM_ visible $ \spec -> do
-              row <- Row.build window defaultGroup spec rowCallbacks
+              row <- Row.build defaultGroup toolRows.installedGhcs spec rowCallbacks
               listBox.append row
             setEmpty (Vector.null visible)
 
-  bar <- buildFilterBar config.listFilters $ \filters -> do
-    writeIORef filtersRef filters
-    render
-    listCallbacks.onFiltersChanged filters
+  bar <- buildFilterBar config.listFilters listCallbacks.onFiltersChanged
 
   content <- new Gtk.Box [#orientation := Gtk.OrientationVertical]
   content.append bar.widget
@@ -82,6 +78,9 @@ build window config rowCallbacks listCallbacks = do
         set listBox [#sensitive := b]
         set bar.widget [#sensitive := b]
 
-      applyConfig newConfig = bar.setFilters newConfig.listFilters
+      applyConfig newConfig = do
+        writeIORef filtersRef newConfig.listFilters
+        bar.setFilters newConfig.listFilters
+        render
 
   pure View {widget, setRows, setSensitive, applyConfig}

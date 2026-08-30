@@ -6,30 +6,31 @@ import Control.Monad (join, void)
 import Data.GI.Base
 import Data.IORef
 import Data.Text (Text)
-import GHCup.Types (BuildSystem (..), TargetVersion, TargetVersionReq (..), ghc, hls, tVerToText)
+import Data.Versions (Version)
+import GHCup.Types (BuildSystem (..), TargetVersionReq (..), ghc, hls, tVerToText)
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
 import Presentation.CompileForm.Ghc
 import Presentation.CompileForm.Hls
-import Presentation.Row (RowSpec (..), toolShortName)
-import Toolchain.Types (Mutation (..))
+import Presentation.Row (RowSpec (..), compileGhcMutation, compileHlsMutation, toolShortName)
+import Toolchain.Types (CompileGhcOptions, CompileHlsOptions, Mutation)
 import UI.OptionsDialog
 
 setSubtitle :: Text
 setSubtitle = "Make this the active version after the build"
 
-present :: Adw.ApplicationWindow -> RowSpec -> (Mutation -> IO ()) -> IO ()
-present window spec onCompile
-  | spec.tool == ghc = presentGhc window heading tv (initGhcFormModel spec.installedGhcs) onCompile
-  | spec.tool == hls = presentHls window heading tv (initHlsFormModel spec.installedGhcs) onCompile
+present :: Adw.ApplicationWindow -> [Version] -> RowSpec -> (Mutation -> IO ()) -> IO ()
+present window installedGhcs spec onCompile
+  | spec.tool == ghc = presentGhc window heading (compileGhcMutation spec) (initGhcFormModel installedGhcs) onCompile
+  | spec.tool == hls = presentHls window heading (compileHlsMutation spec) (initHlsFormModel installedGhcs) onCompile
   | otherwise = pure ()
   where
     TargetVersionReq tv _ = spec.installReq
     heading = "Compile " <> toolShortName spec.tool <> " " <> tVerToText tv <> " from source"
 
-presentGhc :: Adw.ApplicationWindow -> Text -> TargetVersion -> GhcFormModel -> (Mutation -> IO ()) -> IO ()
-presentGhc window heading tv initialModel onCompile = do
+presentGhc :: Adw.ApplicationWindow -> Text -> (CompileGhcOptions -> Mutation) -> GhcFormModel -> (Mutation -> IO ()) -> IO ()
+presentGhc window heading mkMutation initialModel onCompile = do
   modelRef <- newIORef initialModel
   renderRef <- newIORef (pure ())
 
@@ -102,13 +103,13 @@ presentGhc window heading tv initialModel onCompile = do
     renderIsolate ui model.isolateDir (effectiveSetCompileGhc model)
 
   wireSetToggle ui (effectiveSetCompileGhc <$> readIORef modelRef) (dispatch . GhcSetToggled)
-  wireAffirm ui (fmap (CompileGhc tv) . toGhcOptions <$> readIORef modelRef) onCompile
+  wireAffirm ui (fmap mkMutation . toGhcOptions <$> readIORef modelRef) onCompile
 
   join (readIORef renderRef)
   ui.presentDialog
 
-presentHls :: Adw.ApplicationWindow -> Text -> TargetVersion -> HlsFormModel -> (Mutation -> IO ()) -> IO ()
-presentHls window heading tv initialModel onCompile = do
+presentHls :: Adw.ApplicationWindow -> Text -> (CompileHlsOptions -> Mutation) -> HlsFormModel -> (Mutation -> IO ()) -> IO ()
+presentHls window heading mkMutation initialModel onCompile = do
   modelRef <- newIORef initialModel
   renderRef <- newIORef (pure ())
 
@@ -169,7 +170,7 @@ presentHls window heading tv initialModel onCompile = do
     renderIsolate ui model.isolateDir (effectiveSetCompileHls model)
 
   wireSetToggle ui (effectiveSetCompileHls <$> readIORef modelRef) (dispatch . HlsSetToggled)
-  wireAffirm ui (fmap (CompileHls tv) . toHlsOptions <$> readIORef modelRef) onCompile
+  wireAffirm ui (fmap mkMutation . toHlsOptions <$> readIORef modelRef) onCompile
 
   join (readIORef renderRef)
   ui.presentDialog

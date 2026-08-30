@@ -14,6 +14,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Display
 import Data.Vector qualified as Vector
+import Data.Versions (Version)
 import Foreign.Ptr (Ptr, castPtr)
 import GI.Adw qualified as Adw
 import GI.GObject qualified as GObject
@@ -21,7 +22,7 @@ import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
 
 import Config (Config (..), Filters, SortColumn (..), SortDirection (..), TableSort (..), sortColumnFromName, sortColumnName)
-import Presentation.Row (RowSpec (..), ToolRows (..), matchesFilters)
+import Presentation.Row (RowSpec (..), ToolRows (..), matchesFilters, statusLabel)
 import Toolchain.Types (rowKeyText)
 import UI.View (FilterBar (..), RowCallbacks, View (..), buildFilterBar, emptyStateStack, pillLabel)
 import UI.View.ActionStrip qualified as ActionStrip
@@ -39,14 +40,14 @@ data TableCallbacks = TableCallbacks
 -- subclass carrying a Haskell record, so every sorter, filter and cell
 -- callback looks its row up by key.
 build
-  :: Adw.ApplicationWindow
-  -> Config
+  :: Config
   -> RowCallbacks
   -> TableCallbacks
   -> IO View
-build window config rowCallbacks tableCallbacks = do
+build config rowCallbacks tableCallbacks = do
   specsRef <- newIORef Map.empty
   filtersRef <- newIORef config.tableFilters
+  installedGhcsRef <- newIORef []
 
   defaultGroup <- new Gtk.CheckButton []
 
@@ -92,9 +93,9 @@ build window config rowCallbacks tableCallbacks = do
   versionColumn <-
     addColumn columnView specsRef (sortColumnName ByVersion) "Version" versionCell (Just versionSorter)
   releasedColumn <- textColumn ByReleased "Released" dayText (.releaseDay)
-  statusColumn <- textColumn ByStatus "Status" (.statusLabel) (\spec -> (spec.isDefault, spec.installed))
+  statusColumn <- textColumn ByStatus "Status" statusLabel (\spec -> (spec.isDefault, spec.installed))
   void $
-    addColumn columnView specsRef "actions" "Actions" (actionsCell window rowCallbacks defaultGroup) Nothing
+    addColumn columnView specsRef "actions" "Actions" (actionsCell installedGhcsRef rowCallbacks defaultGroup) Nothing
 
   let columns =
         [ (ByVersion, versionColumn)
@@ -130,11 +131,7 @@ build window config rowCallbacks tableCallbacks = do
         count <- Gio.listModelGetNItems filtered
         setEmpty (count == 0)
 
-  bar <- buildFilterBar config.tableFilters $ \filters -> do
-    writeIORef filtersRef filters
-    Gtk.filterChanged rowFilter Gtk.FilterChangeDifferent
-    syncEmptyState
-    tableCallbacks.onFiltersChanged filters
+  bar <- buildFilterBar config.tableFilters tableCallbacks.onFiltersChanged
 
   void $ on filtered #itemsChanged $ \_position _removed _added -> syncEmptyState
   syncEmptyState
@@ -147,6 +144,7 @@ build window config rowCallbacks tableCallbacks = do
   let setRows toolRows = do
         let keyed = Vector.map (\spec -> (rowKeyText spec.key, spec)) toolRows.rows
         writeIORef specsRef (Map.fromList (Vector.toList keyed))
+        writeIORef installedGhcsRef toolRows.installedGhcs
         previous <- Gio.listModelGetNItems items
         items.splice 0 previous (Just (Vector.toList (Vector.map fst keyed)))
         syncEmptyState
@@ -157,7 +155,10 @@ build window config rowCallbacks tableCallbacks = do
 
       applyConfig newConfig = do
         applySort columnView columns newConfig.tableSort
+        writeIORef filtersRef newConfig.tableFilters
         bar.setFilters newConfig.tableFilters
+        Gtk.filterChanged rowFilter Gtk.FilterChangeDifferent
+        syncEmptyState
 
   pure View {widget, setRows, setSensitive, applyConfig}
 
@@ -244,13 +245,14 @@ dayText :: RowSpec -> Text
 dayText spec = maybe "–" (Text.pack . show) spec.releaseDay
 
 actionsCell
-  :: Adw.ApplicationWindow
+  :: IORef [Version]
   -> RowCallbacks
   -> Gtk.CheckButton
   -> RowSpec
   -> IO Gtk.Widget
-actionsCell window callbacks defaultGroup spec =
-  ActionStrip.build window callbacks defaultGroup 20 spec
+actionsCell installedGhcsRef callbacks defaultGroup spec = do
+  installedGhcs <- readIORef installedGhcsRef
+  ActionStrip.build callbacks defaultGroup 20 installedGhcs spec
 
 applySort :: Gtk.ColumnView -> [(SortColumn, Gtk.ColumnViewColumn)] -> TableSort -> IO ()
 applySort columnView columns tableSort =

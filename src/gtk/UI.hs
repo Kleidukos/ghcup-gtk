@@ -3,7 +3,7 @@
 
 module UI (startUI) where
 
-import Control.Monad (forM_, void)
+import Control.Monad (forM_, void, when)
 import Data.Function ((&))
 import Data.GI.Base
 import Data.IORef
@@ -104,7 +104,6 @@ activate forcedView app = do
   let dispatchLater event = readIORef dispatchRef >>= ($ event)
   registry <-
     Registry.build
-      shell.window
       shell.panes
       (rowCallbacks dispatchLater)
       (tableCallbacks dispatchLater)
@@ -146,6 +145,9 @@ interpretEffect rt = \case
   Session.Enqueue job -> Worker.enqueue rt.worker job
   Session.Hold -> rt.app.hold
   Session.Release -> rt.app.release
+  Session.Confirm confirmation job ->
+    Dialog.confirm rt.shell.window confirmation $ \confirmed ->
+      when confirmed $ rt.dispatch (Session.Submitted job)
   Session.Reconcile -> reconcile rt
   Session.Toast title -> showToast rt.shell title 3
   Session.ErrorToast err -> showErrorToast rt.shell err
@@ -184,7 +186,11 @@ viewState model =
     }
 
 rowCallbacks :: (Session.Event -> IO ()) -> RowCallbacks
-rowCallbacks dispatch = RowCallbacks {onSubmit = \op -> Mutate op & Session.Submitted & dispatch}
+rowCallbacks dispatch =
+  RowCallbacks
+    { onSubmit = \op -> Mutate op & Session.Submitted & dispatch
+    , onConfirm = dispatch . Session.ConfirmRequested
+    }
 
 tableCallbacks :: (Session.Event -> IO ()) -> TableView.TableCallbacks
 tableCallbacks dispatch =

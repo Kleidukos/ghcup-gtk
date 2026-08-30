@@ -6,12 +6,18 @@ module Presentation.Row
   , RowAction (..)
   , ToolRows (..)
   , Pill (..)
+  , compileGhcMutation
+  , compileHlsMutation
+  , defaultAction
   , installConfirmation
+  , installMutation
   , installVerb
   , jobTitle
   , matchesFilters
   , planRows
   , removeConfirmation
+  , setDefaultMutation
+  , statusLabel
   , toolShortName
   ) where
 
@@ -47,19 +53,15 @@ data RowSpec = RowSpec
   , pills :: [Pill]
   , installed :: Bool
   , isDefault :: Bool
-  , action :: RowAction
-  , setDefault :: Mutation
   , tool :: Tool
   , installReq :: TargetVersionReq
   , rank :: Int
   , releaseDay :: Maybe Day
   , passesHlsFilter :: Bool
   , latestInFamily :: Bool
-  , statusLabel :: Text
   , progress :: Maybe Progress
   -- ^ Set while a mutation is running on this row; renderers draw it as a
   -- pulsing bar plus the latest log line.
-  , installedGhcs :: [Version]
   }
   deriving stock (Eq, Show)
 
@@ -84,6 +86,7 @@ data RowAction = RowAction
 data ToolRows = ToolRows
   { rows :: Vector RowSpec
   , subtitle :: Text
+  , installedGhcs :: [Version]
   }
   deriving stock (Eq, Show)
 
@@ -99,37 +102,30 @@ planRows busy listings = Map.mapWithKey (planTool busy installedGhcs) (curate li
 planTool :: Map RowKey Progress -> [Version] -> Tool -> Vector ListResult -> ToolRows
 planTool busy installedGhcs tool toolRows =
   ToolRows
-    { rows = Vector.imap (rowSpec busy scopedGhcs tool newest) toolRows
+    { rows = Vector.imap (rowSpec busy tool newest) toolRows
     , subtitle = case lVer <$> Vector.find lSet toolRows of
         Just v -> "Default: " <> prettyVer v
         Nothing -> ""
+    , installedGhcs = if canCompileFromSource tool then installedGhcs else []
     }
   where
     newest = latestPerFamily toolRows
-    scopedGhcs = if canCompileFromSource tool then installedGhcs else []
 
-rowSpec :: Map RowKey Progress -> [Version] -> Tool -> Map FamilyKey Version -> Int -> ListResult -> RowSpec
-rowSpec busy installedGhcs tool newest rank lr =
+rowSpec :: Map RowKey Progress -> Tool -> Map FamilyKey Version -> Int -> ListResult -> RowSpec
+rowSpec busy tool newest rank lr =
   RowSpec
     { key
     , title
     , pills = mkListResultLabels lr
     , installed = lInstalled lr
     , isDefault = lSet lr
-    , action =
-        if lInstalled lr
-          then RowAction "Remove" (removeConfirmation tool lr) (Uninstall tool (tvOf lr))
-          else RowAction "Install" (installConfirmation tool lr) (Install tool (reqOf lr) defaultInstallOptions)
-    , setDefault = SetDefault tool (tvOf lr)
     , tool
     , installReq = reqOf lr
     , rank
     , releaseDay = lReleaseDay lr
     , passesHlsFilter = passesHlsFilter tool lr
     , latestInFamily = isLatestInFamily newest lr
-    , statusLabel = statusLabelOf lr
     , progress = Map.lookup key busy
-    , installedGhcs
     }
   where
     key = keyOfListing tool lr
@@ -159,11 +155,31 @@ matchesFilters filters spec =
   (not filters.hlsPoweredOnly || spec.passesHlsFilter)
     && (not filters.latestPatchOnly || spec.latestInFamily)
 
-statusLabelOf :: ListResult -> Text
-statusLabelOf lr
-  | lSet lr = "default"
-  | lInstalled lr = "installed"
+statusLabel :: RowSpec -> Text
+statusLabel spec
+  | spec.isDefault = "default"
+  | spec.installed = "installed"
   | otherwise = ""
+
+specTv :: RowSpec -> TargetVersion
+specTv spec = let TargetVersionReq tv _ = spec.installReq in tv
+
+defaultAction :: RowSpec -> RowAction
+defaultAction spec
+  | spec.installed = RowAction "Remove" (removeConfirmation spec) (Uninstall spec.tool (specTv spec))
+  | otherwise = RowAction "Install" (installConfirmation spec) (Install spec.tool spec.installReq defaultInstallOptions)
+
+setDefaultMutation :: RowSpec -> Mutation
+setDefaultMutation spec = SetDefault spec.tool (specTv spec)
+
+installMutation :: RowSpec -> InstallOptions -> Mutation
+installMutation spec = Install spec.tool spec.installReq
+
+compileGhcMutation :: RowSpec -> CompileGhcOptions -> Mutation
+compileGhcMutation spec = CompileGhc (specTv spec)
+
+compileHlsMutation :: RowSpec -> CompileHlsOptions -> Mutation
+compileHlsMutation spec = CompileHls (specTv spec)
 
 mkListResultLabels :: ListResult -> [Pill]
 mkListResultLabels lr =
@@ -177,13 +193,13 @@ mkTagLabel = \case
   Latest -> Just LatestVersion
   _ -> Nothing
 
-subject :: Tool -> ListResult -> Text
-subject tool lr = toolShortName tool <> " " <> prettyVer (lVer lr)
+subject :: RowSpec -> Text
+subject spec = toolShortName spec.tool <> " " <> tVerToText (specTv spec)
 
-installConfirmation :: Tool -> ListResult -> Confirmation
-installConfirmation tool lr =
+installConfirmation :: RowSpec -> Confirmation
+installConfirmation spec =
   Confirmation
-    { heading = "Install " <> subject tool lr <> "?"
+    { heading = "Install " <> subject spec <> "?"
     , body = "The download may take several minutes."
     , affirmLabel = "Install"
     , destructive = False
@@ -200,10 +216,10 @@ jobTitle = \case
     done :: Tool -> TargetVersion -> Text -> Text
     done tool tv outcome = toolShortName tool <> " " <> tVerToText tv <> " " <> outcome
 
-removeConfirmation :: Tool -> ListResult -> Confirmation
-removeConfirmation tool lr =
+removeConfirmation :: RowSpec -> Confirmation
+removeConfirmation spec =
   Confirmation
-    { heading = "Uninstall " <> subject tool lr <> "?"
+    { heading = "Uninstall " <> subject spec <> "?"
     , body = "The files will be removed from your system."
     , affirmLabel = "Uninstall"
     , destructive = True

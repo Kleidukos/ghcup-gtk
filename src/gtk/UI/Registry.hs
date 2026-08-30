@@ -12,7 +12,6 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Vector qualified as Vector
 import GHCup.Types (Tool)
-import GI.Adw qualified as Adw
 
 import Config (Config (..), ViewMode (..))
 import Presentation.Row (ToolRows (..))
@@ -35,10 +34,8 @@ data ViewState = ViewState
 -- mode changes.
 data Registry = Registry
   { panes :: ToolPanes
-  , window :: Adw.ApplicationWindow
-  -- ^ Retained so 'reconcile' can build fresh renderers.
   , rowCallbacks :: RowCallbacks
-  -- ^ Likewise.
+  -- ^ Retained so 'reconcile' can build fresh renderers.
   , tableCallbacks :: TableView.TableCallbacks
   -- ^ Likewise.
   , listCallbacks :: ListView.ListCallbacks
@@ -51,14 +48,13 @@ data Registry = Registry
   }
 
 build
-  :: Adw.ApplicationWindow
-  -> ToolPanes
+  :: ToolPanes
   -> RowCallbacks
   -> TableView.TableCallbacks
   -> ListView.ListCallbacks
   -> IO Registry
-build window panes rowCallbacks tableCallbacks listCallbacks =
-  Registry panes window rowCallbacks tableCallbacks listCallbacks
+build panes rowCallbacks tableCallbacks listCallbacks =
+  Registry panes rowCallbacks tableCallbacks listCallbacks
     <$> newIORef Map.empty
     <*> newIORef Nothing
 
@@ -69,9 +65,9 @@ buildRenderers registry config = do
   built <- forM currentPanes $ \pane -> do
     view <- case config.viewMode of
       Simple ->
-        ListView.build registry.window config registry.rowCallbacks registry.listCallbacks
+        ListView.build config registry.rowCallbacks registry.listCallbacks
       Advanced ->
-        TableView.build registry.window config registry.rowCallbacks registry.tableCallbacks
+        TableView.build config registry.rowCallbacks registry.tableCallbacks
     ToolPanes.setChild pane view.widget
     pure (pane.tool, view)
   pure (Map.fromList (Vector.toList built))
@@ -106,7 +102,7 @@ reconcile registry new = do
   let prevPlan = maybe Map.empty (.plan) prev
   currentPanes <- readIORef registry.panes.panesRef
   forM_ currentPanes $ \pane -> do
-    let toolRows = Map.findWithDefault (ToolRows Vector.empty "") pane.tool new.plan
+    let toolRows = Map.findWithDefault (ToolRows Vector.empty "" []) pane.tool new.plan
     set pane.sidebarRow [#subtitle := toolRows.subtitle]
     when (Map.lookup pane.tool prevPlan /= Just toolRows) $
       forM_ (Map.lookup pane.tool renderers) $ \view ->

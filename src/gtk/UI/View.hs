@@ -15,11 +15,12 @@ import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
 import Config (Config, Filters (..))
-import Presentation.Row (ToolRows)
+import Presentation.Row (RowAction, ToolRows)
 import Toolchain.Types (Mutation)
 
-newtype RowCallbacks = RowCallbacks
+data RowCallbacks = RowCallbacks
   { onSubmit :: Mutation -> IO ()
+  , onConfirm :: RowAction -> IO ()
   }
 
 data View = View

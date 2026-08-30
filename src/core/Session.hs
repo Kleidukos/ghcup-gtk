@@ -18,7 +18,7 @@ import GHCup.Types (Tool)
 
 import Config (Config (..), ConfigUpdate (..), applyUpdate)
 import Presentation.Path (BannerSpec, appliedBanner, pathBanner)
-import Presentation.Row (ToolRows, jobTitle, planRows)
+import Presentation.Row (Confirmation, RowAction (..), ToolRows, jobTitle, planRows)
 import Toolchain.Path (FileChange, PathStatus (..))
 import Toolchain.Types
   ( Freshness (..)
@@ -64,6 +64,8 @@ data Model = Model
 data Event
   = -- |  The user asks for an action
     Submitted Job
+  | -- | The user clicked a row action that requires confirmation
+    ConfirmRequested RowAction
   | -- |  Messages reported by the worker
     WorkerMsg UiMsg
   | -- | User clicks the "retry" button
@@ -82,6 +84,7 @@ data Effect
   = Enqueue Job
   | Hold
   | Release
+  | Confirm Confirmation Job
   | Toast Text
   | ErrorToast OpError
   | Reconcile
@@ -121,6 +124,8 @@ step event model = case event of
         model' = model {inFlight = Map.insert key (Progress "" Nothing) model.inFlight}
     in (model', [Hold, Enqueue job, Reconcile])
   Submitted job -> (model, [Enqueue job])
+  ConfirmRequested action ->
+    (model, [Confirm action.confirmation (Mutate action.job)])
   RetryClicked ->
     (model {phase = Loading}, [Reconcile, Enqueue RefreshListings])
   ConfigChanged update ->
