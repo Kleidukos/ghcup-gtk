@@ -28,12 +28,10 @@ tests =
               ]
         length (versionsOf ghc (curate (listingsFor ghc rows))) @?= 3
     , testCase "sorts descending by version" $ do
-        let rows =
-              [ mkLR "3.10.3.0" [] True False
-              , mkLR "3.14.1.0" [Latest] False False
-              ]
-        versionsOf cabal (curate (listingsFor cabal rows))
-          @?= map lVer [rows !! 1, head rows]
+        let older = mkLR "3.10.3.0" [] True False
+            newer = mkLR "3.14.1.0" [Latest] False False
+        versionsOf cabal (curate (listingsFor cabal [older, newer]))
+          @?= map lVer [newer, older]
     , testCase "tools stay separate" $ do
         let listings =
               Map.fromList

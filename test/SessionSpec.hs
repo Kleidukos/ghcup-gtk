@@ -13,7 +13,7 @@ import Config
   )
 import Fixtures (anError, defaultCompileGhcOptions, defaultCompileHlsOptions, dirs, installJob, installMutation, listingsFor, lr914, sampleChanges)
 import Presentation.Path (appliedBanner, pathBanner)
-import Presentation.Row (planRows)
+import Presentation.Row (Confirmation (..), RowAction (..), planRows)
 import Session
 import Toolchain.Path (PathStatus (..))
 import Toolchain.Types
@@ -58,6 +58,10 @@ tests =
                 (model, effects) = step (Submitted installJob) held
             effects @?= []
             model.inFlight @?= Map.singleton installKey (Progress "" Nothing)
+        , testCase "a confirm request becomes a Confirm effect carrying the job, model untouched" $ do
+            let action = RowAction "Remove" (Confirmation "h" "b" "Remove" True) (Uninstall ghc (tvOf lr914))
+            step (ConfirmRequested action) model0
+              @?= (model0, [Confirm action.confirmation (Mutate action.job)])
         ]
     , testGroup
         "listings"
