@@ -1,5 +1,6 @@
 module WorkerSpec (tests) where
 
+import Data.Function ((&))
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Effectful
@@ -24,11 +25,11 @@ emptyReady = Right (Map.empty, False)
 run :: GhcupHandlers TestEs -> [Job] -> ([UiMsg], Int)
 run handlers jobs =
   let ((_, msgs), count) =
-        runPureEff
-          . runState (0 :: Int)
-          . runGhcupTest handlers
-          . runNotifyCollect
-          $ mapM_ (processJob (\_ -> pure ())) jobs
+        mapM_ (processJob (\_ -> pure ())) jobs
+          & runNotifyCollect
+          & runGhcupTest handlers
+          & runState (0 :: Int)
+          & runPureEff
   in (msgs, count)
 
 bump :: (State Int :> es) => Eff es ()

@@ -7,13 +7,15 @@ module Fixtures
   , installJob
   , listingsFor
   , sampleChanges
+  , defaultCompileGhcOptions
+  , defaultCompileHlsOptions
   ) where
 
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Vector (Vector)
 import Data.Vector qualified as Vector
-import Data.Versions (version)
+import Data.Versions (Version, version)
 import GHCup.Command.List (ListResult (..), RevTag (..))
 import GHCup.Types (Tag (..), Tool, ghc)
 
@@ -52,6 +54,42 @@ installJob = Mutate installMutation
 
 listingsFor :: Tool -> [ListResult] -> Listings
 listingsFor tool = Map.singleton tool . Vector.fromList
+
+defaultCompileGhcOptions :: Either Version FilePath -> CompileGhcOptions
+defaultCompileGhcOptions bootstrapGhc =
+  CompileGhcOptions
+    { bootstrapGhc
+    , hadrianGhc = Nothing
+    , jobs = Nothing
+    , buildConfig = Nothing
+    , patches = Nothing
+    , crossTarget = Nothing
+    , addConfArgs = []
+    , setCompile = False
+    , overwriteVer = Nothing
+    , buildFlavour = Nothing
+    , buildSystem = Nothing
+    , isolateDir = Nothing
+    , gitRef = Nothing
+    , installTargets = Nothing
+    , docs = Nothing
+    }
+
+defaultCompileHlsOptions :: [Version] -> CompileHlsOptions
+defaultCompileHlsOptions targetGhcs =
+  CompileHlsOptions
+    { targetGhcs
+    , jobs = Nothing
+    , setCompile = False
+    , updateCabal = False
+    , overwriteVer = Nothing
+    , isolateDir = Nothing
+    , cabalProject = Nothing
+    , cabalProjectLocal = Nothing
+    , patches = Nothing
+    , cabalArgs = []
+    , gitRef = Nothing
+    }
 
 sampleChanges :: Vector FileChange
 sampleChanges =

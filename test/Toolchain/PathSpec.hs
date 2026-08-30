@@ -1,5 +1,6 @@
 module Toolchain.PathSpec (tests) where
 
+import Data.Function ((&))
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
@@ -183,7 +184,7 @@ tests =
             let dir = tmpRoot </> "ghcup-gtk-pathspec"
                 target = dir </> "dotfiles/zshrc"
                 link = dir </> ".zshrc"
-                fix = runEff . runFileSystemIO . applyFix
+                fix changes = applyFix changes & runFileSystemIO & runEff
             removePathForcibly dir
             createDirectoryIfMissing True (dir </> "dotfiles")
             Text.writeFile target "# my config\n"

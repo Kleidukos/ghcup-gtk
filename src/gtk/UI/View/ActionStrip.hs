@@ -12,7 +12,8 @@ import GI.Gtk qualified as Gtk
 import GI.Pango qualified as Pango
 
 import Presentation.Row (RowAction (..), RowSpec (..), installVerb)
-import Toolchain.Types (Mutation (..), Progress (..))
+import Toolchain.Types (Mutation (..), Progress (..), canCompileFromSource)
+import UI.CompileOptionsDialog qualified as CompileOptionsDialog
 import UI.Dialog qualified as Dialog
 import UI.InstallOptionsDialog qualified as InstallOptionsDialog
 import UI.View (RowCallbacks (..), captionLabel)
@@ -83,9 +84,17 @@ build window callbacks defaultGroup phaseWidth spec = do
       [ #label := menuLabel
       , #cssClasses := ["flat"]
       ]
-  popover <- new Gtk.Popover []
+  menuBox <-
+    new
+      Gtk.Box
+      [ #orientation := Gtk.OrientationVertical
+      ]
   optionsWidget <- Gtk.toWidget optionsItem
-  popover.setChild (Just optionsWidget)
+  menuBox.append optionsWidget
+  popover <- new Gtk.Popover []
+  menuBoxWidget <- Gtk.toWidget menuBox
+  popover.setChild (Just menuBoxWidget)
+
   menuButton <-
     new
       Gtk.MenuButton
@@ -99,6 +108,20 @@ build window callbacks defaultGroup phaseWidth spec = do
     popover.popdown
     InstallOptionsDialog.present window spec $ \opts ->
       callbacks.onSubmit (Install spec.tool spec.installReq opts)
+
+  when (canCompileFromSource spec.tool) $ do
+    compileItem <-
+      new
+        Gtk.Button
+        [ #label := "Compile from source…"
+        , #cssClasses := ["flat"]
+        ]
+    compileWidget <- Gtk.toWidget compileItem
+    menuBox.append compileWidget
+    void $ on compileItem #clicked $ do
+      popover.popdown
+      CompileOptionsDialog.present window spec callbacks.onSubmit
+
   box.append menuButton
 
   forM_ spec.progress $ \progress -> do

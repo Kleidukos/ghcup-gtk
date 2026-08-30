@@ -5,6 +5,8 @@ module Effects.Ghcup
   , installTool
   , uninstallTool
   , setDefaultVersion
+  , compileGhcTool
+  , compileHlsTool
   , runGhcupIO
   ) where
 
@@ -16,7 +18,7 @@ import GHCup.Types (TargetVersion, TargetVersionReq, Tool)
 
 import Toolchain.GHCup (GhcupEnv)
 import Toolchain.GHCup qualified as GHCup
-import Toolchain.Types (InstallOptions, Listings, OpError (..))
+import Toolchain.Types (CompileGhcOptions, CompileHlsOptions, InstallOptions, Listings, OpError (..))
 
 -- | The ghcup domain operations.
 data Ghcup :: Effect where
@@ -25,6 +27,8 @@ data Ghcup :: Effect where
   InstallTool :: Tool -> TargetVersionReq -> InstallOptions -> Ghcup m (Either OpError ())
   UninstallTool :: Tool -> TargetVersion -> Ghcup m (Either OpError ())
   SetDefaultVersion :: Tool -> TargetVersion -> Ghcup m (Either OpError ())
+  CompileGhcTool :: TargetVersion -> CompileGhcOptions -> Ghcup m (Either OpError ())
+  CompileHlsTool :: TargetVersion -> CompileHlsOptions -> Ghcup m (Either OpError ())
 
 type instance DispatchOf Ghcup = Dynamic
 
@@ -42,6 +46,12 @@ uninstallTool tool tv = send (UninstallTool tool tv)
 
 setDefaultVersion :: (Ghcup :> es) => Tool -> TargetVersion -> Eff es (Either OpError ())
 setDefaultVersion tool tv = send (SetDefaultVersion tool tv)
+
+compileGhcTool :: (Ghcup :> es) => TargetVersion -> CompileGhcOptions -> Eff es (Either OpError ())
+compileGhcTool tv opts = send (CompileGhcTool tv opts)
+
+compileHlsTool :: (Ghcup :> es) => TargetVersion -> CompileHlsOptions -> Eff es (Either OpError ())
+compileHlsTool tv opts = send (CompileHlsTool tv opts)
 
 runGhcupIO :: (IOE :> es) => (Text -> Eff es ()) -> Eff (Ghcup : es) a -> Eff es a
 runGhcupIO onLog action =
@@ -63,5 +73,7 @@ runGhcupIO onLog action =
             InstallTool tool tvr opts -> liftIO (withEnv (\env -> GHCup.install env tool tvr opts))
             UninstallTool tool tv -> liftIO (withEnv (\env -> GHCup.uninstall env tool tv))
             SetDefaultVersion tool tv -> liftIO (withEnv (\env -> GHCup.setDefault env tool tv))
+            CompileGhcTool tv opts -> liftIO (withEnv (\env -> GHCup.compileGhc env tv opts))
+            CompileHlsTool tv opts -> liftIO (withEnv (\env -> GHCup.compileHls env tv opts))
         )
         action
