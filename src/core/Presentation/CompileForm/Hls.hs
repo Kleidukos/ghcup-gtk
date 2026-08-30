@@ -6,6 +6,7 @@ module Presentation.CompileForm.Hls
   , stepHlsForm
   , hlsFieldError
   , canCompileHls
+  , effectiveSetCompileHls
   , toHlsOptions
   ) where
 
@@ -13,7 +14,7 @@ import Control.Monad (void)
 import Data.Bifunctor (bimap, first)
 import Data.Either (isRight)
 import Data.Function ((&))
-import Data.Maybe (isJust)
+import Data.Maybe (isNothing)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Versions (Version, prettyVer)
@@ -29,7 +30,6 @@ data HlsFormModel = HlsFormModel
   , installedGhcs :: [Version]
   , jobs :: Text
   , setCompile :: Bool
-  , priorSetCompile :: Bool
   , updateCabal :: Bool
   , overwriteVer :: Text
   , isolateDir :: Maybe FilePath
@@ -63,7 +63,6 @@ initHlsFormModel installedGhcs =
     , installedGhcs
     , jobs = ""
     , setCompile = False
-    , priorSetCompile = False
     , updateCabal = False
     , overwriteVer = ""
     , isolateDir = Nothing
@@ -78,15 +77,11 @@ stepHlsForm :: HlsFormEvent -> HlsFormModel -> HlsFormModel
 stepHlsForm event model = case event of
   HlsTargetGhcsChanged text -> model {targetGhcs = text}
   HlsJobsChanged text -> model {jobs = text}
-  HlsSetToggled b
-    | isJust model.isolateDir -> model
-    | otherwise -> model {setCompile = b, priorSetCompile = b}
+  HlsSetToggled b -> model {setCompile = b}
   HlsUpdateCabalToggled b -> model {updateCabal = b}
   HlsOverwriteChanged text -> model {overwriteVer = text}
-  HlsIsolatePicked path
-    | isJust model.isolateDir -> model {isolateDir = Just path}
-    | otherwise -> model {isolateDir = Just path, setCompile = False}
-  HlsIsolateCleared -> model {isolateDir = Nothing, setCompile = model.priorSetCompile}
+  HlsIsolatePicked path -> model {isolateDir = Just path}
+  HlsIsolateCleared -> model {isolateDir = Nothing}
   HlsCabalProjectChanged text -> model {cabalProject = text}
   HlsCabalProjectLocalChanged text -> model {cabalProjectLocal = text}
   HlsPatchesChanged text -> model {patches = text}
@@ -114,6 +109,9 @@ hlsFieldError model field = either Just (const Nothing) $ case field of
 canCompileHls :: HlsFormModel -> Bool
 canCompileHls = isRight . toHlsOptions
 
+effectiveSetCompileHls :: HlsFormModel -> Bool
+effectiveSetCompileHls model = isNothing model.isolateDir && model.setCompile
+
 toHlsOptions :: HlsFormModel -> Either Text CompileHlsOptions
 toHlsOptions model = do
   targetGhcs <- parsedTargetGhcs model.installedGhcs model.targetGhcs
@@ -126,7 +124,7 @@ toHlsOptions model = do
     Types.CompileHlsOptions
       { targetGhcs
       , jobs
-      , setCompile = model.setCompile
+      , setCompile = effectiveSetCompileHls model
       , updateCabal = model.updateCabal
       , overwriteVer
       , isolateDir = model.isolateDir

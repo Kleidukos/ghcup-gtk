@@ -38,13 +38,15 @@ tests =
     , testCase "an installed default row seeds both switches" $ do
         installedModel.setDefault @?= True
         installedModel.force @?= True
-    , testCase "picking an isolate dir clears and locks set-default" $ do
+    , testCase "picking an isolate dir locks set-default and force" $ do
         let model = stepForm (IsolatePicked "/opt/ghc") installedModel
         model.isolate @?= Just "/opt/ghc"
-        model.setDefault @?= False
-        model.force @?= False
-        setDefaultLocked model @?= True
-        (stepForm (SetDefaultToggled True) model).setDefault @?= False
+        effectiveSetDefault model @?= False
+        effectiveForce model @?= False
+        effectiveSetDefault (stepForm (SetDefaultToggled True) model) @?= False
+        fmap (.installDir) (toOptions model) @?= Just (IsolateDir "/opt/ghc")
+        fmap (.setAsDefault) (toOptions model) @?= Just False
+        fmap (.forceInstall) (toOptions model) @?= Just False
     , testCase "clearing the isolate dir restores the prior switches" $
         steps [IsolatePicked "/opt/ghc", IsolateCleared] installedModel
           @?= installedModel
@@ -60,8 +62,7 @@ tests =
         toOptions freshModel @?= Just defaultInstallOptions
         let model =
               steps
-                [ IsolatePicked "/opt/ghc"
-                , ForceToggled True
+                [ ForceToggled True
                 , ArgsChanged "  --with-x  --with-y "
                 , TargetsChanged "install"
                 ]
@@ -70,7 +71,6 @@ tests =
           @?= Just
             defaultInstallOptions
               { forceInstall = True
-              , installDir = IsolateDir "/opt/ghc"
               , extraConfArgs = ["--with-x", "--with-y"]
               , installTargets = Just ["install"]
               }
