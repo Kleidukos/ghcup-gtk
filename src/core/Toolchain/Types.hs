@@ -20,6 +20,7 @@ module Toolchain.Types
   , Progress (..)
   , progressOf
   , OpError (..)
+  , Freshness (..)
   , UiMsg (..)
   ) where
 
@@ -169,8 +170,12 @@ data OpError = OpError
   }
   deriving stock (Eq, Show)
 
+data Freshness = Fresh | Stale
+  deriving stock (Eq, Show)
+
 data UiMsg
-  = ListingsReady Listings Bool
+  = ListingsReady Listings Freshness
+  | Relisted Listings
   | ListingsFailed OpError
   | JobProgress Job Progress
   | JobDone Mutation (Either OpError ())

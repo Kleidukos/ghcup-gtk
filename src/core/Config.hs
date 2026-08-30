@@ -15,7 +15,6 @@ module Config
   , save
   , sortColumnFromName
   , sortColumnName
-  , viewMode
   ) where
 
 import Data.Either (fromRight)
@@ -52,7 +51,7 @@ data ViewMode = Simple | Advanced
   deriving stock (Eq, Ord, Show)
 
 data Config = Config
-  { advancedInterface :: Bool
+  { viewMode :: ViewMode
   , tableSort :: TableSort
   , tableFilters :: Filters
   , listFilters :: Filters
@@ -64,7 +63,7 @@ data Config = Config
 defaultConfig :: Config
 defaultConfig =
   Config
-    { advancedInterface = False
+    { viewMode = Simple
     , tableSort = TableSort ByVersion Descending
     , tableFilters = Filters True True
     , listFilters = Filters False False
@@ -72,14 +71,9 @@ defaultConfig =
     , windowHeight = 560
     }
 
-viewMode :: Config -> ViewMode
-viewMode config
-  | config.advancedInterface = Advanced
-  | otherwise = Simple
-
 -- | A preference change, or a table-state change worth remembering.
 data ConfigUpdate
-  = SetAdvancedInterface Bool
+  = SetViewMode ViewMode
   | SetTableSort TableSort
   | SetTableFilters Filters
   | SetListFilters Filters
@@ -88,7 +82,7 @@ data ConfigUpdate
 
 applyUpdate :: ConfigUpdate -> Config -> Config
 applyUpdate update config = case update of
-  SetAdvancedInterface b -> config {advancedInterface = b}
+  SetViewMode mode -> config {viewMode = mode}
   SetTableSort sort -> config {tableSort = sort}
   SetTableFilters filters -> config {tableFilters = filters}
   SetListFilters filters -> config {listFilters = filters}
@@ -99,7 +93,7 @@ parseConfigEither input = configOf <$> KDL.parse input
   where
     configOf doc =
       Config
-        { advancedInterface = bool "advanced-interface" defaultConfig.advancedInterface doc
+        { viewMode = fromMaybe defaultConfig.viewMode (viewModeFromName =<< stringArg "view-mode" doc)
         , tableSort =
             TableSort
               { column = fromMaybe defaultConfig.tableSort.column (sortColumn doc)
@@ -148,7 +142,7 @@ renderConfig config =
   KDL.render
     KDL.NodeList
       { nodes =
-          [ boolNode "advanced-interface" config.advancedInterface
+          [ stringNode "view-mode" (viewModeName config.viewMode)
           , stringNode "table-sort-column" (sortColumnName config.tableSort.column)
           , boolNode "table-sort-descending" (config.tableSort.direction == Descending)
           ]
@@ -161,6 +155,17 @@ renderConfig config =
                ]
       , ext = KDL.def
       }
+
+viewModeName :: ViewMode -> Text
+viewModeName = \case
+  Simple -> "simple"
+  Advanced -> "advanced"
+
+viewModeFromName :: Text -> Maybe ViewMode
+viewModeFromName = \case
+  "simple" -> Just Simple
+  "advanced" -> Just Advanced
+  _ -> Nothing
 
 sortColumnName :: SortColumn -> Text
 sortColumnName = \case

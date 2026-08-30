@@ -13,12 +13,12 @@ present parent config onChanged = do
       Adw.SwitchRow
       [ #title := "Advanced interface"
       , #subtitle := "Sortable table with release dates and filters"
-      , #active := config.advancedInterface
+      , #active := (config.viewMode == Advanced)
       ]
 
   void $ on advancedToggle (PropertyNotify #active) $ \_ -> do
     active <- advancedToggle.getActive
-    onChanged (SetAdvancedInterface active)
+    onChanged (SetViewMode (if active then Advanced else Simple))
 
   interfaceGroup <- new Adw.PreferencesGroup [#title := "Interface"]
   interfaceGroup.add advancedToggle

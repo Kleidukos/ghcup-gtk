@@ -43,9 +43,8 @@ import URI.ByteString (serializeURIRef')
 
 import Toolchain.Types
 
-data GhcupEnv = GhcupEnv
+newtype GhcupEnv = GhcupEnv
   { appStateRef :: IORef AppState
-  , staleRef :: IORef Bool
   }
 
 renderErr :: Text -> String -> OpError
@@ -91,20 +90,19 @@ newEnv logSink = do
     Right pfreq -> do
       let emptyInfo = GHCupInfo mempty (GHCupDownloads mempty) Nothing
       appStateRef <- newIORef (AppState settings dirs defaultKeyBindings emptyInfo pfreq loggerConfig)
-      staleRef <- newIORef False
-      pure (Right GhcupEnv {appStateRef, staleRef})
+      pure (Right GhcupEnv {appStateRef})
 
-fetchInfo :: LeanAppState -> PlatformRequest -> IO (Either OpError (GHCupInfo, Bool))
+fetchInfo :: LeanAppState -> PlatformRequest -> IO (Either OpError (GHCupInfo, Freshness))
 fetchInfo lean pfreq = do
   first <- runFetch lean
   case first of
-    VRight gi -> pure (Right (gi, False))
+    VRight gi -> pure (Right (gi, Fresh))
     VLeft _ -> do
       let LeanAppState {settings = onlineSettings, dirs, keyBindings, pfreq = p, loggerConfig} = lean
           offline =
             LeanAppState (onlineSettings {noNetwork = True}) dirs keyBindings p loggerConfig
       second <- runFetch offline
-      pure (fmap (,True) (toOpError "Could not fetch toolchain metadata" second))
+      pure (fmap (,Stale) (toOpError "Could not fetch toolchain metadata" second))
   where
     runFetch env =
       liftE (getDownloadsF pfreq)
@@ -120,24 +118,20 @@ fetchInfo lean pfreq = do
             ]
         & flip runReaderT env
 
-getListings :: GhcupEnv -> IO (Either OpError (Listings, Bool))
+getListings :: GhcupEnv -> IO (Either OpError (Listings, Freshness))
 getListings env = do
   appState <- readIORef env.appStateRef
   let AppState {settings, dirs, keyBindings, pfreq, loggerConfig} = appState
       lean = LeanAppState settings dirs keyBindings pfreq loggerConfig
   fetchInfo lean pfreq >>= \case
     Left err -> pure (Left err)
-    Right (ghcupInfo, stale) -> do
+    Right (ghcupInfo, freshness) -> do
       let refreshed = appState {ghcupInfo = ghcupInfo} :: AppState
       writeIORef env.appStateRef refreshed
-      writeIORef env.staleRef stale
-      fmap (,stale) <$> runList refreshed
+      fmap (,freshness) <$> runList refreshed
 
-relistListings :: GhcupEnv -> IO (Either OpError (Listings, Bool))
-relistListings env = do
-  appState <- readIORef env.appStateRef
-  stale <- readIORef env.staleRef
-  fmap (,stale) <$> runList appState
+relistListings :: GhcupEnv -> IO (Either OpError Listings)
+relistListings env = readIORef env.appStateRef >>= runList
 
 runList :: AppState -> IO (Either OpError Listings)
 runList appState = do

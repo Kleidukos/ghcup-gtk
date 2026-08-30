@@ -21,7 +21,8 @@ import Presentation.Path (BannerSpec, appliedBanner, pathBanner)
 import Presentation.Row (ToolRows, jobTitle, planRows)
 import Toolchain.Path (FileChange, PathStatus (..))
 import Toolchain.Types
-  ( GhcupDirs
+  ( Freshness (..)
+  , GhcupDirs
   , Job (..)
   , Listings
   , OpError
@@ -55,7 +56,8 @@ data Model = Model
   -- ^ ghcup's directories
   , pathModel :: PathModel
   -- ^ Status of the PATH fixing
-  , stale :: Bool
+  , freshness :: Freshness
+  -- ^ Whether the listings reflect current toolchain metadata
   }
   deriving stock (Eq, Show)
 
@@ -97,7 +99,7 @@ initialModel ghcupDirs config =
     , inFlight = Map.empty
     , ghcupDirs
     , pathModel = Unchecked
-    , stale = False
+    , freshness = Fresh
     }
 
 bannerFor :: Model -> Maybe BannerSpec
@@ -139,10 +141,12 @@ step event model = case event of
     (model {pathModel = FixApplied}, [Reconcile])
   PathFixDone (Left err) -> (model, [ErrorToast err])
   WorkerMsg msg -> case msg of
-    ListingsReady listings stale ->
-      (model {listings, phase = Ready, stale}, [Reconcile])
+    ListingsReady listings freshness ->
+      (model {listings, phase = Ready, freshness}, [Reconcile])
+    Relisted listings ->
+      (model {listings, phase = Ready}, [Reconcile])
     ListingsFailed err -> case model.phase of
-      Ready -> (model {stale = True}, [Reconcile, ErrorToast err])
+      Ready -> (model {freshness = Stale}, [Reconcile, ErrorToast err])
       _ -> (model {phase = Offline}, [Reconcile])
     JobProgress (Mutate mutation) progress
       | key <- keyOfMutation mutation

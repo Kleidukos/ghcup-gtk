@@ -20,7 +20,7 @@ import System.FilePath ((</>))
 import Effects.FileSystem (FileSystem (..))
 import Effects.Ghcup (Ghcup (..))
 import Effects.Notify (Notify (..))
-import Toolchain.Types (CompileGhcOptions, CompileHlsOptions, InstallOptions, Listings, OpError, UiMsg)
+import Toolchain.Types (CompileGhcOptions, CompileHlsOptions, Freshness (..), InstallOptions, Listings, OpError, UiMsg)
 
 -- | Record every emitted 'UiMsg' in order.
 runNotifyCollect :: Eff (Notify : es) a -> Eff es (a, [UiMsg])
@@ -32,8 +32,8 @@ runNotifyCollect = reinterpret (runState []) $ \_ -> \case
 -- 'Eff es' so a test can thread its own counters through them.
 data GhcupHandlers es = GhcupHandlers
   { acquire :: Eff es (Either OpError ())
-  , getListings :: Eff es (Either OpError (Listings, Bool))
-  , relist :: Eff es (Either OpError (Listings, Bool))
+  , getListings :: Eff es (Either OpError (Listings, Freshness))
+  , relist :: Eff es (Either OpError Listings)
   , install :: Tool -> TargetVersionReq -> InstallOptions -> Eff es (Either OpError ())
   , uninstall :: Tool -> TargetVersion -> Eff es (Either OpError ())
   , setDefault :: Tool -> TargetVersion -> Eff es (Either OpError ())
@@ -45,8 +45,8 @@ idleHandlers :: GhcupHandlers es
 idleHandlers =
   GhcupHandlers
     { acquire = pure (Right ())
-    , getListings = pure (Right (Map.empty, False))
-    , relist = pure (Right (Map.empty, False))
+    , getListings = pure (Right (Map.empty, Fresh))
+    , relist = pure (Right Map.empty)
     , install = \_ _ _ -> pure (Right ())
     , uninstall = \_ _ -> pure (Right ())
     , setDefault = \_ _ -> pure (Right ())

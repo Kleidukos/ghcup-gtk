@@ -8,6 +8,7 @@ import Test.Tasty.HUnit
 import Config
   ( Config (..)
   , ConfigUpdate (..)
+  , ViewMode (..)
   , defaultConfig
   )
 import Fixtures (anError, defaultCompileGhcOptions, defaultCompileHlsOptions, dirs, installJob, installMutation, listingsFor, lr914, sampleChanges)
@@ -61,25 +62,31 @@ tests =
     , testGroup
         "listings"
         [ testCase "ready: reconcile with the fresh listings in the model" $ do
-            let (model, effects) = step (WorkerMsg (ListingsReady sampleListings False)) model0
+            let (model, effects) = step (WorkerMsg (ListingsReady sampleListings Fresh)) model0
             effects @?= [Reconcile]
             model.phase @?= Ready
-            model.stale @?= False
+            model.freshness @?= Fresh
             rowPlan model @?= planRows Map.empty sampleListings
         , testCase "failure before anything loaded lands on the offline page" $ do
             let (model, effects) = step (WorkerMsg (ListingsFailed anError)) model0
             effects @?= [Reconcile]
             model.phase @?= Offline
         , testCase "failure after Ready degrades to staleness + toast, a fresh success clears it" $ do
-            let (ready, _) = step (WorkerMsg (ListingsReady sampleListings False)) model0
+            let (ready, _) = step (WorkerMsg (ListingsReady sampleListings Fresh)) model0
                 (staleModel, effects) = step (WorkerMsg (ListingsFailed anError)) ready
             effects @?= [Reconcile, ErrorToast anError]
             staleModel.phase @?= Ready
-            staleModel.stale @?= True
-            let (model, _) = step (WorkerMsg (ListingsReady sampleListings False)) staleModel
-            model.stale @?= False
+            staleModel.freshness @?= Stale
+            let (model, _) = step (WorkerMsg (ListingsReady sampleListings Fresh)) staleModel
+            model.freshness @?= Fresh
         , testCase "a stale-flagged delivery stamps staleness" $
-            (fst (step (WorkerMsg (ListingsReady sampleListings True)) model0)).stale @?= True
+            (fst (step (WorkerMsg (ListingsReady sampleListings Stale)) model0)).freshness @?= Stale
+        , testCase "a relist swaps the listings and keeps the freshness" $ do
+            let (staleReady, _) = step (WorkerMsg (ListingsReady sampleListings Stale)) model0
+                (model, effects) = step (WorkerMsg (Relisted sampleListings)) staleReady
+            effects @?= [Reconcile]
+            model.phase @?= Ready
+            model.freshness @?= Stale
         ]
     , testGroup
         "jobs"
@@ -105,7 +112,7 @@ tests =
                   ]
             model.inFlight @?= Map.empty
         , testCase "failure: release, reconcile without the stamp, toast" $ do
-            let (ready, _) = step (WorkerMsg (ListingsReady sampleListings False)) model0
+            let (ready, _) = step (WorkerMsg (ListingsReady sampleListings Fresh)) model0
                 (held, _) = step (Submitted installJob) ready
                 (model, effects) = step (WorkerMsg (JobDone installMutation (Left anError))) held
             effects
@@ -124,20 +131,20 @@ tests =
             effects @?= [Reconcile, Enqueue RefreshListings]
             model.phase @?= Loading
         , testCase "advanced interface: save, then reconcile with the new config in the model" $ do
-            let (ready, _) = step (WorkerMsg (ListingsReady sampleListings False)) model0
-                newConfig = defaultConfig {advancedInterface = True}
-                (model, effects) = step (ConfigChanged (SetAdvancedInterface True)) ready
+            let (ready, _) = step (WorkerMsg (ListingsReady sampleListings Fresh)) model0
+                newConfig = defaultConfig {viewMode = Advanced}
+                (model, effects) = step (ConfigChanged (SetViewMode Advanced)) ready
             effects @?= [SaveConfig newConfig, Reconcile]
             model.config @?= newConfig
         , testCase "a window resize saves without reconciling" $ do
-            let (ready, _) = step (WorkerMsg (ListingsReady sampleListings False)) model0
+            let (ready, _) = step (WorkerMsg (ListingsReady sampleListings Fresh)) model0
                 (_, effects) = step (ConfigChanged (SetWindowSize 1000 700)) ready
             filter (== Reconcile) effects @?= []
         , testCase "an echoed config update emits nothing, which is what stops the sort-save-apply-sort loop" $ do
-            let (ready, _) = step (WorkerMsg (ListingsReady sampleListings False)) model0
+            let (ready, _) = step (WorkerMsg (ListingsReady sampleListings Fresh)) model0
             snd (step (ConfigChanged (SetTableSort defaultConfig.tableSort)) ready) @?= []
             snd (step (ConfigChanged (SetListFilters defaultConfig.listFilters)) ready) @?= []
-            snd (step (ConfigChanged (SetAdvancedInterface False)) ready) @?= []
+            snd (step (ConfigChanged (SetViewMode Simple)) ready) @?= []
         ]
     , testGroup
         "PATH fix"

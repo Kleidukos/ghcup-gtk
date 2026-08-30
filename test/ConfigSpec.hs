@@ -41,12 +41,16 @@ tests =
             c.tableFilters @?= defaultConfig.tableFilters
         ]
     , testGroup
-        "advanced interface"
-        [ testCase "parses advanced-interface #true" $
-            (parseConfig "advanced-interface #true").advancedInterface @?= True
-        , testCase "viewMode follows the flag" $ do
-            viewMode defaultConfig @?= Simple
-            viewMode defaultConfig {advancedInterface = True} @?= Advanced
+        "view mode"
+        [ testCase "parses view-mode \"advanced\"" $
+            (parseConfig "view-mode \"advanced\"").viewMode @?= Advanced
+        , testCase "parses view-mode \"simple\", defaults to it" $ do
+            (parseConfig "view-mode \"simple\"").viewMode @?= Simple
+            defaultConfig.viewMode @?= Simple
+        , testCase "an unknown view mode falls back to the default" $
+            (parseConfig "view-mode \"fancy\"").viewMode @?= Simple
+        , testCase "the retired advanced-interface bool is ignored" $
+            (parseConfig "advanced-interface #true").viewMode @?= Simple
         ]
     , testGroup
         "table state"
@@ -63,7 +67,7 @@ tests =
         , testCase "round-trips every setting, and the defaults" $ do
             let c =
                   Config
-                    { advancedInterface = True
+                    { viewMode = Advanced
                     , tableSort = TableSort ByStatus Ascending
                     , tableFilters = Filters True True
                     , listFilters = Filters True False
@@ -85,8 +89,8 @@ tests =
             let sorted = applyUpdate (SetTableSort (TableSort ByReleased Ascending)) defaultConfig
             sorted.tableSort @?= TableSort ByReleased Ascending
             sorted.tableFilters @?= defaultConfig.tableFilters
-            sorted.advancedInterface @?= False
-            (applyUpdate (SetAdvancedInterface True) defaultConfig).advancedInterface @?= True
+            sorted.viewMode @?= Simple
+            (applyUpdate (SetViewMode Advanced) defaultConfig).viewMode @?= Advanced
             (applyUpdate (SetTableFilters (Filters True False)) defaultConfig).tableFilters
               @?= Filters True False
         ]

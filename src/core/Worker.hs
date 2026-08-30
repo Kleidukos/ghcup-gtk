@@ -9,11 +9,10 @@ module Worker
 import Control.Concurrent (forkIO)
 import Control.Concurrent.STM
 import Control.Monad (forever, void, when)
-import Data.Text (Text)
+import Data.IORef
 import Data.Text qualified as Text
 import Effectful
 import Effectful.Exception (SomeException, try)
-import Effectful.State.Static.Shared (State, evalState, get, put)
 import GHC.Clock (getMonotonicTime)
 
 import Effects.Ghcup
@@ -31,29 +30,24 @@ enqueue :: Handle -> Job -> IO ()
 enqueue handle job = atomically $ writeTQueue handle.queue job
 
 start :: Handle -> (UiMsg -> IO ()) -> IO ()
-start handle notify =
+start handle notify = do
+  currentJobRef <- newIORef RefreshListings
+  lastEmitRef <- newIORef (0 :: Double)
+  let throttledProgress line = do
+        now <- getMonotonicTime
+        before <- readIORef lastEmitRef
+        when (now - before >= 0.1) $ do
+          writeIORef lastEmitRef now
+          job <- readIORef currentJobRef
+          notify (JobProgress job (progressOf line))
   void $
     forkIO $
       runEff $
         runNotifyIO notify $
-          evalState RefreshListings $ -- the job progress reports attach to
-            evalState (0 :: Double) $ -- when progress was last emitted
-              runGhcupIO throttledProgress $
-                forever $ do
-                  job <- liftIO (atomically (readTQueue handle.queue))
-                  processJob put job
-
-throttledProgress
-  :: (IOE :> es, Notify :> es, State Job :> es, State Double :> es)
-  => Text
-  -> Eff es ()
-throttledProgress line = do
-  now <- liftIO getMonotonicTime
-  before <- get
-  when (now - before >= 0.1) $ do
-    put now
-    job <- get @Job
-    emit (JobProgress job (progressOf line))
+          runGhcupIO throttledProgress $
+            forever $ do
+              job <- liftIO (atomically (readTQueue handle.queue))
+              processJob (liftIO . writeIORef currentJobRef) job
 
 processJob
   :: (Ghcup :> es, Notify :> es)
@@ -72,14 +66,14 @@ processJob setCurrent job = do
 
 runJob :: (Ghcup :> es, Notify :> es) => (Job -> Eff es ()) -> Job -> Eff es ()
 runJob setCurrent = \case
-  RefreshListings -> emitListings =<< fetchListings
+  RefreshListings -> emitFetched =<< fetchListings
   Mutate mutation -> do
     result <- runMutation mutation
     emit (JobDone mutation result)
     relistAfterMutation
   where
-    emitListings = \case
-      Right (listings, stale) -> emit (ListingsReady listings stale)
+    emitFetched = \case
+      Right (listings, freshness) -> emit (ListingsReady listings freshness)
       Left err -> emit (ListingsFailed err)
 
     runMutation = \case
@@ -91,7 +85,9 @@ runJob setCurrent = \case
 
     relistAfterMutation = do
       setCurrent RefreshListings
-      emitListings =<< (attempt relistListings `fallbackTo` attempt fetchListings)
+      attempt relistListings >>= \case
+        Right listings -> emit (Relisted listings)
+        Left _ -> emitFetched =<< attempt fetchListings
 
 -- | Fold an exception into the operation's own error channel.
 attempt :: Eff es (Either OpError a) -> Eff es (Either OpError a)
@@ -99,6 +95,3 @@ attempt op =
   try @SomeException op >>= \case
     Right result -> pure result
     Left e -> pure (Left (OpError "Could not refresh listings" (Text.pack (show e))))
-
-fallbackTo :: Eff es (Either e a) -> Eff es (Either e a) -> Eff es (Either e a)
-fallbackTo action fallback = action >>= either (const fallback) (pure . Right)
