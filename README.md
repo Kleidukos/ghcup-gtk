@@ -70,3 +70,16 @@ NixOS-based setups are not supported. Please read [Haskell#GHCup](https://wiki.n
 - `make run`: compile and start the application
 - `make test`: run the test suite
 - `make dist`: build the release tarball
+
+
+## Verifying release artifacts
+
+Release artifacts are signed with [minisign](https://jedisct1.github.io/minisign/).
+The public key is [`release/ghcup-gtk-release.pub`](./release/ghcup-gtk-release.pub)
+in this repository, and is also attached to every release.
+
+To verify an artifact, download it along with its `.minisig` signature and run:
+
+```bash
+minisign -Vm <artifact> -P RWQC6/WX3yuYGI32C+DSyRvRM6ES628HyiUHx9A+C8UCGa2JCj6Y2vTr
+```
