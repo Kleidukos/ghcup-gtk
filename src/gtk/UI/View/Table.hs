@@ -10,6 +10,7 @@ import Data.Int (Int32)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Ord (Down (..))
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Display
@@ -23,7 +24,7 @@ import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
 
 import Config (Config (..), SortColumn (..), SortDirection (..), TableSort (..), sortColumnFromName, sortColumnName)
-import Presentation.Filter (advancedFiltersFor, defaultFilters)
+import Presentation.Filter (extraFiltersFor, filtersFor)
 import Presentation.Row (RowSpec (..), ToolRows (..), matchesFilters, statusLabel)
 import Toolchain.Types (rowKeyText)
 import UI.View (RowCallbacks, View (..), buildFilterBar, emptyStateStack, pillLabel)
@@ -48,7 +49,7 @@ build
   -> IO View
 build tool config rowCallbacks tableCallbacks = do
   specsRef <- newIORef Map.empty
-  let initial = defaultFilters tool
+  let initial = Set.empty
   filtersRef <- newIORef initial
   installedGhcsRef <- newIORef []
 
@@ -138,7 +139,7 @@ build tool config rowCallbacks tableCallbacks = do
         writeIORef filtersRef filters
         Gtk.filterChanged rowFilter Gtk.FilterChangeDifferent
         syncEmptyState
-  bar <- buildFilterBar (advancedFiltersFor tool) initial onFiltersChanged
+  bar <- buildFilterBar [filtersFor tool, extraFiltersFor tool] initial onFiltersChanged
 
   void $ on filtered #itemsChanged $ \_position _removed _added -> syncEmptyState
   syncEmptyState

@@ -5,12 +5,13 @@ module UI.View.List
 import Control.Monad (forM_)
 import Data.GI.Base
 import Data.IORef
+import Data.Set qualified as Set
 import Data.Vector qualified as Vector
 import GHCup.Types (Tool)
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
-import Presentation.Filter (defaultFilters, filtersFor)
+import Presentation.Filter (filtersFor)
 import Presentation.Row (ToolRows (..), matchesFilters)
 import UI.View (RowCallbacks, View (..), buildFilterBar, emptyStateStack)
 import UI.View.List.Row qualified as Row
@@ -20,7 +21,7 @@ build
   -> RowCallbacks
   -> IO View
 build tool rowCallbacks = do
-  let initial = defaultFilters tool
+  let initial = Set.empty
   filtersRef <- newIORef initial
   rowsRef <- newIORef Nothing
 
@@ -61,7 +62,7 @@ build tool rowCallbacks = do
   let onFiltersChanged filters = do
         writeIORef filtersRef filters
         render
-  bar <- buildFilterBar (filtersFor tool) initial onFiltersChanged
+  bar <- buildFilterBar [filtersFor tool] initial onFiltersChanged
 
   content <- new Gtk.Box [#orientation := Gtk.OrientationVertical]
   content.append bar

@@ -59,7 +59,6 @@ data RowSpec = RowSpec
   , installReq :: TargetVersionReq
   , rank :: Int
   , releaseDay :: Maybe Day
-  , passesHlsFilter :: Bool
   , latestInFamily :: Bool
   , progress :: Maybe Progress
   -- ^ Set while a mutation is running on this row; renderers draw it as a
@@ -132,7 +131,6 @@ rowSpec busy tool newest rank lr =
     , installReq = reqOf lr
     , rank
     , releaseDay = lReleaseDay lr
-    , passesHlsFilter = passesHlsFilter tool lr
     , latestInFamily = isLatestInFamily newest lr
     , progress = Map.lookup key busy
     , isPrerelease = Prerelease `elem` lr.lTag || LatestPrerelease `elem` lr.lTag
@@ -157,16 +155,12 @@ getBaseVersion tags = List.foldl' go Nothing tags
     go Nothing _ = Nothing
     go (Just b) _ = Just b
 
-passesHlsFilter :: Tool -> ListResult -> Bool
-passesHlsFilter tool lr = tool /= ghc || hlsPowered lr
-
--- | Whether a row survives a bar's active filters. Shared by the list and
--- table renderers.
+-- | Whether a row survives a bar's active filters. Every filter reveals a
+-- category hidden by default. Shared by the list and table renderers.
 matchesFilters :: Set FilterKind -> RowSpec -> Bool
 matchesFilters active spec =
   and
-    [ not (on HlsPoweredOnly) || spec.passesHlsFilter
-    , not (on LatestPatchOnly) || spec.latestInFamily
+    [ on ShowOldPatches || spec.latestInFamily
     , on ShowPrereleases || not spec.isPrerelease
     , on ShowNightlies || not spec.isNightly
     , on ShowCross || isNothing spec.crossTarget

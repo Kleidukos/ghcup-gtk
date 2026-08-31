@@ -127,25 +127,15 @@ tests =
             let specs = ghcRows [mkLR "9.2.8" [] False False, lr914]
             ((\s -> (s.title, s.rank)) <$> Vector.toList specs)
               @?= [("9.14.1", 0), ("9.2.8", 1)]
-        , testCase "release day and hls-powered mirror the listing" $ do
-            let dated =
-                  (mkLR "9.12.2" [] False False)
-                    { lReleaseDay = Just (fromGregorian 2025 3 22)
-                    , hlsPowered = True
-                    }
+        , testCase "release day mirrors the listing" $ do
+            let dated = (mkLR "9.12.2" [] False False) {lReleaseDay = Just (fromGregorian 2025 3 22)}
                 specs = ghcRows [dated, lr914]
-            ((\s -> (s.releaseDay, s.passesHlsFilter)) <$> Vector.toList specs)
-              @?= [(Nothing, False), (Just (fromGregorian 2025 3 22), True)]
+            ((.releaseDay) <$> Vector.toList specs)
+              @?= [Nothing, Just (fromGregorian 2025 3 22)]
         , testCase "latestInFamily carries curation's verdict onto the rows" $ do
             let specs = ghcRows [mkLR "9.12.2" [] False False, mkLR "9.12.1" [] False False]
             ((\s -> (s.title, s.latestInFamily)) <$> Vector.toList specs)
               @?= [("9.12.2", True), ("9.12.1", False)]
-        , testCase "non-GHC tools always count as hls-powered" $ do
-            let cabalRow = mkLR "3.14.1.0" [Latest] False False
-                specs = case Map.lookup cabal (planRows Map.empty (listingsFor cabal [cabalRow])) of
-                  Just toolRows -> toolRows.rows
-                  Nothing -> error "planRows lost the cabal entry"
-            ((.passesHlsFilter) <$> Vector.toList specs) @?= [True]
         , testCase "a busy map stamps progress onto the matching row" $ do
             let key = keyOfMutation (Install ghc (reqOf lr914) defaultInstallOptions)
                 busy = Map.singleton key (Progress "unpacking" Nothing)
@@ -183,32 +173,27 @@ tests =
         ]
     , testGroup
         "matchesFilters"
-        [ testCase "no active filter keeps regular rows, hides special categories" $ do
-            matchesFilters Set.empty (sampleSpec False False) @?= True
-            matchesFilters Set.empty ((sampleSpec False False) {isPrerelease = True}) @?= False
-            matchesFilters Set.empty ((sampleSpec False False) {isNightly = True}) @?= False
-            matchesFilters Set.empty ((sampleSpec False False) {crossTarget = Just "aarch64-linux"}) @?= False
-        , testCase "hls filter drops rows that fail it" $ do
-            matchesFilters (Set.singleton HlsPoweredOnly) (sampleSpec False True) @?= False
-            matchesFilters (Set.singleton HlsPoweredOnly) (sampleSpec True True) @?= True
-        , testCase "latest-patch filter drops older patches" $ do
-            matchesFilters (Set.singleton LatestPatchOnly) (sampleSpec True False) @?= False
-            matchesFilters (Set.singleton LatestPatchOnly) (sampleSpec True True) @?= True
+        [ testCase "no active filter shows only curated rows" $ do
+            matchesFilters Set.empty (sampleSpec True) @?= True
+            matchesFilters Set.empty (sampleSpec False) @?= False
+            matchesFilters Set.empty ((sampleSpec True) {isPrerelease = True}) @?= False
+            matchesFilters Set.empty ((sampleSpec True) {isNightly = True}) @?= False
+            matchesFilters Set.empty ((sampleSpec True) {crossTarget = Just "aarch64-linux"}) @?= False
+        , testCase "ShowOldPatches reveals older patches" $
+            matchesFilters (Set.singleton ShowOldPatches) (sampleSpec False) @?= True
         , testCase "show filters reveal their category" $ do
-            matchesFilters (Set.singleton ShowPrereleases) ((sampleSpec False False) {isPrerelease = True}) @?= True
-            matchesFilters (Set.singleton ShowNightlies) ((sampleSpec False False) {isNightly = True}) @?= True
-            matchesFilters (Set.singleton ShowCross) ((sampleSpec False False) {crossTarget = Just "aarch64-linux"}) @?= True
-        , testCase "restrictive filters must all pass together" $
-            matchesFilters (Set.fromList [HlsPoweredOnly, LatestPatchOnly]) (sampleSpec False True) @?= False
-        , testCase "restrictive and additive filters compose" $ do
-            matchesFilters (Set.fromList [LatestPatchOnly, ShowPrereleases]) ((sampleSpec True True) {isPrerelease = True}) @?= True
-            matchesFilters (Set.fromList [LatestPatchOnly, ShowPrereleases]) ((sampleSpec True False) {isPrerelease = True}) @?= False
+            matchesFilters (Set.singleton ShowPrereleases) ((sampleSpec True) {isPrerelease = True}) @?= True
+            matchesFilters (Set.singleton ShowNightlies) ((sampleSpec True) {isNightly = True}) @?= True
+            matchesFilters (Set.singleton ShowCross) ((sampleSpec True) {crossTarget = Just "aarch64-linux"}) @?= True
+        , testCase "filters compose" $ do
+            matchesFilters (Set.singleton ShowPrereleases) ((sampleSpec False) {isPrerelease = True}) @?= False
+            matchesFilters (Set.fromList [ShowOldPatches, ShowPrereleases]) ((sampleSpec False) {isPrerelease = True}) @?= True
         ]
     ]
   where
-    sampleSpec :: Bool -> Bool -> RowSpec
-    sampleSpec hls latest =
-      (Vector.head (ghcRows [lr914])) {passesHlsFilter = hls, latestInFamily = latest}
+    sampleSpec :: Bool -> RowSpec
+    sampleSpec latest =
+      (Vector.head (ghcRows [lr914])) {latestInFamily = latest}
     ghcPlan :: [ListResult] -> ToolRows
     ghcPlan lrs =
       case Map.lookup ghc (planRows Map.empty (listingsFor ghc lrs)) of

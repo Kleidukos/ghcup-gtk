@@ -7,7 +7,7 @@ module UI.View
   , pillLabel
   ) where
 
-import Control.Monad (filterM, forM_, void)
+import Control.Monad (filterM, forM_, void, when)
 import Data.GI.Base
 import Data.Set (Set)
 import Data.Set qualified as Set
@@ -36,15 +36,20 @@ data View = View
   }
 
 -- | The filter funnel shared by the list and table renderers: a menu
--- button whose popover holds one check button per filter, with a pill
--- showing how many are active.
-buildFilterBar :: [FilterKind] -> Set FilterKind -> (Set FilterKind -> IO ()) -> IO Gtk.Widget
-buildFilterBar kinds initial onChanged = do
-  checks <- traverse checkOf kinds
+-- button whose popover holds one check button per filter, groups split
+-- by a separator, with a pill showing how many are active.
+buildFilterBar :: [[FilterKind]] -> Set FilterKind -> (Set FilterKind -> IO ()) -> IO Gtk.Widget
+buildFilterBar groups initial onChanged = do
+  checkGroups <- traverse (traverse checkOf) (filter (not . null) groups)
+  let checks = concat checkGroups
 
   list <- new Gtk.Box [#orientation := Gtk.OrientationVertical, #spacing := 4]
   list.addCssClass "filter-popover-content"
-  forM_ checks $ \(_, check) -> list.append check
+  forM_ (zip [0 :: Int ..] checkGroups) $ \(i, group) -> do
+    when (i > 0) $ do
+      separator <- new Gtk.Separator [#orientation := Gtk.OrientationHorizontal]
+      list.append separator
+    forM_ group $ \(_, check) -> list.append check
   popover <- new Gtk.Popover [#child := list]
 
   icon <- new Gtk.Image [#iconName := "funnel-symbolic"]
