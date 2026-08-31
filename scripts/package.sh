@@ -123,6 +123,7 @@ install_file() {
 install_file 755 "$BIN" "${STAGING}${PREFIX}/bin/ghcup-gtk"
 strip "${STAGING}${PREFIX}/bin/ghcup-gtk"
 install_file 644 data/style.css "${STAGING}${PREFIX}/share/ghcup-gtk/data/style.css"
+install_file 644 data/icons/funnel-symbolic.svg "${STAGING}${PREFIX}/share/ghcup-gtk/data/icons/funnel-symbolic.svg"
 
 if [ "$OS" = "Linux" ]; then
   install_file 644 data/org.haskell.GhcupGtk.desktop \

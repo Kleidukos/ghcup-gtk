@@ -38,8 +38,6 @@ data Registry = Registry
   -- ^ Retained so 'reconcile' can build fresh renderers.
   , tableCallbacks :: TableView.TableCallbacks
   -- ^ Likewise.
-  , listCallbacks :: ListView.ListCallbacks
-  -- ^ Likewise.
   , renderersRef :: IORef (Map Tool View)
   , appliedRef :: IORef (Maybe ViewState)
   -- ^ The last state applied to the widgets; 'Nothing' until the first
@@ -51,10 +49,9 @@ build
   :: ToolPanes
   -> RowCallbacks
   -> TableView.TableCallbacks
-  -> ListView.ListCallbacks
   -> IO Registry
-build panes rowCallbacks tableCallbacks listCallbacks =
-  Registry panes rowCallbacks tableCallbacks listCallbacks
+build panes rowCallbacks tableCallbacks =
+  Registry panes rowCallbacks tableCallbacks
     <$> newIORef Map.empty
     <*> newIORef Nothing
 
@@ -65,9 +62,9 @@ buildRenderers registry config = do
   built <- forM currentPanes $ \pane -> do
     view <- case config.viewMode of
       Simple ->
-        ListView.build config registry.rowCallbacks registry.listCallbacks
+        ListView.build pane.tool registry.rowCallbacks
       Advanced ->
-        TableView.build config registry.rowCallbacks registry.tableCallbacks
+        TableView.build pane.tool config registry.rowCallbacks registry.tableCallbacks
     ToolPanes.setChild pane view.widget
     pure (pane.tool, view)
   pure (Map.fromList (Vector.toList built))

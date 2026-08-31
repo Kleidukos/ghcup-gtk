@@ -4,6 +4,7 @@ import Test.Tasty
 
 import CompileFormSpec qualified
 import ConfigSpec qualified
+import FilterSpec qualified
 import InstallFormSpec qualified
 import PresentationSpec qualified
 import SessionSpec qualified
@@ -18,6 +19,7 @@ main =
       "ghcup-gtk"
       [ CompileFormSpec.tests
       , ConfigSpec.tests
+      , FilterSpec.tests
       , InstallFormSpec.tests
       , PresentationSpec.tests
       , SessionSpec.tests

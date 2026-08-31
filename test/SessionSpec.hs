@@ -147,7 +147,6 @@ tests =
         , testCase "an echoed config update emits nothing, which is what stops the sort-save-apply-sort loop" $ do
             let (ready, _) = step (WorkerMsg (ListingsReady sampleListings Fresh)) model0
             snd (step (ConfigChanged (SetTableSort defaultConfig.tableSort)) ready) @?= []
-            snd (step (ConfigChanged (SetListFilters defaultConfig.listFilters)) ready) @?= []
             snd (step (ConfigChanged (SetViewMode Simple)) ready) @?= []
         ]
     , testGroup

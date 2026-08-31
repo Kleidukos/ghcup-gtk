@@ -22,6 +22,7 @@ import GI.Gtk qualified as Gtk
 #ifdef DEVELOPMENT
 import Development.Reload qualified as Reload
 #endif
+import System.Directory (doesDirectoryExist)
 import System.Environment (getProgName)
 import System.IO (hPutStrLn, stderr)
 
@@ -41,7 +42,6 @@ import UI.Shell (Shell (..))
 import UI.Shell qualified as Shell
 import UI.Shortcuts qualified as Shortcuts
 import UI.View (RowCallbacks (..))
-import UI.View.List qualified as ListView
 import UI.View.Table qualified as TableView
 import Worker qualified
 
@@ -54,6 +54,7 @@ startUI = do
       [ #applicationId := "org.haskell.GhcupGtk"
       , On #activate (activate options.forcedView ?self)
       , On #startup loadCSS
+      , On #startup loadIcons
       ]
   progName <- getProgName
   void (app.run $ Just $ progName : options.gtkArgs)
@@ -78,6 +79,22 @@ loadCSS = do
     cssProvider
     (fromIntegral @Int32 @Word32 Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 {- FOURMOLU_ENABLE -}
+
+-- | Make the bundled icons (data/icons) resolvable by name.
+loadIcons :: (MonadIO m) => m ()
+loadIcons = do
+  display <-
+    Gdk.displayGetDefault
+      >>= \case
+        Nothing -> error "Could not find Display!"
+        Just d -> pure d
+  theme <- Gtk.iconThemeGetForDisplay display
+  localExists <- liftIO (doesDirectoryExist "data/icons")
+  path <-
+    if localExists
+      then pure "data/icons"
+      else liftIO (Paths.getDataFileName "data/icons")
+  theme.addSearchPath path
 
 data Runtime = Runtime
   { app :: Adw.Application
@@ -107,7 +124,6 @@ activate forcedView app = do
       shell.panes
       (rowCallbacks dispatchLater)
       (tableCallbacks dispatchLater)
-      (listCallbacks dispatchLater)
 
   let runtime = Runtime {app, shell, registry, worker, dirs, modelRef, dispatch}
       dispatch event = do
@@ -196,13 +212,6 @@ tableCallbacks :: (Session.Event -> IO ()) -> TableView.TableCallbacks
 tableCallbacks dispatch =
   TableView.TableCallbacks
     { onSortChanged = \sort -> Config.SetTableSort sort & Session.ConfigChanged & dispatch
-    , onFiltersChanged = \filters -> Config.SetTableFilters filters & Session.ConfigChanged & dispatch
-    }
-
-listCallbacks :: (Session.Event -> IO ()) -> ListView.ListCallbacks
-listCallbacks dispatch =
-  ListView.ListCallbacks
-    { onFiltersChanged = \filters -> Config.SetListFilters filters & Session.ConfigChanged & dispatch
     }
 
 runPathCheck :: Runtime -> IO ()

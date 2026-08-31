@@ -1,6 +1,5 @@
 module UI.View
-  ( FilterBar (..)
-  , RowCallbacks (..)
+  ( RowCallbacks (..)
   , View (..)
   , buildFilterBar
   , captionLabel
@@ -8,13 +7,17 @@ module UI.View
   , pillLabel
   ) where
 
-import Control.Monad (void)
+import Control.Monad (filterM, forM_, void, when)
 import Data.GI.Base
+import Data.Set (Set)
+import Data.Set qualified as Set
 import Data.Text (Text)
+import Data.Text qualified as Text
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
-import Config (Config, Filters (..))
+import Config (Config)
+import Presentation.Filter (FilterKind, filterLabel)
 import Presentation.Row (RowAction, ToolRows)
 import Toolchain.Types (Mutation)
 
@@ -32,41 +35,54 @@ data View = View
   , applyConfig :: Config -> IO ()
   }
 
--- | The filter checkboxes shared by the list and table renderers.
-data FilterBar = FilterBar
-  { widget :: Gtk.Widget
-  , setFilters :: Filters -> IO ()
-  }
+-- | The filter funnel shared by the list and table renderers: a menu
+-- button whose popover holds one check button per filter, groups split
+-- by a separator, with a pill showing how many are active.
+buildFilterBar :: [[FilterKind]] -> Set FilterKind -> (Set FilterKind -> IO ()) -> IO Gtk.Widget
+buildFilterBar groups initial onChanged = do
+  checkGroups <- traverse (traverse checkOf) (filter (not . null) groups)
+  let checks = concat checkGroups
 
-buildFilterBar :: Filters -> (Filters -> IO ()) -> IO FilterBar
-buildFilterBar initialFilters onChanged = do
-  hlsCheck <-
-    new Gtk.CheckButton [#label := "HLS-powered", #active := initialFilters.hlsPoweredOnly]
-  latestCheck <-
-    new
-      Gtk.CheckButton
-      [ #label := "Latest patch per major.minor"
-      , #active := initialFilters.latestPatchOnly
-      ]
-  bar <-
-    new
-      Gtk.Box
-      [ #orientation := Gtk.OrientationHorizontal
-      , #spacing := 12
-      ]
+  list <- new Gtk.Box [#orientation := Gtk.OrientationVertical, #spacing := 4]
+  list.addCssClass "filter-popover-content"
+  forM_ (zip [0 :: Int ..] checkGroups) $ \(i, group) -> do
+    when (i > 0) $ do
+      separator <- new Gtk.Separator [#orientation := Gtk.OrientationHorizontal]
+      list.append separator
+    forM_ group $ \(_, check) -> list.append check
+  popover <- new Gtk.Popover [#child := list]
+
+  icon <- new Gtk.Image [#iconName := "funnel-symbolic"]
+  label <- new Gtk.Label [#label := "Filters"]
+  let activeCount = length (filter ((`Set.member` initial) . fst) checks)
+  badge <- pillLabel (countText activeCount)
+  set badge [#visible := activeCount > 0]
+
+  content <- new Gtk.Box [#orientation := Gtk.OrientationHorizontal, #spacing := 6]
+  content.append icon
+  content.append label
+  content.append badge
+
+  button <- new Gtk.MenuButton [#popover := popover, #child := content]
+
+  let currentFilters =
+        Set.fromList . map fst <$> filterM (\(_, check) -> check.getActive) checks
+  forM_ checks $ \(_, check) ->
+    void $ on check #toggled $ do
+      filters <- currentFilters
+      set badge [#label := countText (Set.size filters), #visible := not (Set.null filters)]
+      onChanged filters
+
+  bar <- new Gtk.Box [#orientation := Gtk.OrientationHorizontal]
   bar.addCssClass "filter-bar"
-  bar.append hlsCheck
-  bar.append latestCheck
+  bar.append button
+  Gtk.toWidget bar
+  where
+    checkOf kind = do
+      check <- new Gtk.CheckButton [#label := filterLabel kind, #active := Set.member kind initial]
+      pure (kind, check)
 
-  let currentFilters = Filters <$> hlsCheck.getActive <*> latestCheck.getActive
-  void $ on hlsCheck #toggled (currentFilters >>= onChanged)
-  void $ on latestCheck #toggled (currentFilters >>= onChanged)
-
-  widget <- Gtk.toWidget bar
-  let setFilters filters = do
-        hlsCheck.setActive filters.hlsPoweredOnly
-        latestCheck.setActive filters.latestPatchOnly
-  pure FilterBar {widget, setFilters}
+    countText = Text.pack . show
 
 emptyStateStack :: Gtk.Widget -> IO (Gtk.Stack, Bool -> IO ())
 emptyStateStack content = do
