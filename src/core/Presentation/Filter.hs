@@ -1,33 +1,72 @@
 module Presentation.Filter
-  ( FilterKind (..)
-  , extraFiltersFor
+  ( ActiveFilters (..)
+  , Channel (..)
+  , FilterKind (..)
+  , activeCount
+  , channelLabel
+  , channelsFor
   , filterLabel
   , filtersFor
+  , reachableChannels
+  , restrictTo
   ) where
 
+import Data.Set (Set)
+import Data.Set qualified as Set
 import Data.Text (Text)
 import GHCup.Types (Tool, ghc)
 
+import Toolchain.Channels (Channel (..))
+
 data FilterKind
   = ShowOldPatches
-  | ShowPrereleases
-  | ShowNightlies
-  | ShowCross
   deriving stock (Bounded, Enum, Eq, Ord, Show)
+
+data ActiveFilters = ActiveFilters
+  { kinds :: Set FilterKind
+  , channels :: Set Channel
+  }
+  deriving stock (Eq, Show)
+
+instance Semigroup ActiveFilters where
+  a <> b = ActiveFilters (a.kinds <> b.kinds) (a.channels <> b.channels)
+
+instance Monoid ActiveFilters where
+  mempty = ActiveFilters Set.empty Set.empty
+
+activeCount :: ActiveFilters -> Int
+activeCount active = Set.size active.kinds + Set.size active.channels
 
 filterLabel :: FilterKind -> Text
 filterLabel = \case
   ShowOldPatches -> "Show older patch releases"
-  ShowPrereleases -> "Show prereleases"
-  ShowNightlies -> "Show nightlies"
-  ShowCross -> "Show cross builds"
 
-filtersFor :: Tool -> [FilterKind]
-filtersFor tool
-  | tool == ghc = [ShowOldPatches]
-  | otherwise = [ShowOldPatches, ShowPrereleases]
+channelLabel :: Channel -> Text
+channelLabel = \case
+  Prereleases -> "Prereleases"
+  Nightlies -> "Nightlies"
+  Cross -> "Cross builds"
+  ThirdParty -> "Third-party tools"
 
-extraFiltersFor :: Tool -> [FilterKind]
-extraFiltersFor tool
-  | tool == ghc = [ShowPrereleases, ShowNightlies, ShowCross]
-  | otherwise = []
+filtersFor :: [FilterKind]
+filtersFor = [ShowOldPatches]
+
+channelsFor :: Set Channel -> Tool -> [Channel]
+channelsFor configured tool = filter (`Set.member` configured) available
+  where
+    available
+      | tool == ghc = [Prereleases, Nightlies, Cross]
+      | otherwise = [Prereleases]
+
+-- | The configured channels these tools' filter bars can actually offer;
+-- a channel no bar shows cannot warrant rebuilding any of them.
+reachableChannels :: (Foldable f) => Set Channel -> f Tool -> Set Channel
+reachableChannels configured = foldMap (Set.fromList . channelsFor configured)
+
+-- | Keep only the selections a bar offering these kinds and channels can
+-- represent; a filter naming something no longer on offer is dropped.
+restrictTo :: [FilterKind] -> [Channel] -> ActiveFilters -> ActiveFilters
+restrictTo kinds channels active =
+  ActiveFilters
+    (active.kinds `Set.intersection` Set.fromList kinds)
+    (active.channels `Set.intersection` Set.fromList channels)

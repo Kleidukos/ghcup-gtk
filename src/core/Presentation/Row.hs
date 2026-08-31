@@ -26,7 +26,6 @@ import Data.List qualified as List
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (isNothing, mapMaybe)
-import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text.Display
@@ -37,8 +36,8 @@ import Data.Versions (PVP, Version, prettyPVP, prettyVer)
 import GHCup.Command.List (ListResult (..))
 import GHCup.Types (Tag (..), TargetVersion, TargetVersionReq (..), Tool, cabal, ghc, ghcup, hls, stack, tVerToText)
 
-import Presentation.Filter (FilterKind (..))
-import Toolchain.Curation (FamilyKey, curate, isLatestInFamily, latestPerFamily)
+import Presentation.Filter (ActiveFilters (..), Channel (..), FilterKind (..))
+import Toolchain.Curation (FamilyKey, Stability (..), curate, isLatestInFamily, latestPerFamily, stabilityOf)
 import Toolchain.Types
 
 data Confirmation = Confirmation
@@ -133,8 +132,8 @@ rowSpec busy tool newest rank lr =
     , releaseDay = lReleaseDay lr
     , latestInFamily = isLatestInFamily newest lr
     , progress = Map.lookup key busy
-    , isPrerelease = Prerelease `elem` lr.lTag || LatestPrerelease `elem` lr.lTag
-    , isNightly = Nightly `elem` lr.lTag || LatestNightly `elem` lr.lTag
+    , isPrerelease = stabilityOf lr == PrereleaseBuild
+    , isNightly = stabilityOf lr == NightlyBuild
     , crossTarget = lr.lCross
     }
   where
@@ -157,16 +156,17 @@ getBaseVersion tags = List.foldl' go Nothing tags
 
 -- | Whether a row survives a bar's active filters. Every filter reveals a
 -- category hidden by default. Shared by the list and table renderers.
-matchesFilters :: Set FilterKind -> RowSpec -> Bool
+matchesFilters :: ActiveFilters -> RowSpec -> Bool
 matchesFilters active spec =
   and
-    [ on ShowOldPatches || spec.latestInFamily
-    , on ShowPrereleases || not spec.isPrerelease
-    , on ShowNightlies || not spec.isNightly
-    , on ShowCross || isNothing spec.crossTarget
+    [ onKind ShowOldPatches || spec.latestInFamily
+    , onChannel Prereleases || not spec.isPrerelease
+    , onChannel Nightlies || not spec.isNightly
+    , onChannel Cross || isNothing spec.crossTarget
     ]
   where
-    on kind = Set.member kind active
+    onKind kind = Set.member kind active.kinds
+    onChannel channel = Set.member channel active.channels
 
 statusLabel :: RowSpec -> Text
 statusLabel spec

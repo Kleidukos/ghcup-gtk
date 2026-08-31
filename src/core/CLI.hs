@@ -6,11 +6,8 @@ module CLI
 
 import Options.Applicative
 
-import Config (ViewMode (..))
-
-data Options = Options
-  { forcedView :: Maybe ViewMode
-  , gtkArgs :: [String]
+newtype Options = Options
+  { gtkArgs :: [String]
   }
   deriving stock (Eq, Ord, Show)
 
@@ -29,18 +26,4 @@ parserInfo =
 parser :: Parser Options
 parser =
   Options
-    <$> optional
-      ( option
-          viewMode
-          ( long "view"
-              <> metavar "VIEW"
-              <> help "Force the view: \"list\" or \"table\""
-          )
-      )
-    <*> many (strArgument (metavar "GTK_ARGS"))
-
-viewMode :: ReadM ViewMode
-viewMode = eitherReader $ \case
-  "list" -> Right Simple
-  "table" -> Right Advanced
-  other -> Left ("invalid view " <> show other <> ", expected \"list\" or \"table\"")
+    <$> many (strArgument (metavar "GTK_ARGS"))

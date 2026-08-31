@@ -1,5 +1,6 @@
 module Session
   ( Model (..)
+  , ChannelsEditability (..)
   , Phase (..)
   , PathModel (..)
   , Event (..)
@@ -10,15 +11,21 @@ module Session
   , step
   ) where
 
+import Data.Functor ((<&>))
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
+import Data.Maybe (fromMaybe)
+import Data.Set (Set)
 import Data.Text (Text)
 import Data.Vector (Vector)
-import GHCup.Types (Tool)
+import GHCup.Types (NewURLSource, Tool)
+import URI.ByteString (URI)
 
 import Config (Config (..), ConfigUpdate (..), applyUpdate)
+import Presentation.Filter (Channel)
 import Presentation.Path (BannerSpec, appliedBanner, pathBanner)
 import Presentation.Row (Confirmation, RowAction (..), ToolRows, jobTitle, planRows)
+import Toolchain.Channels (applyChannels, nightliesUri, uriText)
 import Toolchain.Path (FileChange, PathStatus (..))
 import Toolchain.Types
   ( Freshness (..)
@@ -43,6 +50,13 @@ data PathModel
   | FixApplied
   deriving stock (Eq, Show)
 
+-- | Whether the channel set may be edited: 'ChannelsLocked' when the
+-- ghcup config could not be read at startup, so a write would clobber it.
+data ChannelsEditability
+  = ChannelsEditable
+  | ChannelsLocked
+  deriving stock (Eq, Show)
+
 data Model = Model
   { listings :: Listings
   -- ^ Version data for each tool
@@ -58,6 +72,10 @@ data Model = Model
   -- ^ Status of the PATH fixing
   , freshness :: Freshness
   -- ^ Whether the listings reflect current toolchain metadata
+  , urlSource :: [NewURLSource]
+  -- ^ ghcup's url-source list, the source of truth for channels
+  , channelsEditable :: ChannelsEditability
+  -- ^ 'ChannelsLocked' when the ghcup config could not be read at startup
   }
   deriving stock (Eq, Show)
 
@@ -78,6 +96,10 @@ data Event
     PathFixConfirmed
   | -- | The PATH fix was applied (or failed)
     PathFixDone (Either OpError ())
+  | -- | The user changed the channel toggles in the preferences
+    ChannelsChanged (Set Channel) (Maybe URI)
+  | -- | The new url-source list was written to the ghcup config
+    ChannelsSaved [NewURLSource]
   deriving stock (Eq, Show)
 
 data Effect
@@ -91,10 +113,11 @@ data Effect
   | SaveConfig Config
   | CheckPath
   | ApplyPathFix (Vector FileChange)
+  | PersistChannels (Set Channel) (Maybe URI)
   deriving stock (Eq, Show)
 
-initialModel :: GhcupDirs -> Config -> Model
-initialModel ghcupDirs config =
+initialModel :: GhcupDirs -> Config -> [NewURLSource] -> ChannelsEditability -> Model
+initialModel ghcupDirs config urlSource channelsEditable =
   Model
     { listings = mempty
     , config
@@ -103,6 +126,8 @@ initialModel ghcupDirs config =
     , ghcupDirs
     , pathModel = Unchecked
     , freshness = Fresh
+    , urlSource
+    , channelsEditable
     }
 
 bannerFor :: Model -> Maybe BannerSpec
@@ -131,12 +156,9 @@ step event model = case event of
   ConfigChanged update ->
     let model' = model {config = applyUpdate update model.config}
         echoesCurrentConfig = model'.config == model.config
-        redraw = case update of
-          SetWindowSize _ _ -> []
-          _ -> [Reconcile]
     in if echoesCurrentConfig
          then (model, [])
-         else (model', SaveConfig model'.config : redraw)
+         else (model', [SaveConfig model'.config])
   PathChecked status ->
     (model {pathModel = Checked status}, [Reconcile])
   PathFixConfirmed -> case model.pathModel of
@@ -169,3 +191,24 @@ step event model = case event of
             Right () -> [Toast (jobTitle mutation), CheckPath]
             Left err -> [ErrorToast err]
       in (model', release <> (Reconcile : outcome))
+  ChannelsChanged _ _
+    | model.channelsEditable == ChannelsLocked -> (model, [])
+  ChannelsChanged channels nightlies ->
+    let sources = applyChannels channels nightlies model.urlSource
+    in if sources == model.urlSource
+         then (model, [])
+         else (model, [PersistChannels channels nightlies])
+  ChannelsSaved sources ->
+    let saved = nightliesUri sources <&> uriText
+        remembered
+          | Just url <- saved
+          , Just url /= model.config.nightliesUrl =
+              Just (model.config {nightliesUrl = Just url})
+          | otherwise = Nothing
+        model' =
+          model
+            { urlSource = sources
+            , config = fromMaybe model.config remembered
+            }
+        saveConfig = maybe [] (\config -> [SaveConfig config]) remembered
+    in (model', saveConfig <> [Enqueue (Reconfigure sources), Reconcile])

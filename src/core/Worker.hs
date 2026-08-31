@@ -14,6 +14,7 @@ import Data.Text qualified as Text
 import Effectful
 import Effectful.Exception (SomeException, try)
 import GHC.Clock (getMonotonicTime)
+import GHCup.Types (NewURLSource)
 
 import Effects.Ghcup
 import Effects.Notify (Notify, emit, runNotifyIO)
@@ -29,8 +30,8 @@ new = Handle <$> newTQueueIO
 enqueue :: Handle -> Job -> IO ()
 enqueue handle job = atomically $ writeTQueue handle.queue job
 
-start :: Handle -> (UiMsg -> IO ()) -> IO ()
-start handle notify = do
+start :: Handle -> [NewURLSource] -> (UiMsg -> IO ()) -> IO ()
+start handle urlSource notify = do
   currentJobRef <- newIORef RefreshListings
   lastEmitRef <- newIORef (0 :: Double)
   let throttledProgress line = do
@@ -44,7 +45,7 @@ start handle notify = do
     forkIO $
       runEff $
         runNotifyIO notify $
-          runGhcupIO throttledProgress $
+          runGhcupIO urlSource throttledProgress $
             forever $ do
               job <- liftIO (atomically (readTQueue handle.queue))
               processJob (liftIO . writeIORef currentJobRef) job
@@ -63,10 +64,14 @@ processJob setCurrent job = do
       in emit $ case job of
            Mutate mutation -> JobDone mutation (Left err)
            RefreshListings -> ListingsFailed err
+           Reconfigure _ -> ListingsFailed err
 
 runJob :: (Ghcup :> es, Notify :> es) => (Job -> Eff es ()) -> Job -> Eff es ()
 runJob setCurrent = \case
   RefreshListings -> emitFetched =<< fetchListings
+  Reconfigure sources -> do
+    reconfigureSources sources
+    emitFetched =<< fetchListings
   Mutate mutation -> do
     result <- runMutation mutation
     emit (JobDone mutation result)

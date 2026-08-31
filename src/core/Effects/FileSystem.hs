@@ -6,17 +6,21 @@ module Effects.FileSystem
   , doesFileExist
   , readFileText
   , writeFileAtomic
+  , atomicWriteBytes
   , getXdgDirectory
   , getHomeDirectory
   , lookupEnv
   , runFileSystemIO
   ) where
 
-import Control.Exception (SomeException, try)
+import Control.Exception (SomeException, bracket, bracketOnError, try)
 import Control.Monad (when)
 import Data.Bifunctor (first)
+import Data.ByteString (ByteString)
+import Data.ByteString qualified as ByteString
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Text.Encoding
 import Data.Text.IO qualified as Text
 import Effectful
 import Effectful.Dispatch.Dynamic
@@ -24,7 +28,9 @@ import System.Directory (XdgDirectory)
 import System.Directory qualified as Directory
 import System.Environment qualified as System
 import System.FilePath (takeDirectory, takeFileName)
-import System.IO (hClose, openTempFile)
+import System.IO (Handle, hClose, hFlush, openTempFile)
+import System.Posix.IO (closeFd, handleToFd)
+import System.Posix.Unistd (fileSynchronise)
 
 data FileSystem :: Effect where
   DoesFileExist :: FilePath -> FileSystem m Bool
@@ -66,13 +72,35 @@ runFileSystemIO = interpret $ \_ -> \case
 tryText :: IO a -> IO (Either Text a)
 tryText action = first (Text.pack . show) <$> try @SomeException action
 
-atomicWrite :: FilePath -> Text -> IO ()
-atomicWrite path payload = do
+-- | Replace a file's contents by rename, so a reader never observes a
+-- partial write and a crash never leaves the temp file behind. The payload
+-- reaches the disk before the rename, so the rename cannot expose an empty
+-- file after a power loss.
+atomicWriteBytes :: FilePath -> ByteString -> IO ()
+atomicWriteBytes path payload = do
   Directory.createDirectoryIfMissing True (takeDirectory path)
   exists <- Directory.doesFileExist path
   target <- if exists then Directory.canonicalizePath path else pure path
-  (tmp, h) <- openTempFile (takeDirectory target) (takeFileName target <> ".tmp")
-  Text.hPutStr h payload
-  hClose h
-  when exists $ Directory.copyPermissions target tmp
-  Directory.renameFile tmp target
+  bracketOnError
+    (openTempFile (takeDirectory target) (takeFileName target <> ".tmp"))
+    discard
+    $ \(tmp, h) -> do
+      ByteString.hPut h payload
+      syncHandle h
+      when exists $ Directory.copyPermissions target tmp
+      Directory.renameFile tmp target
+  where
+    discard (tmp, h) = do
+      _ <- try @SomeException (hClose h)
+      _ <- try @SomeException (Directory.removeFile tmp)
+      pure ()
+
+-- | Flush the handle's buffers and the file's data to disk. 'handleToFd'
+-- closes the handle, so nothing may be written through it afterwards.
+syncHandle :: Handle -> IO ()
+syncHandle h = do
+  hFlush h
+  bracket (handleToFd h) closeFd fileSynchronise
+
+atomicWrite :: FilePath -> Text -> IO ()
+atomicWrite path payload = atomicWriteBytes path (Text.Encoding.encodeUtf8 payload)

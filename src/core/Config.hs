@@ -1,22 +1,14 @@
 module Config
   ( Config (..)
   , ConfigUpdate (..)
-  , SortColumn (..)
-  , SortDirection (..)
-  , TableSort (..)
-  , ViewMode (..)
   , applyUpdate
   , defaultConfig
-  , parseConfig
   , parseConfigEither
   , renderConfig
   , load
   , save
-  , sortColumnFromName
-  , sortColumnName
   ) where
 
-import Data.Either (fromRight)
 import Data.Maybe (fromMaybe)
 import Data.Scientific qualified as Scientific
 import Data.Text (Text)
@@ -28,49 +20,28 @@ import System.FilePath ((</>))
 
 import Effects.FileSystem
 
-data SortColumn = ByVersion | ByReleased | ByStatus
-  deriving stock (Eq, Show)
-
-data SortDirection = Ascending | Descending
-  deriving stock (Eq, Show)
-
-data TableSort = TableSort
-  { column :: SortColumn
-  , direction :: SortDirection
-  }
-  deriving stock (Eq, Show)
-
-data ViewMode = Simple | Advanced
-  deriving stock (Eq, Ord, Show)
-
 data Config = Config
-  { viewMode :: ViewMode
-  , tableSort :: TableSort
-  , windowWidth :: Int
+  { windowWidth :: Int
   , windowHeight :: Int
+  , nightliesUrl :: Maybe Text
   }
   deriving stock (Eq, Show)
 
 defaultConfig :: Config
 defaultConfig =
   Config
-    { viewMode = Simple
-    , tableSort = TableSort ByVersion Descending
-    , windowWidth = 960
+    { windowWidth = 960
     , windowHeight = 560
+    , nightliesUrl = Nothing
     }
 
--- | A preference change, or a table-state change worth remembering.
+-- | A window-state change worth remembering.
 data ConfigUpdate
-  = SetViewMode ViewMode
-  | SetTableSort TableSort
-  | SetWindowSize Int Int
+  = SetWindowSize Int Int
   deriving stock (Eq, Show)
 
 applyUpdate :: ConfigUpdate -> Config -> Config
 applyUpdate update config = case update of
-  SetViewMode mode -> config {viewMode = mode}
-  SetTableSort sort -> config {tableSort = sort}
   SetWindowSize width height -> config {windowWidth = width, windowHeight = height}
 
 parseConfigEither :: Text -> Either Text Config
@@ -78,28 +49,12 @@ parseConfigEither input = configOf <$> KDL.parse input
   where
     configOf doc =
       Config
-        { viewMode = fromMaybe defaultConfig.viewMode (viewModeFromName =<< stringArg "view-mode" doc)
-        , tableSort =
-            TableSort
-              { column = fromMaybe defaultConfig.tableSort.column (sortColumn doc)
-              , direction =
-                  if bool "table-sort-descending" (defaultConfig.tableSort.direction == Descending) doc
-                    then Descending
-                    else Ascending
-              }
-        , windowWidth = int "window-width" defaultConfig.windowWidth doc
+        { windowWidth = int "window-width" defaultConfig.windowWidth doc
         , windowHeight = int "window-height" defaultConfig.windowHeight doc
+        , nightliesUrl = textArg "nightlies-url" doc
         }
 
-    sortColumn doc = sortColumnFromName =<< stringArg "table-sort-column" doc
-
-    bool name fallback doc = fromMaybe fallback (boolArg name doc)
-
     int name fallback doc = fromMaybe fallback (intArg name doc)
-
-    boolArg name doc = case KDL.getArgAt name doc of
-      Just KDL.Value {data_ = KDL.Bool b} -> Just b
-      _ -> Nothing
 
     intArg name doc = case KDL.getArgAt name doc of
       Just KDL.Value {data_ = KDL.Number n} -> do
@@ -107,59 +62,28 @@ parseConfigEither input = configOf <$> KDL.parse input
         if value > 0 then Just value else Nothing
       _ -> Nothing
 
-    stringArg name doc = case KDL.getArgAt name doc of
-      Just KDL.Value {data_ = KDL.String s} -> Just s
+    textArg name doc = case KDL.getArgAt name doc of
+      Just KDL.Value {data_ = KDL.String value}
+        | not (Text.null (Text.strip value)) -> Just (Text.strip value)
       _ -> Nothing
-
-parseConfig :: Text -> Config
-parseConfig = fromRight defaultConfig . parseConfigEither
 
 renderConfig :: Config -> Text
 renderConfig config =
   KDL.render
     KDL.NodeList
       { nodes =
-          [ stringNode "view-mode" (viewModeName config.viewMode)
-          , stringNode "table-sort-column" (sortColumnName config.tableSort.column)
-          , boolNode "table-sort-descending" (config.tableSort.direction == Descending)
-          , intNode "window-width" config.windowWidth
+          [ intNode "window-width" config.windowWidth
           , intNode "window-height" config.windowHeight
           ]
+            <> maybe [] (\url -> [textNode "nightlies-url" url]) config.nightliesUrl
       , ext = KDL.def
       }
 
-viewModeName :: ViewMode -> Text
-viewModeName = \case
-  Simple -> "simple"
-  Advanced -> "advanced"
-
-viewModeFromName :: Text -> Maybe ViewMode
-viewModeFromName = \case
-  "simple" -> Just Simple
-  "advanced" -> Just Advanced
-  _ -> Nothing
-
-sortColumnName :: SortColumn -> Text
-sortColumnName = \case
-  ByVersion -> "version"
-  ByReleased -> "released"
-  ByStatus -> "status"
-
-sortColumnFromName :: Text -> Maybe SortColumn
-sortColumnFromName = \case
-  "version" -> Just ByVersion
-  "released" -> Just ByReleased
-  "status" -> Just ByStatus
-  _ -> Nothing
-
-boolNode :: Text -> Bool -> KDL.Node
-boolNode name value = node name [KDL.Bool value]
-
-stringNode :: Text -> Text -> KDL.Node
-stringNode name value = node name [KDL.String value]
-
 intNode :: Text -> Int -> KDL.Node
 intNode name value = node name [KDL.Number (fromIntegral value)]
+
+textNode :: Text -> Text -> KDL.Node
+textNode name value = node name [KDL.String value]
 
 node :: Text -> [KDL.ValueData] -> KDL.Node
 node name values =

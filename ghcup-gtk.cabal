@@ -69,6 +69,7 @@ library core
     Presentation.Path
     Presentation.Row
     Session
+    Toolchain.Channels
     Toolchain.Curation
     Toolchain.GHCup
     Toolchain.Path
@@ -77,6 +78,7 @@ library core
 
   build-depends:
     base,
+    bytestring,
     containers,
     directory,
     effectful-core,
@@ -92,10 +94,12 @@ library core
     text,
     text-display,
     time,
+    unix,
     uri-bytestring,
     variant,
     vector,
     versions,
+    yaml,
 
 library
   import: options
@@ -118,7 +122,6 @@ library
     UI.View.ActionStrip
     UI.View.List
     UI.View.List.Row
-    UI.View.Table
 
   other-modules: Paths_ghcup_gtk
   autogen-modules: Paths_ghcup_gtk
@@ -145,6 +148,7 @@ library
     text,
     text-display,
     time,
+    uri-bytestring,
     vector,
     versions,
 
@@ -172,14 +176,15 @@ test-suite ghcup-gtk-test
   -- cabal-gild: discover test/ --exclude test/Main.hs
   other-modules:
     CompileFormSpec
-    ConfigSpec
     FilterSpec
     Fixtures
     InstallFormSpec
     PresentationSpec
     SessionSpec
     TestInterpreters
+    Toolchain.ChannelsSpec
     Toolchain.CurationSpec
+    Toolchain.GHCupConfigSpec
     Toolchain.PathSpec
     WorkerSpec
 
@@ -187,6 +192,7 @@ test-suite ghcup-gtk-test
   main-is: Main.hs
   build-depends:
     base,
+    bytestring,
     containers,
     directory,
     effectful-core,
@@ -197,5 +203,7 @@ test-suite ghcup-gtk-test
     tasty-hunit,
     text,
     time,
+    uri-bytestring,
     vector,
     versions,
+    yaml,

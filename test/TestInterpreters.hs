@@ -14,7 +14,7 @@ import Data.Text qualified as Text
 import Effectful
 import Effectful.Dispatch.Dynamic
 import Effectful.State.Static.Local
-import GHCup.Types (TargetVersion, TargetVersionReq, Tool)
+import GHCup.Types (NewURLSource, TargetVersion, TargetVersionReq, Tool)
 import System.FilePath ((</>))
 
 import Effects.FileSystem (FileSystem (..))
@@ -39,6 +39,7 @@ data GhcupHandlers es = GhcupHandlers
   , setDefault :: Tool -> TargetVersion -> Eff es (Either OpError ())
   , compileGhc :: TargetVersion -> CompileGhcOptions -> Eff es (Either OpError ())
   , compileHls :: TargetVersion -> CompileHlsOptions -> Eff es (Either OpError ())
+  , reconfigure :: [NewURLSource] -> Eff es ()
   }
 
 idleHandlers :: GhcupHandlers es
@@ -52,6 +53,7 @@ idleHandlers =
     , setDefault = \_ _ -> pure (Right ())
     , compileGhc = \_ _ -> pure (Right ())
     , compileHls = \_ _ -> pure (Right ())
+    , reconfigure = \_ -> pure ()
     }
 
 -- | Mirrors the live interpreter's memoization: a successful acquisition
@@ -65,6 +67,7 @@ runGhcupTest h = reinterpret (evalState False) $ \_ -> \case
   SetDefaultVersion tool tv -> acquiring (h.setDefault tool tv)
   CompileGhcTool tv opts -> acquiring (h.compileGhc tv opts)
   CompileHlsTool tv opts -> acquiring (h.compileHls tv opts)
+  ReconfigureSources sources -> raise (h.reconfigure sources)
   where
     acquiring :: Eff es (Either OpError b) -> Eff (State Bool : es) (Either OpError b)
     acquiring op =

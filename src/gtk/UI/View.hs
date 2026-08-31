@@ -7,17 +7,15 @@ module UI.View
   , pillLabel
   ) where
 
-import Control.Monad (filterM, forM_, void, when)
+import Control.Monad (filterM, forM_, unless, void)
 import Data.GI.Base
-import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
-import Config (Config)
-import Presentation.Filter (FilterKind, filterLabel)
+import Presentation.Filter (ActiveFilters (..), Channel, FilterKind, activeCount, channelLabel, filterLabel, restrictTo)
 import Presentation.Row (RowAction, ToolRows)
 import Toolchain.Types (Mutation)
 
@@ -32,31 +30,42 @@ data View = View
   , setRows :: ToolRows -> IO ()
   -- ^ Replace the rendered rows
   , setSensitive :: Bool -> IO ()
-  , applyConfig :: Config -> IO ()
+  , getFilters :: IO ActiveFilters
+  -- ^ The view's current selections, so a rebuild can carry them over
   }
 
--- | The filter funnel shared by the list and table renderers: a menu
--- button whose popover holds one check button per filter, groups split
--- by a separator, with a pill showing how many are active.
-buildFilterBar :: [[FilterKind]] -> Set FilterKind -> (Set FilterKind -> IO ()) -> IO Gtk.Widget
-buildFilterBar groups initial onChanged = do
-  checkGroups <- traverse (traverse checkOf) (filter (not . null) groups)
-  let checks = concat checkGroups
+-- | The filter funnel used by the list renderer: a menu button whose
+-- popover holds one check button per filter, channels under their own
+-- heading, with a pill showing how many are active. Returns the
+-- selections it actually applied: filters naming a kind or channel this
+-- bar does not offer are dropped, so the caller must adopt this value
+-- rather than the 'ActiveFilters' it passed in.
+buildFilterBar
+  :: [FilterKind]
+  -> [Channel]
+  -> ActiveFilters
+  -> (ActiveFilters -> IO ())
+  -> IO (Gtk.Widget, ActiveFilters)
+buildFilterBar kinds channels initial onChanged = do
+  let active = restrictTo kinds channels initial
+  kindChecks <- traverse (checkOf filterLabel (`Set.member` active.kinds)) kinds
+  channelChecks <- traverse (checkOf channelLabel (`Set.member` active.channels)) channels
 
   list <- new Gtk.Box [#orientation := Gtk.OrientationVertical, #spacing := 4]
   list.addCssClass "filter-popover-content"
-  forM_ (zip [0 :: Int ..] checkGroups) $ \(i, group) -> do
-    when (i > 0) $ do
-      separator <- new Gtk.Separator [#orientation := Gtk.OrientationHorizontal]
-      list.append separator
-    forM_ group $ \(_, check) -> list.append check
+  forM_ kindChecks $ \(_, check) -> list.append check
+  unless (null channelChecks) $ do
+    header <- new Gtk.Label [#label := "Channels", #xalign := 0]
+    header.addCssClass "heading"
+    header.addCssClass "filter-section-heading"
+    list.append header
+    forM_ channelChecks $ \(_, check) -> list.append check
   popover <- new Gtk.Popover [#child := list]
 
   icon <- new Gtk.Image [#iconName := "funnel-symbolic"]
   label <- new Gtk.Label [#label := "Filters"]
-  let activeCount = length (filter ((`Set.member` initial) . fst) checks)
-  badge <- pillLabel (countText activeCount)
-  set badge [#visible := activeCount > 0]
+  badge <- pillLabel (countText (activeCount active))
+  set badge [#visible := activeCount active > 0]
 
   content <- new Gtk.Box [#orientation := Gtk.OrientationHorizontal, #spacing := 6]
   content.append icon
@@ -65,21 +74,23 @@ buildFilterBar groups initial onChanged = do
 
   button <- new Gtk.MenuButton [#popover := popover, #child := content]
 
-  let currentFilters =
-        Set.fromList . map fst <$> filterM (\(_, check) -> check.getActive) checks
-  forM_ checks $ \(_, check) ->
+  let activeSetOf checks = Set.fromList . map fst <$> filterM (\(_, check) -> check.getActive) checks
+      currentFilters = ActiveFilters <$> activeSetOf kindChecks <*> activeSetOf channelChecks
+  forM_ (map snd kindChecks <> map snd channelChecks) $ \check ->
     void $ on check #toggled $ do
       filters <- currentFilters
-      set badge [#label := countText (Set.size filters), #visible := not (Set.null filters)]
+      let count = activeCount filters
+      set badge [#label := countText count, #visible := count > 0]
       onChanged filters
 
   bar <- new Gtk.Box [#orientation := Gtk.OrientationHorizontal]
   bar.addCssClass "filter-bar"
   bar.append button
-  Gtk.toWidget bar
+  barWidget <- Gtk.toWidget bar
+  pure (barWidget, active)
   where
-    checkOf kind = do
-      check <- new Gtk.CheckButton [#label := filterLabel kind, #active := Set.member kind initial]
+    checkOf labelOf isChecked kind = do
+      check <- new Gtk.CheckButton [#label := labelOf kind, #active := isChecked kind]
       pure (kind, check)
 
     countText = Text.pack . show

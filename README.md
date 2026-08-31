@@ -13,8 +13,8 @@ It aims to have feature parity with the GHCup TUI.
 
 <img
   width="800px"
-  src="./screenshots/table-view.png"
-  alt="The advanced view of the application with more details per entry, and sorting options."
+  src="./screenshots/preferences.png"
+  alt="The preferences dialog, with the release channel toggles and the nightlies metadata URL."
 />
 
 ## Development

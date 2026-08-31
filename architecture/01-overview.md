@@ -26,8 +26,8 @@ Everything interesting enough to get wrong is a pure function.
   `Toolchain.*`, `Effects.*`, `Worker`). Test suite builds against this.
   Must never import a `gi-*` module.
 - `src/gtk`: rendering layer, linked against `src/core`.
-- `src/gtk/UI/View*`: the two renderers (`UI.View.List`, `UI.View.Table`)
-  behind the single `View` record in `UI.View`.
+- `src/gtk/UI/View*`: the list renderer (`UI.View.List`) behind the single
+  `View` record in `UI.View`, one instance per tool pane.
 - `src/gtk/UI/Shell.hs`: widget construction only, no model or callbacks.
 - `src/gtk/UI.hs`: builds the shell, feeds events to the state
   machine, interprets the resulting effects.

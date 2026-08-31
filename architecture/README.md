@@ -5,7 +5,6 @@
 3. [Concurrency](03-concurrency.md): GTK main thread vs worker thread.
 4. [Talking to ghcup](04-ghcup-integration.md): the `Toolchain` layer over the `ghcup` library.
 5. [PATH management](05-path-management.md): detecting and fixing a missing `PATH` entry.
-6. [Two renderers](06-two-renderers.md): simple list and advanced table behind one `View`.
 
 ## Overview
 

@@ -174,23 +174,25 @@ tests =
     , testGroup
         "matchesFilters"
         [ testCase "no active filter shows only curated rows" $ do
-            matchesFilters Set.empty (sampleSpec True) @?= True
-            matchesFilters Set.empty (sampleSpec False) @?= False
-            matchesFilters Set.empty ((sampleSpec True) {isPrerelease = True}) @?= False
-            matchesFilters Set.empty ((sampleSpec True) {isNightly = True}) @?= False
-            matchesFilters Set.empty ((sampleSpec True) {crossTarget = Just "aarch64-linux"}) @?= False
+            matchesFilters mempty (sampleSpec True) @?= True
+            matchesFilters mempty (sampleSpec False) @?= False
+            matchesFilters mempty ((sampleSpec True) {isPrerelease = True}) @?= False
+            matchesFilters mempty ((sampleSpec True) {isNightly = True}) @?= False
+            matchesFilters mempty ((sampleSpec True) {crossTarget = Just "aarch64-linux"}) @?= False
         , testCase "ShowOldPatches reveals older patches" $
-            matchesFilters (Set.singleton ShowOldPatches) (sampleSpec False) @?= True
-        , testCase "show filters reveal their category" $ do
-            matchesFilters (Set.singleton ShowPrereleases) ((sampleSpec True) {isPrerelease = True}) @?= True
-            matchesFilters (Set.singleton ShowNightlies) ((sampleSpec True) {isNightly = True}) @?= True
-            matchesFilters (Set.singleton ShowCross) ((sampleSpec True) {crossTarget = Just "aarch64-linux"}) @?= True
+            matchesFilters (kindFilters [ShowOldPatches]) (sampleSpec False) @?= True
+        , testCase "channel filters reveal their channel" $ do
+            matchesFilters (channelFilters [Prereleases]) ((sampleSpec True) {isPrerelease = True}) @?= True
+            matchesFilters (channelFilters [Nightlies]) ((sampleSpec True) {isNightly = True}) @?= True
+            matchesFilters (channelFilters [Cross]) ((sampleSpec True) {crossTarget = Just "aarch64-linux"}) @?= True
         , testCase "filters compose" $ do
-            matchesFilters (Set.singleton ShowPrereleases) ((sampleSpec False) {isPrerelease = True}) @?= False
-            matchesFilters (Set.fromList [ShowOldPatches, ShowPrereleases]) ((sampleSpec False) {isPrerelease = True}) @?= True
+            matchesFilters (channelFilters [Prereleases]) ((sampleSpec False) {isPrerelease = True}) @?= False
+            matchesFilters (kindFilters [ShowOldPatches] <> channelFilters [Prereleases]) ((sampleSpec False) {isPrerelease = True}) @?= True
         ]
     ]
   where
+    kindFilters ks = ActiveFilters (Set.fromList ks) Set.empty
+    channelFilters cs = ActiveFilters Set.empty (Set.fromList cs)
     sampleSpec :: Bool -> RowSpec
     sampleSpec latest =
       (Vector.head (ghcRows [lr914])) {latestInFamily = latest}

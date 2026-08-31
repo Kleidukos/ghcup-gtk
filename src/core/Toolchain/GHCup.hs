@@ -1,5 +1,9 @@
 module Toolchain.GHCup
   ( GhcupEnv
+  , loadUrlSource
+  , saveUrlSource
+  , setUrlSource
+  , updateUrlSource
   , newEnv
   , getListings
   , relistListings
@@ -11,6 +15,7 @@ module Toolchain.GHCup
   , ghcupDirs
   ) where
 
+import Control.Exception (SomeException, try)
 import Control.Monad (void)
 import Control.Monad.Reader (lift, runReaderT)
 import Control.Monad.Trans.Resource (runResourceT)
@@ -19,12 +24,12 @@ import Data.Functor ((<&>))
 import Data.IORef
 import Data.Map.Strict qualified as Map
 import Data.Maybe (isNothing)
+import Data.Set (Set)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Data.Text.Encoding qualified as Text.Encoding
-import Data.Text.Encoding.Error qualified as Text.Encoding.Error
 import Data.Variant.Excepts
 import Data.Vector qualified as Vector
+import Data.Yaml qualified as Yaml
 import GHCup.Command.Compile.GHC qualified as CompileGHC
 import GHCup.Command.Compile.HLS qualified as CompileHLS
 import GHCup.Command.Install (installBindist, installTool)
@@ -33,16 +38,23 @@ import GHCup.Command.Rm (rmToolVersion)
 import GHCup.Command.Set (setToolVersion)
 import GHCup.Download (getDownloadsF)
 import GHCup.Errors
-import GHCup.Query.GHCupDirs (fromGHCupPath, getAllDirs)
+import GHCup.Query.GHCupDirs (fromGHCupPath, getAllDirs, getConfigFilePath, ghcupConfigFile)
 import GHCup.Query.Metadata (getDownloadInfoE')
 import GHCup.Query.System (platformRequest)
 import GHCup.Setup (ensureDirectories)
 import GHCup.Types
+import GHCup.Types.JSON ()
 import Text.PrettyPrint.HughesPJClass (Pretty, prettyShow)
-import URI.ByteString (serializeURIRef')
+import URI.ByteString (URI)
 
+import Effects.FileSystem (atomicWriteBytes)
+import Toolchain.Channels (Channel, applyChannels, uriText)
 import Toolchain.Types
 
+-- | Every read and write of 'appStateRef' must happen on the single worker
+-- thread, serialized by the job queue: 'setUrlSource' and the fetch path in
+-- 'getListings' both read-modify-write it, so a second thread would lose one
+-- of the two updates.
 newtype GhcupEnv = GhcupEnv
   { appStateRef :: IORef AppState
   }
@@ -68,12 +80,66 @@ ghcupDirs = do
       , ghcupBaseDir = fromGHCupPath (baseDir dirs)
       }
 
-newEnv :: (Text -> IO ()) -> IO (Either OpError GhcupEnv)
-newEnv logSink = do
+-- | The url-source of the user's ghcup config, or the default channel
+-- with a warning when the config cannot be read.
+loadUrlSource :: IO ([NewURLSource], Maybe Text)
+loadUrlSource =
+  try @SomeException (runE @'[JSONError] ghcupConfigFile) <&> \case
+    Right (VRight userSettings) -> (urlSourceOf userSettings, Nothing)
+    Right (VLeft err) -> degraded (Text.pack (prettyShow err))
+    Left err -> degraded (Text.pack (show err))
+  where
+    degraded reason =
+      ( defaultSettings.urlSource
+      , Just ("Could not read the ghcup config, using the default channel: " <> reason)
+      )
+
+-- | The url-source list a ghcup config carries, defaulted the way ghcup
+-- itself defaults it.
+urlSourceOf :: UserSettings -> [NewURLSource]
+urlSourceOf userSettings =
+  maybe defaultSettings.urlSource fromURLSource userSettings.uUrlSource
+
+-- | Enable exactly the requested channels in a ghcup config's url-source
+-- list. Entries 'applyChannels' does not recognise as a channel pass
+-- through, so the settings this is applied to must come from a fresh read.
+updateUrlSource :: Set Channel -> Maybe URI -> UserSettings -> UserSettings
+updateUrlSource requested nightlies userSettings =
+  userSettings
+    { uUrlSource = Just (SimpleList (applyChannels requested nightlies (urlSourceOf userSettings)))
+    }
+
+-- | Enable exactly the requested channels in the user's ghcup config, a
+-- full YAML re-encode like `ghcup config` performs. Non-channel entries
+-- pass through from a fresh read of the config; the channel entries are
+-- the dialog's requested set, overwriting whatever the config held. The
+-- written list is returned. An unreadable config is never overwritten.
+saveUrlSource :: Set Channel -> Maybe URI -> IO (Either Text [NewURLSource])
+saveUrlSource requested nightlies =
+  try @SomeException write <&> either (Left . Text.pack . show) id
+  where
+    write =
+      runE @'[JSONError] ghcupConfigFile >>= \case
+        VLeft err ->
+          pure (Left ("Not overwriting an unreadable ghcup config: " <> Text.pack (prettyShow err)))
+        VRight userSettings -> do
+          let updated = updateUrlSource requested nightlies userSettings
+          path <- getConfigFilePath
+          atomicWriteBytes path (Yaml.encode updated)
+          pure (Right (urlSourceOf updated))
+
+-- | Swap the running worker's in-memory url-source, without touching disk.
+setUrlSource :: GhcupEnv -> [NewURLSource] -> IO ()
+setUrlSource env urlSource =
+  modifyIORef' env.appStateRef $ \appState ->
+    appState {settings = appState.settings {urlSource}} :: AppState
+
+newEnv :: [NewURLSource] -> (Text -> IO ()) -> IO (Either OpError GhcupEnv)
+newEnv urlSource logSink = do
   dirs <- getAllDirs
   ensureDirectories dirs
 
-  let settings = defaultSettings {cache = True, metaMode = Strict}
+  let settings = defaultSettings {cache = True, metaMode = Strict, urlSource}
       loggerConfig =
         LoggerConfig
           { lcPrintDebugLvl = Nothing
@@ -141,7 +207,7 @@ runList appState = do
       []
       ShowNone
       False
-      NShowNone
+      NShowAll
       (Nothing, Nothing)
       & liftE
       & runE @'[ParseError]
@@ -172,11 +238,7 @@ install env tool tvr opts = runIn env $ \appState -> do
               pure $ case revE of
                 VRight (r, _) -> r
                 VLeft _ -> 0
-          let uriText =
-                Text.Encoding.decodeUtf8With
-                  Text.Encoding.Error.lenientDecode
-                  (serializeURIRef' uri)
-              dlInfo = DownloadInfo uriText (bindistTarDir tool) "" Nothing Nothing Nothing Nothing
+          let dlInfo = DownloadInfo (uriText uri) (bindistTarDir tool) "" Nothing Nothing Nothing Nothing
               GHCupInfo {_ghcupDownloads = dls} = appState.ghcupInfo
               toolDesc = Map.lookup tool (unGHCupDownloads dls) >>= _toolDetails
               TargetVersionReq tv _ = tvr

@@ -48,11 +48,16 @@ tests =
           @?= [lVer installedNoBindist]
     , testGroup
         "version families"
-        [ testCase "familyKey is (cross, major, minor)" $
-            familyKey (mkLR "9.12.2" [] False False) @?= Just (Nothing, 9, 12)
+        [ testCase "familyKey is (cross, major, minor, stability)" $
+            familyKey (mkLR "9.12.2" [] False False) @?= Just (Nothing, 9, 12, StableRelease)
         , testCase "a cross build is its own family" $ do
             let cross = (mkLR "9.12.2" [] False False) {lCross = Just "aarch64-unknown-linux"}
-            familyKey cross @?= Just (Just "aarch64-unknown-linux", 9, 12)
+            familyKey cross @?= Just (Just "aarch64-unknown-linux", 9, 12, StableRelease)
+        , testCase "prereleases and nightlies are their own families" $ do
+            familyKey (mkLR "9.12.4.20260713" [Prerelease] False False)
+              @?= Just (Nothing, 9, 12, PrereleaseBuild)
+            familyKey (mkLR "9.15.20260830" [LatestNightly] False False)
+              @?= Just (Nothing, 9, 15, NightlyBuild)
         , testCase "latestPerFamily keeps the newest of each family" $ do
             let newestMinor = mkLR "9.12.2" [] False False
                 rows =
@@ -61,8 +66,8 @@ tests =
                   , mkLR "9.10.1" [] False False
                   ]
                 newest = latestPerFamily (Vector.fromList rows)
-            Map.lookup (Nothing, 9, 12) newest @?= Just (lVer newestMinor)
-            Map.lookup (Nothing, 9, 10) newest @?= Just (lVer (rows !! 2))
+            Map.lookup (Nothing, 9, 12, StableRelease) newest @?= Just (lVer newestMinor)
+            Map.lookup (Nothing, 9, 10, StableRelease) newest @?= Just (lVer (rows !! 2))
         , testCase "latestPerFamily does not depend on input order" $ do
             let rows = [mkLR "9.12.1" [] False False, mkLR "9.12.2" [] False False]
             latestPerFamily (Vector.fromList rows)
@@ -79,5 +84,23 @@ tests =
                 newest = latestPerFamily (Vector.fromList [native, cross])
             isLatestInFamily newest native @? "native 9.12.1 is latest of its family"
             isLatestInFamily newest cross @? "cross 9.12.2 is latest of its family"
+        , testCase "a prerelease snapshot never masks the stable release" $ do
+            let stable = mkLR "9.12.4" [] False False
+                snapshot = mkLR "9.12.4.20260713" [Prerelease] False False
+                newest = latestPerFamily (Vector.fromList [stable, snapshot])
+            isLatestInFamily newest stable @? "stable 9.12.4 is latest of its family"
+            isLatestInFamily newest snapshot @? "the snapshot is latest of the prerelease family"
+        , testCase "prerelease snapshots hide older snapshots of their family" $ do
+            let newer = mkLR "9.14.1.20260728" [LatestPrerelease] False False
+                older = mkLR "9.14.0.20250819" [Prerelease] False False
+                newest = latestPerFamily (Vector.fromList [newer, older])
+            isLatestInFamily newest newer @? "the newest snapshot is latest"
+            not (isLatestInFamily newest older) @? "the older snapshot is not"
+        , testCase "a nightly never masks the stable release" $ do
+            let stable = mkLR "9.15.1" [] False False
+                nightly = mkLR "9.15.20260830" [Nightly] False False
+                newest = latestPerFamily (Vector.fromList [stable, nightly])
+            isLatestInFamily newest stable @? "stable 9.15.1 is latest of its family"
+            isLatestInFamily newest nightly @? "the nightly is latest of the nightly family"
         ]
     ]
