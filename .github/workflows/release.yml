@@ -92,7 +92,7 @@ jobs:
             ./scripts/package.sh -v head
           fi
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: packages-${{ runner.os }}
           path: dist-package/out/*
