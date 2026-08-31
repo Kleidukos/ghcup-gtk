@@ -1,6 +1,10 @@
 module Toolchain.Channels
-  ( Channel (..)
+  ( BaseChannel (..)
+  , Channel (..)
+  , applyBase
   , applyChannels
+  , applyUrlSource
+  , configuredBase
   , configuredChannels
   , defaultNightliesUrl
   , nightliesMarker
@@ -15,7 +19,7 @@ import Data.ByteString.Char8 qualified as Char8
 import Data.Char (isDigit)
 import Data.Function ((&))
 import Data.List (find)
-import Data.Maybe (listToMaybe, mapMaybe)
+import Data.Maybe (fromMaybe, isJust, isNothing, listToMaybe, mapMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
@@ -55,26 +59,43 @@ channelMarker = \case
   Cross -> "ghcup-cross"
   ThirdParty -> "ghcup-3rdparty"
 
--- | Recognition must not claim a file the user named after a channel: the
+-- | Recognition must not claim a file the user named after a marker: the
 -- last path segment has to /start/ with the marker and the marker has to be
 -- followed by the extension or by a version, never by more name.
-hasMarker :: Channel -> URI -> Bool
-hasMarker channel uri =
-  case Char8.stripPrefix (channelMarker channel) basename of
+matchesMarker :: ByteString -> URI -> Bool
+matchesMarker marker uri =
+  case Char8.stripPrefix marker (basenameOf uri) of
     Nothing -> False
     Just rest -> case Char8.uncons rest of
       Just ('.', _) -> True
       Just ('-', after) -> maybe False (isDigit . fst) (Char8.uncons after)
       _ -> False
+
+basenameOf :: URI -> ByteString
+basenameOf uri = uriPath uri & Char8.breakEnd (== '/') & snd
+
+hasMarker :: Channel -> URI -> Bool
+hasMarker channel = matchesMarker (channelMarker channel)
+
+vanillaMarker :: ByteString
+vanillaMarker = "ghcup-vanilla"
+
+hasVanillaMarker :: URI -> Bool
+hasVanillaMarker = matchesMarker vanillaMarker
+
+hasDefaultMarker :: URI -> Bool
+hasDefaultMarker uri =
+  case Char8.stripPrefix "ghcup" (basenameOf uri) of
+    Just rest | Just stem <- Char8.stripSuffix ".yaml" rest -> Char8.all versionChar stem
+    _ -> False
   where
-    basename = uriPath uri & Char8.breakEnd (== '/') & snd
+    versionChar c = isDigit c || c == '.' || c == '-'
 
 -- | Whether a URI names a nightlies metadata file, the check the
 -- preferences dialog and 'sourceChannel' must agree on.
 hasNightliesMarker :: URI -> Bool
 hasNightliesMarker = hasMarker Nightlies
 
--- | The nightlies marker, for UI copy that must agree with recognition.
 nightliesMarker :: Text
 nightliesMarker = Text.Encoding.decodeUtf8 (channelMarker Nightlies)
 
@@ -142,3 +163,40 @@ applyChannels requested nightlies sources =
 nightliesUri :: [NewURLSource] -> Maybe URI
 nightliesUri sources =
   listToMaybe [uri | source@(NewURI uri) <- sources, sourceChannel source == Just Nightlies]
+
+data BaseChannel
+  = DefaultBase
+  | VanillaBase
+  deriving stock (Eq, Show)
+
+canonicalBase :: BaseChannel -> NewURLSource
+canonicalBase = \case
+  DefaultBase -> NewGHCupURL
+  VanillaBase -> NewChannelAlias VanillaChannel
+
+sourceBase :: NewURLSource -> Maybe BaseChannel
+sourceBase = \case
+  NewGHCupURL -> Just DefaultBase
+  NewChannelAlias DefaultChannel -> Just DefaultBase
+  NewChannelAlias VanillaChannel -> Just VanillaBase
+  NewURI uri | hasVanillaMarker uri -> Just VanillaBase
+  NewURI uri | hasDefaultMarker uri -> Just DefaultBase
+  _ -> Nothing
+
+configuredBase :: [NewURLSource] -> BaseChannel
+configuredBase = fromMaybe DefaultBase . listToMaybe . mapMaybe sourceBase
+
+applyBase :: BaseChannel -> [NewURLSource] -> [NewURLSource]
+applyBase target sources = case break (isJust . sourceBase) sources of
+  (_, []) -> canonicalBase target : sources
+  (before, current : after)
+    | sourceBase current == Just target -> before <> (current : keepRest after)
+    | otherwise -> before <> (canonicalBase target : keepRest after)
+  where
+    keepRest = filter (isNothing . sourceBase)
+
+applyUrlSource :: Maybe BaseChannel -> Set Channel -> Maybe URI -> [NewURLSource] -> [NewURLSource]
+applyUrlSource base channels nightlies sources =
+  sources
+    & maybe id applyBase base
+    & applyChannels channels nightlies

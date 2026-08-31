@@ -182,7 +182,7 @@ tests =
         [ testCase "a change asks for the requested set to be persisted, without touching the model yet" $ do
             let (model, effects) = step (ChannelsChanged (Set.singleton Prereleases) Nothing) model0
             model @?= model0
-            effects @?= [PersistChannels (Set.singleton Prereleases) Nothing]
+            effects @?= [PersistChannels Nothing (Set.singleton Prereleases) Nothing]
         , testCase "a no-op change is dropped" $
             step (ChannelsChanged Set.empty Nothing) model0 @?= (model0, [])
         , testCase "a change against a locked model is dropped" $ do

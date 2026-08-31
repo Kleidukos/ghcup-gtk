@@ -33,7 +33,7 @@ import Config qualified
 import Effects.FileSystem (runFileSystemIO)
 import Paths_ghcup_gtk qualified as Paths
 import Session qualified
-import Toolchain.Channels (configuredChannels, nightliesUri, parseNightlies)
+import Toolchain.Channels (configuredBase, configuredChannels, nightliesUri, parseNightlies)
 import Toolchain.GHCup qualified as GHCup
 import Toolchain.Path (applyFix, checkPath)
 import Toolchain.Types
@@ -126,6 +126,7 @@ activate app = do
     Registry.build
       shell.panes
       (rowCallbacks dispatchLater)
+      (dispatchLater . Session.BaseChanged)
 
   let runtime = Runtime {app, shell, registry, worker, dirs, modelRef, dispatch}
       dispatch event = do
@@ -178,9 +179,12 @@ interpretEffect rt = \case
   Session.ApplyPathFix changes -> do
     result <- runEff (runFileSystemIO (applyFix changes))
     rt.dispatch (Session.PathFixDone result)
-  Session.PersistChannels channels nightlies ->
-    GHCup.saveUrlSource channels nightlies >>= \case
-      Left e -> showToast rt.shell ("Could not save the ghcup config: " <> e) 5
+  Session.PersistChannels base channels nightlies ->
+    GHCup.saveUrlSource base channels nightlies >>= \case
+      Left e -> do
+        showToast rt.shell ("Could not save the ghcup config: " <> e) 5
+        Registry.invalidate rt.registry
+        reconcile rt
       Right sources -> rt.dispatch (Session.ChannelsSaved sources)
 
 reconcile :: Runtime -> IO ()
@@ -204,6 +208,8 @@ viewState :: Session.Model -> Registry.ViewState
 viewState model =
   Registry.ViewState
     { channels = configuredChannels model.urlSource
+    , base = configuredBase model.urlSource
+    , editable = model.channelsEditable
     , sensitive = Map.null model.inFlight
     , plan = Session.rowPlan model
     }

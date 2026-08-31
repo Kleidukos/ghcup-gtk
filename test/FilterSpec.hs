@@ -25,6 +25,18 @@ tests =
     , testCase "third-party is never exposed as a per-tool filter" $ do
         channelsFor (Set.singleton ThirdParty) ghc @?= []
         channelsFor (Set.singleton ThirdParty) cabal @?= []
+    , testGroup
+        "seedFilters"
+        [ testCase "a fresh bar starts with every offered channel visible" $
+            seedFilters [] [Prereleases, Cross] mempty
+              @?= ActiveFilters Set.empty (Set.fromList [Prereleases, Cross])
+        , testCase "a newly offered channel starts visible, carried selections kept" $
+            seedFilters [Prereleases] [Prereleases, Nightlies] (ActiveFilters (Set.singleton ShowOldPatches) Set.empty)
+              @?= ActiveFilters (Set.singleton ShowOldPatches) (Set.singleton Nightlies)
+        , testCase "an unchanged offer preserves the carried selections exactly" $ do
+            let carried = ActiveFilters Set.empty (Set.singleton Prereleases)
+            seedFilters [Prereleases, Cross] [Prereleases, Cross] carried @?= carried
+        ]
     , testCase "reachableChannels unions what the panes' filter bars can offer" $ do
         reachableChannels allChannels [ghc, cabal] @?= Set.fromList [Prereleases, Nightlies, Cross]
         reachableChannels allChannels [cabal] @?= Set.singleton Prereleases
@@ -34,8 +46,6 @@ tests =
         filterLabel ShowOldPatches @?= "Show older patch releases"
         channelLabel Nightlies @?= "Nightlies"
         channelLabel ThirdParty @?= "Third-party tools"
-    , testCase "activeCount counts kinds and channels together" $
-        activeCount (ActiveFilters (Set.singleton ShowOldPatches) (Set.fromList [Cross, Nightlies])) @?= 3
     , testGroup
         "restrictTo"
         [ testCase "selections for a channel or kind no longer offered are dropped" $

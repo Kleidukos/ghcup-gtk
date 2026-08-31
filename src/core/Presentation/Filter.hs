@@ -2,13 +2,14 @@ module Presentation.Filter
   ( ActiveFilters (..)
   , Channel (..)
   , FilterKind (..)
-  , activeCount
+  , baseLabel
   , channelLabel
   , channelsFor
   , filterLabel
   , filtersFor
   , reachableChannels
   , restrictTo
+  , seedFilters
   ) where
 
 import Data.Set (Set)
@@ -16,7 +17,7 @@ import Data.Set qualified as Set
 import Data.Text (Text)
 import GHCup.Types (Tool, ghc)
 
-import Toolchain.Channels (Channel (..))
+import Toolchain.Channels (BaseChannel (..), Channel (..))
 
 data FilterKind
   = ShowOldPatches
@@ -34,9 +35,6 @@ instance Semigroup ActiveFilters where
 instance Monoid ActiveFilters where
   mempty = ActiveFilters Set.empty Set.empty
 
-activeCount :: ActiveFilters -> Int
-activeCount active = Set.size active.kinds + Set.size active.channels
-
 filterLabel :: FilterKind -> Text
 filterLabel = \case
   ShowOldPatches -> "Show older patch releases"
@@ -47,6 +45,11 @@ channelLabel = \case
   Nightlies -> "Nightlies"
   Cross -> "Cross builds"
   ThirdParty -> "Third-party tools"
+
+baseLabel :: BaseChannel -> Text
+baseLabel = \case
+  DefaultBase -> "Default"
+  VanillaBase -> "Vanilla"
 
 filtersFor :: [FilterKind]
 filtersFor = [ShowOldPatches]
@@ -62,6 +65,10 @@ channelsFor configured tool = filter (`Set.member` configured) available
 -- a channel no bar shows cannot warrant rebuilding any of them.
 reachableChannels :: (Foldable f) => Set Channel -> f Tool -> Set Channel
 reachableChannels configured = foldMap (Set.fromList . channelsFor configured)
+
+seedFilters :: [Channel] -> [Channel] -> ActiveFilters -> ActiveFilters
+seedFilters offeredBefore offeredNow carried =
+  carried <> ActiveFilters Set.empty (Set.fromList offeredNow `Set.difference` Set.fromList offeredBefore)
 
 -- | Keep only the selections a bar offering these kinds and channels can
 -- represent; a filter naming something no longer on offer is dropped.

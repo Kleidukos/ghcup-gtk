@@ -5,24 +5,26 @@ module UI.View.List
 import Control.Monad (forM_)
 import Data.GI.Base
 import Data.IORef
-import Data.Set (Set)
 import Data.Vector qualified as Vector
-import GHCup.Types (Tool)
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
-import Presentation.Filter (ActiveFilters, Channel, channelsFor, filtersFor)
+import Presentation.Filter (ActiveFilters, Channel, filtersFor)
 import Presentation.Row (ToolRows (..), matchesFilters)
+import Session (ChannelsEditability)
+import Toolchain.Channels (BaseChannel)
 import UI.View (RowCallbacks, View (..), buildFilterBar, emptyStateStack)
 import UI.View.List.Row qualified as Row
 
 build
-  :: Tool
-  -> Set Channel
+  :: [Channel]
+  -> BaseChannel
+  -> ChannelsEditability
   -> ActiveFilters
   -> RowCallbacks
+  -> (BaseChannel -> IO ())
   -> IO View
-build tool channels initial rowCallbacks = do
+build offered base editable initial rowCallbacks onBaseChanged = do
   filtersRef <- newIORef initial
   rowsRef <- newIORef Nothing
 
@@ -63,7 +65,8 @@ build tool channels initial rowCallbacks = do
   let onFiltersChanged filters = do
         writeIORef filtersRef filters
         render
-  (bar, applied) <- buildFilterBar filtersFor (channelsFor channels tool) initial onFiltersChanged
+  (bar, applied) <-
+    buildFilterBar filtersFor offered base editable onBaseChanged initial onFiltersChanged
   writeIORef filtersRef applied
 
   content <- new Gtk.Box [#orientation := Gtk.OrientationVertical]
