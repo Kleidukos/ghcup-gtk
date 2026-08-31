@@ -61,6 +61,10 @@ brew install pkgconf gobject-introspection glib gtk4 libadwaita pango cairo \
   harfbuzz graphene freetype gdk-pixbuf zlib xz
 ```
 
+#### NixOS
+
+NixOS-based setups are not supported. Please read [Haskell#GHCup](https://wiki.nixos.org/wiki/Haskell#GHCup) on the NixOS Wiki
+
 ### Commands
 
 - `make run`: compile and start the application
