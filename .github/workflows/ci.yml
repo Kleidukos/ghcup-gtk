@@ -11,7 +11,7 @@ jobs:
     name: 'Generate matrix from cabal'
     outputs:
       test-matrix: ${{ steps.set-test-matrix.outputs.matrix }}
-      release-matrix: ${{ steps.set-release-matrix.outputs.matrix }}
+      release-matrix: ${{ steps.extend-release-matrix.outputs.matrix }}
     runs-on: ubuntu-latest
     steps:
       - name: Extract the tested GHC versions (tests)
@@ -30,6 +30,13 @@ jobs:
           ubuntu-version: '26.04'
           macos-version: 'latest'
           version: 0.1.9.1
+
+      - name: Add the aarch64 Ubuntu runner to the release matrix
+        id: extend-release-matrix
+        env:
+          MATRIX: ${{ steps.set-release-matrix.outputs.matrix }}
+        run: |
+          echo "matrix=$(jq -c '.include += [.include[] | select(.os == "ubuntu-26.04") | .os = "ubuntu-26.04-arm"]' <<< "$MATRIX")" >> "$GITHUB_OUTPUT"
 
   tests:
     name: ${{ matrix.ghc }} on ${{ matrix.os }}
@@ -142,21 +149,21 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ${{ steps.setup-haskell.outputs.cabal-store }}
-          key: release-${{ runner.os }}-ghc-${{ matrix.ghc }}-${{ hashFiles('**/plan.json') }}
-          restore-keys: release-${{ runner.os }}-ghc-${{ matrix.ghc }}-
+          key: release-${{ runner.os }}-${{ runner.arch }}-ghc-${{ matrix.ghc }}-${{ hashFiles('**/plan.json') }}
+          restore-keys: release-${{ runner.os }}-${{ runner.arch }}-ghc-${{ matrix.ghc }}-
 
       - name: Cache flatpak runtimes
         if: runner.os == 'Linux'
         uses: actions/cache@v6
         with:
           path: ~/.local/share/flatpak
-          key: flatpak-runtimes-${{ hashFiles('flatpak/org.haskell.GhcupGtk.yml') }}
+          key: flatpak-runtimes-${{ runner.arch }}-${{ hashFiles('packaging/flatpak/org.haskell.GhcupGtk.yml') }}
 
       - name: Build packages
         run: |
           FORMATS=()
           if [[ "$RUNNER_OS" == "Linux" ]]; then
-            FORMATS=(deb rpm pacman flatpak)
+            FORMATS=(deb rpm pacman flatpak tarball)
           fi
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             ./scripts/package.sh -v "${GITHUB_REF_NAME#v}" ${FORMATS[@]+"${FORMATS[@]}"}
@@ -166,7 +173,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: packages-${{ runner.os }}
+          name: packages-${{ runner.os }}-${{ runner.arch }}
           path: dist-package/out/*
           if-no-files-found: error
 

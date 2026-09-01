@@ -1,3 +1,4 @@
+# Manifest for Flatpak building
 app-id: org.haskell.GhcupGtk
 runtime: org.gnome.Platform
 runtime-version: '49'
@@ -9,7 +10,7 @@ finish-args:
   - --socket=wayland
   - --socket=fallback-x11
   - --device=dri
-  - --filesystem=host
+  - --filesystem=home
   # Query the host's real $SHELL and $PATH via flatpak-spawn
   - --talk-name=org.freedesktop.Flatpak
   - --env=ghcup_gtk_datadir=/app/share/ghcup-gtk
