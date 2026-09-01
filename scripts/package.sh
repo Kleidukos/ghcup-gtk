@@ -79,8 +79,6 @@ for fmt in "${FORMATS[@]}"; do
   esac
 done
 
-# On Darwin the datadir is never used: the .app launcher overrides
-# it at runtime via the ghcup_gtk_datadir env variable.
 if [ "$OS" = "Darwin" ]; then
   PREFIX=/usr/local
 else
@@ -130,13 +128,13 @@ macos_bundle() {
 
   install_file 755 "$BIN" "${contents}/MacOS/ghcup-gtk-bin"
   strip "${contents}/MacOS/ghcup-gtk-bin"
-  install_file 755 data/macos/launcher.sh "${contents}/MacOS/ghcup-gtk"
-  sed "s/@VERSION@/${VERSION}/g" data/macos/Info.plist > "${contents}/Info.plist"
+  install_file 755 packaging/macos/launcher.sh "${contents}/MacOS/ghcup-gtk"
+  sed "s/@VERSION@/${VERSION}/g" packaging/macos/Info.plist > "${contents}/Info.plist"
 
-  install_file 644 data/style.css \
-    "${contents}/Resources/share/ghcup-gtk/data/style.css"
-  install_file 644 data/icons/funnel-symbolic.svg \
-    "${contents}/Resources/share/ghcup-gtk/data/icons/funnel-symbolic.svg"
+  install_file 644 assets/style.css \
+    "${contents}/Resources/share/ghcup-gtk/assets/style.css"
+  install_file 644 assets/icons/funnel-symbolic.svg \
+    "${contents}/Resources/share/ghcup-gtk/assets/icons/funnel-symbolic.svg"
 
   mkdir -p "${contents}/Resources/share/glib-2.0/schemas"
   "${brew_prefix}/bin/glib-compile-schemas" \
@@ -173,9 +171,9 @@ macos_bundle() {
   mkdir -p "$iconset"
   for size in 16 32 128 256 512; do
     rsvg-convert -w "$size" -h "$size" \
-      data/org.haskell.GhcupGtk.svg -o "${iconset}/icon_${size}x${size}.png"
+      assets/org.haskell.GhcupGtk.svg -o "${iconset}/icon_${size}x${size}.png"
     rsvg-convert -w "$((size * 2))" -h "$((size * 2))" \
-      data/org.haskell.GhcupGtk.svg -o "${iconset}/icon_${size}x${size}@2x.png"
+      assets/org.haskell.GhcupGtk.svg -o "${iconset}/icon_${size}x${size}@2x.png"
   done
   iconutil -c icns -o "${contents}/Resources/ghcup-gtk.icns" "$iconset"
 }
@@ -185,11 +183,11 @@ if [ "$OS" = "Darwin" ]; then
 else
   install_file 755 "$BIN" "${STAGING}${PREFIX}/bin/ghcup-gtk"
   strip "${STAGING}${PREFIX}/bin/ghcup-gtk"
-  install_file 644 data/style.css "${STAGING}${PREFIX}/share/ghcup-gtk/data/style.css"
-  install_file 644 data/icons/funnel-symbolic.svg "${STAGING}${PREFIX}/share/ghcup-gtk/data/icons/funnel-symbolic.svg"
-  install_file 644 data/org.haskell.GhcupGtk.desktop \
+  install_file 644 assets/style.css "${STAGING}${PREFIX}/share/ghcup-gtk/assets/style.css"
+  install_file 644 assets/icons/funnel-symbolic.svg "${STAGING}${PREFIX}/share/ghcup-gtk/assets/icons/funnel-symbolic.svg"
+  install_file 644 assets/org.haskell.GhcupGtk.desktop \
     "${STAGING}${PREFIX}/share/applications/org.haskell.GhcupGtk.desktop"
-  install_file 644 data/org.haskell.GhcupGtk.svg \
+  install_file 644 assets/org.haskell.GhcupGtk.svg \
     "${STAGING}${PREFIX}/share/icons/hicolor/scalable/apps/org.haskell.GhcupGtk.svg"
 fi
 
