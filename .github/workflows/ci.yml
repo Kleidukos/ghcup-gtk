@@ -16,20 +16,20 @@ jobs:
     steps:
       - name: Extract the tested GHC versions (tests)
         id: set-test-matrix
-        uses: kleidukos/get-tested@v0.1.9.1
+        uses: kleidukos/get-tested@v0.1.10.0
         with:
           cabal-file: ghcup-gtk.cabal
           ubuntu-version: '24.04,26.04'
-          version: 0.1.9.1
+          version: 0.1.10.0
 
       - name: Extract the tested GHC versions (packages)
         id: set-release-matrix
-        uses: kleidukos/get-tested@v0.1.9.1
+        uses: kleidukos/get-tested@v0.1.10.0
         with:
           cabal-file: ghcup-gtk.cabal
           ubuntu-version: '24.04,26.04'
           macos-version: 'latest'
-          version: 0.1.9.1
+          version: 0.1.10.0
 
       - name: Add the aarch64 Ubuntu runners to the release matrix
         id: extend-release-matrix
