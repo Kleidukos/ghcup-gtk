@@ -225,7 +225,7 @@ build_flatpak() {
   flatpak-builder --force-clean --user --install-deps-from=flathub \
     --repo=dist-package/flatpak-repo \
     dist-package/flatpak-build \
-    flatpak/org.haskell.GhcupGtk.yml
+    packaging/flatpak/org.haskell.GhcupGtk.yml
   flatpak build-bundle dist-package/flatpak-repo \
     "dist-package/out/${pkg_name}" org.haskell.GhcupGtk
 }
