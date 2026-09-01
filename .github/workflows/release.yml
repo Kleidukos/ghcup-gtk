@@ -65,8 +65,7 @@ jobs:
             ruby-full
           sudo gem install fpm
           cabal update
-          rm cabal.project.freeze
-          cabal freeze -f -development
+          cabal freeze --project-file=cabal.release.project
 
       - name: Configure environment (macOS)
         if: runner.os == 'macOS'
@@ -74,8 +73,7 @@ jobs:
           brew install gtk4 libadwaita gobject-introspection pkgconf
           sudo gem install fpm
           cabal update
-          rm cabal.project.freeze
-          cabal freeze -f -development
+          cabal freeze --project-file=cabal.release.project
 
       - name: Cache
         uses: actions/cache@v6
@@ -98,9 +96,74 @@ jobs:
           path: dist-package/out/*
           if-no-files-found: error
 
+  flatpak:
+    name: Flatpak package
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Haskell
+        id: setup-haskell
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.14.1'
+          cabal-version: 'latest'
+
+      - name: Configure environment
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            libadwaita-1-dev \
+            libcairo2-dev \
+            libfreetype-dev \
+            libgdk-pixbuf-2.0-dev \
+            libgirepository1.0-dev \
+            libglib2.0-dev \
+            libgraphene-1.0-dev \
+            libgtk-4-dev \
+            libharfbuzz-dev \
+            liblzma-dev \
+            libpango1.0-dev \
+            zlib1g-dev \
+            flatpak \
+            flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub \
+            https://dl.flathub.org/repo/flathub.flatpakrepo
+          cabal update
+          cabal freeze --project-file=cabal.release.project
+
+      - name: Cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.setup-haskell.outputs.cabal-store }}
+          key: release-flatpak-ghc-9.14.1-${{ hashFiles('**/plan.json') }}
+          restore-keys: release-flatpak-ghc-9.14.1-
+
+      - name: Cache flatpak runtimes
+        uses: actions/cache@v6
+        with:
+          path: ~/.local/share/flatpak
+          key: flatpak-runtimes-${{ hashFiles('flatpak/org.haskell.GhcupGtk.yml') }}
+
+      - name: Build flatpak
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            ./scripts/package.sh -v "${GITHUB_REF_NAME#v}" flatpak
+          else
+            ./scripts/package.sh -v head flatpak
+          fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: packages-flatpak
+          path: dist-package/out/*
+          if-no-files-found: error
+
   release:
     name: Publish release
-    needs: packages
+    needs: [packages, flatpak]
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
