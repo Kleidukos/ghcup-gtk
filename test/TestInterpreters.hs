@@ -5,6 +5,7 @@ module TestInterpreters
   , idleHandlers
   , runGhcupTest
   , runFileSystemPure
+  , runHostEnvPure
   ) where
 
 import Data.Map.Strict (Map)
@@ -19,8 +20,13 @@ import System.FilePath ((</>))
 
 import Effects.FileSystem (FileSystem (..))
 import Effects.Ghcup (Ghcup (..))
+import Effects.HostEnv (HostEnv (..))
 import Effects.Notify (Notify (..))
 import Toolchain.Types (CompileGhcOptions, CompileHlsOptions, Freshness (..), InstallOptions, Listings, OpError, UiMsg)
+
+runHostEnvPure :: (Maybe Text, Maybe Text) -> Eff (HostEnv : es) a -> Eff es a
+runHostEnvPure response = interpret $ \_ -> \case
+  GetHostEnvironment -> pure response
 
 -- | Record every emitted 'UiMsg' in order.
 runNotifyCollect :: Eff (Notify : es) a -> Eff es (a, [UiMsg])

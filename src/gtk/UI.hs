@@ -4,6 +4,7 @@
 module UI (startUI) where
 
 import Control.Applicative ((<|>))
+import Control.Concurrent (forkIO)
 import Control.Monad (forM_, void, when)
 import Data.Function ((&))
 import Data.GI.Base
@@ -24,6 +25,8 @@ import GI.Gtk qualified as Gtk
 #ifdef DEVELOPMENT
 import Development.Reload qualified as Reload
 #endif
+import Effectful.Process.Typed (runTypedProcess)
+import Effectful.Timeout (runTimeout)
 import System.Directory (doesDirectoryExist)
 import System.Environment (getProgName)
 import System.IO (hPutStrLn, stderr)
@@ -31,6 +34,7 @@ import System.IO (hPutStrLn, stderr)
 import CLI qualified
 import Config qualified
 import Effects.FileSystem (runFileSystemIO)
+import Effects.HostEnv (runHostEnvIO)
 import Paths_ghcup_gtk qualified as Paths
 import Session qualified
 import Toolchain.Channels (configuredBase, configuredChannels, nightliesUri, parseNightlies)
@@ -222,9 +226,11 @@ rowCallbacks dispatch =
     }
 
 runPathCheck :: Runtime -> IO ()
-runPathCheck rt = do
-  status <- runEff (runFileSystemIO (checkPath rt.dirs))
-  rt.dispatch (Session.PathChecked status)
+runPathCheck rt = void $ forkIO $ do
+  status <- runEff (runTimeout (runTypedProcess (runHostEnvIO (runFileSystemIO (checkPath rt.dirs)))))
+  void $ GLib.idleAdd GLib.PRIORITY_DEFAULT_IDLE $ do
+    rt.dispatch (Session.PathChecked status)
+    pure False
 
 showToast :: Shell -> Text -> Word32 -> IO ()
 showToast shell title timeout = do

@@ -23,7 +23,7 @@ import Test.Tasty.HUnit
 
 import Effects.FileSystem (runFileSystemIO)
 import Fixtures (dirs)
-import TestInterpreters (runFileSystemPure)
+import TestInterpreters (runFileSystemPure, runHostEnvPure)
 import Toolchain.Path
 import Toolchain.Types (GhcupDirs (..), OpError (..))
 
@@ -213,7 +213,7 @@ pairOf v = case Vector.toList v of
 
 runCheck :: Map String String -> Map FilePath Text -> (PathStatus, Map FilePath Text)
 runCheck vars files =
-  runPureEff (runFileSystemPure vars files [] (checkPath dirs))
+  runPureEff (runHostEnvPure (Nothing, Nothing) (runFileSystemPure vars files [] (checkPath dirs)))
 
 runApply
   :: Map FilePath Text
