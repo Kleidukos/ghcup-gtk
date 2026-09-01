@@ -146,8 +146,8 @@ macos_bundle() {
   mkdir -p "$loaders_dst"
   cp "${loaders_src}"/* "${loaders_dst}/"
 
-  "${brew_prefix}/bin/gdk-pixbuf-query-loaders" "${loaders_dst}"/* \
-    | sed "s|${ROOT}/${STAGING}||g" \
+  "${brew_prefix}/bin/gdk-pixbuf-query-loaders" "${loaders_src}"/* \
+    | sed "s|${brew_prefix}/lib|/Applications/GHCup.app/Contents/Resources/lib|g" \
     > "${contents}/Resources/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache"
 
   local bundler_args
@@ -156,6 +156,7 @@ macos_bundle() {
     -x "${contents}/MacOS/ghcup-gtk-bin"
     -d "${contents}/Frameworks"
     -p '@executable_path/../Frameworks/'
+    -s "${brew_prefix}/lib"
   )
   for loader in "${loaders_dst}"/*; do
     bundler_args+=(-x "$loader")
