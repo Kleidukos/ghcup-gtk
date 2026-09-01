@@ -1,0 +1,35 @@
+# Manifest for Flathub submission
+# After cutting a release, fill in the sha256 fields:
+#   sha256sum ghcup-gtk-<version>-linux-{x86_64,aarch64}.tar.gz
+app-id: org.haskell.GhcupGtk
+runtime: org.gnome.Platform
+runtime-version: '49'
+sdk: org.gnome.Sdk
+command: ghcup-gtk
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # Manage the user-local toolchain
+  - --filesystem=home
+  # Query the host's real $SHELL and $PATH via flatpak-spawn
+  - --talk-name=org.freedesktop.Flatpak
+  - --env=ghcup_gtk_datadir=/app/share/ghcup-gtk
+modules:
+  - name: ghcup-gtk
+    buildsystem: simple
+    build-commands:
+      - cp -a ./. /app
+    sources:
+      - type: archive
+        only-arches: [x86_64]
+        strip-components: 0
+        url: https://github.com/Kleidukos/ghcup-gtk/releases/download/v0.1.0.0/ghcup-gtk-0.1.0.0-linux-x86_64.tar.gz
+        sha256: TODO_FILL_AFTER_RELEASE
+      - type: archive
+        only-arches: [aarch64]
+        strip-components: 0
+        url: https://github.com/Kleidukos/ghcup-gtk/releases/download/v0.1.0.0/ghcup-gtk-0.1.0.0-linux-aarch64.tar.gz
+        sha256: TODO_FILL_AFTER_RELEASE

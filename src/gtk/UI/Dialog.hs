@@ -14,6 +14,15 @@ import GI.Gtk qualified as Gtk
 
 import Presentation.Row (Confirmation (..))
 
+class FileResult r where
+  toMaybeFile :: r -> Maybe Gio.File
+
+instance FileResult Gio.File where
+  toMaybeFile = Just
+
+instance FileResult (Maybe Gio.File) where
+  toMaybeFile = id
+
 info :: Adw.ApplicationWindow -> Text -> Text -> IO ()
 info window heading body = do
   dialog <- Adw.alertDialogNew (Just heading) (Just body)
@@ -46,7 +55,8 @@ pickFolder window title onPicked = do
         result <- try @GError (fileDialog.selectFolderFinish asyncResult)
         case result of
           Left _dismissed -> pure ()
-          Right file -> do
-            mpath <- file.getPath
-            forM_ mpath onPicked
+          Right picked ->
+            forM_ (toMaybeFile picked) $ \file -> do
+              mpath <- file.getPath
+              forM_ mpath onPicked
     )

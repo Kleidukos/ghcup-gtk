@@ -92,8 +92,8 @@ build app config = do
 
   breakpoint <-
     Adw.breakpointNew =<< Adw.breakpointConditionParse "max-width: 560sp"
-  collapsed <- toGValue True
-  breakpoint.addSetter splitView "collapsed" (Just collapsed)
+  _ <- on breakpoint #apply $ set splitView [#collapsed := True]
+  _ <- on breakpoint #unapply $ set splitView [#collapsed := False]
   window.addBreakpoint breakpoint
 
   ToolPanes.onToolSelected panes $ \tool -> do
