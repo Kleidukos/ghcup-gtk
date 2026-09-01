@@ -35,11 +35,10 @@ data ViewState = ViewState
   , plan :: Map Tool ToolRows
   }
 
--- | One live renderer per tool. 'reconcile' destroys them and builds fresh
--- ones whenever the pane set changes, whenever the url-source base flips,
--- or whenever the channels the panes actually offer change; a channel no
--- pane can offer must not cost a rebuild, which would throw away scroll
--- position for no visible gain.
+-- | One live renderer per tool. 'reconcile' rebuilds them when the pane
+-- set, the url-source base, or the offered channels change. A channel that
+-- no pane offers must not cause a rebuild: it loses scroll position for
+-- nothing.
 data Registry = Registry
   { panes :: ToolPanes
   , rowCallbacks :: RowCallbacks
@@ -47,9 +46,9 @@ data Registry = Registry
   , onBaseChanged :: BaseChannel -> IO ()
   , renderersRef :: IORef (Map Tool View)
   , appliedRef :: IORef (Maybe ViewState)
-  -- ^ The last state applied to the widgets; 'Nothing' until the first
-  -- 'reconcile', and treated as 'Nothing' again after a renderer rebuild
-  -- so everything is replayed onto the fresh widgets.
+  -- ^ The last state applied to the widgets. 'Nothing' until the first
+  -- 'reconcile', and treated as 'Nothing' after a rebuild so that the full
+  -- state is replayed onto the fresh widgets.
   }
 
 build
@@ -62,10 +61,9 @@ build panes rowCallbacks onBaseChanged =
     <$> newIORef Map.empty
     <*> newIORef Nothing
 
--- | Build one renderer per tool and mount each in its pane, seeding each
--- with the transient filter selections carried over from its predecessor;
--- a pane with no predecessor, and any channel newly on offer, starts with
--- its channels visible.
+-- | Build one renderer per tool and mount it in its pane. Each renderer
+-- keeps the filter selections of its predecessor. Without a predecessor,
+-- and for a newly offered channel, channels start visible.
 buildRenderers :: Registry -> Set Channel -> ViewState -> Map Tool ActiveFilters -> IO (Map Tool View)
 buildRenderers registry previousChannels state carried = do
   currentPanes <- readIORef registry.panes.panesRef

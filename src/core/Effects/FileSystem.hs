@@ -1,6 +1,4 @@
--- | Custom effect for domain-specific operations.
--- Need to be replaced by stock "Effectful.Filesystem" when we have a
--- pure interpreter for it.
+-- | File operations of this application.
 module Effects.FileSystem
   ( FileSystem (..)
   , doesFileExist
@@ -72,10 +70,7 @@ runFileSystemIO = interpret $ \_ -> \case
 tryText :: IO a -> IO (Either Text a)
 tryText action = first (Text.pack . show) <$> try @SomeException action
 
--- | Replace a file's contents by rename, so a reader never observes a
--- partial write and a crash never leaves the temp file behind. The payload
--- reaches the disk before the rename, so the rename cannot expose an empty
--- file after a power loss.
+-- | Replace the contents of a file with a rename.
 atomicWriteBytes :: FilePath -> ByteString -> IO ()
 atomicWriteBytes path payload = do
   Directory.createDirectoryIfMissing True (takeDirectory path)

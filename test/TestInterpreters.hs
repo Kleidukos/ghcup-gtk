@@ -33,9 +33,6 @@ runNotifyCollect :: Eff (Notify : es) a -> Eff es (a, [UiMsg])
 runNotifyCollect = reinterpret (runState []) $ \_ -> \case
   Emit msg -> modify (<> [msg])
 
--- | Responses of a fake ghcup: the environment acquisition every
--- operation runs behind, then one field per operation. Fields live in
--- 'Eff es' so a test can thread its own counters through them.
 data GhcupHandlers es = GhcupHandlers
   { acquire :: Eff es (Either OpError ())
   , getListings :: Eff es (Either OpError (Listings, Freshness))

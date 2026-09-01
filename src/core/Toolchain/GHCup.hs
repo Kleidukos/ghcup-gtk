@@ -51,10 +51,9 @@ import Effects.FileSystem (atomicWriteBytes)
 import Toolchain.Channels (BaseChannel, Channel, applyUrlSource, uriText)
 import Toolchain.Types
 
--- | Every read and write of 'appStateRef' must happen on the single worker
--- thread, serialized by the job queue: 'setUrlSource' and the fetch path in
--- 'getListings' both read-modify-write it, so a second thread would lose one
--- of the two updates.
+-- | Access 'appStateRef' only on the worker thread. 'setUrlSource' and the
+-- fetch path in 'getListings' both read-modify-write it, so a second thread
+-- loses one of the two updates.
 newtype GhcupEnv = GhcupEnv
   { appStateRef :: IORef AppState
   }
@@ -107,13 +106,8 @@ updateUrlSource base requested nightlies userSettings =
         Just (SimpleList (applyUrlSource base requested nightlies (urlSourceOf userSettings)))
     }
 
--- | Set the base, when one is requested, and enable exactly the requested
--- channels in the user's ghcup config, a full YAML re-encode like `ghcup
--- config` performs. Non-channel, non-base entries pass through from a
--- fresh read of the config; the channel entries, and the base when one is
--- requested, are the dialog's requested selections, overwriting whatever
--- the config held. The written list is returned. An unreadable config is
--- never overwritten.
+-- | Enable requested channels, and the base if one is given,
+-- in the ghcup config.
 saveUrlSource :: Maybe BaseChannel -> Set Channel -> Maybe URI -> IO (Either Text [NewURLSource])
 saveUrlSource base requested nightlies =
   try @SomeException write <&> either (Left . Text.pack . show) id

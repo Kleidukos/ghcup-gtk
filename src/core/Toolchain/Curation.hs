@@ -35,10 +35,9 @@ curate listings =
   where
     installable lr = lInstalled lr || not (lNoBindist lr)
 
--- | A release family: everything sharing a cross-compilation target, a
--- Major.Minor version and a stability. Stability is part of the key so a
--- prerelease snapshot or nightly, whose version outranks the stable
--- release, never masks it as the family's latest.
+-- | A release family: same cross-compilation target, Major.Minor version,
+-- and stability. Stability is in the key so that a prerelease or nightly,
+-- whose version outranks the stable release, does not hide it as the latest.
 type FamilyKey = (Maybe Text, Word, Word, Stability)
 
 data Stability
