@@ -95,10 +95,10 @@ fi
 ARCH="$(uname -m)"
 
 # Minimum supported OS per package format. Keep in sync with the
-# runners in .github/workflows/release.yml.
+# runners in .github/workflows/ci.yml.
 min_os_for() {
   case "$1" in
-    deb) echo ubuntu-26 ;;
+    deb) echo "ubuntu-$(. /etc/os-release && echo "${VERSION_ID%%.*}")" ;;
     rpm) echo fedora-44 ;;
     pacman) echo archlinux ;;
     osxpkg) echo macos-15 ;;

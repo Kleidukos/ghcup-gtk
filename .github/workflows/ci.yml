@@ -19,7 +19,7 @@ jobs:
         uses: kleidukos/get-tested@v0.1.9.1
         with:
           cabal-file: ghcup-gtk.cabal
-          ubuntu-version: '26.04'
+          ubuntu-version: '24.04,26.04'
           version: 0.1.9.1
 
       - name: Extract the tested GHC versions (packages)
@@ -27,16 +27,16 @@ jobs:
         uses: kleidukos/get-tested@v0.1.9.1
         with:
           cabal-file: ghcup-gtk.cabal
-          ubuntu-version: '26.04'
+          ubuntu-version: '24.04,26.04'
           macos-version: 'latest'
           version: 0.1.9.1
 
-      - name: Add the aarch64 Ubuntu runner to the release matrix
+      - name: Add the aarch64 Ubuntu runners to the release matrix
         id: extend-release-matrix
         env:
           MATRIX: ${{ steps.set-release-matrix.outputs.matrix }}
         run: |
-          echo "matrix=$(jq -c '.include += [.include[] | select(.os == "ubuntu-26.04") | .os = "ubuntu-26.04-arm"]' <<< "$MATRIX")" >> "$GITHUB_OUTPUT"
+          echo "matrix=$(jq -c '.include += [.include[] | select(.os | startswith("ubuntu-")) | .os += "-arm"]' <<< "$MATRIX")" >> "$GITHUB_OUTPUT"
 
   tests:
     name: ${{ matrix.ghc }} on ${{ matrix.os }}
@@ -149,11 +149,11 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ${{ steps.setup-haskell.outputs.cabal-store }}
-          key: release-${{ runner.os }}-${{ runner.arch }}-ghc-${{ matrix.ghc }}-${{ hashFiles('**/plan.json') }}
-          restore-keys: release-${{ runner.os }}-${{ runner.arch }}-ghc-${{ matrix.ghc }}-
+          key: release-${{ matrix.os }}-ghc-${{ matrix.ghc }}-${{ hashFiles('**/plan.json') }}
+          restore-keys: release-${{ matrix.os }}-ghc-${{ matrix.ghc }}-
 
       - name: Cache flatpak runtimes
-        if: runner.os == 'Linux'
+        if: startsWith(matrix.os, 'ubuntu-26.04')
         uses: actions/cache@v6
         with:
           path: ~/.local/share/flatpak
@@ -162,9 +162,10 @@ jobs:
       - name: Build packages
         run: |
           FORMATS=()
-          if [[ "$RUNNER_OS" == "Linux" ]]; then
-            FORMATS=(deb rpm pacman flatpak tarball)
-          fi
+          case "${{ matrix.os }}" in
+            ubuntu-26.04*) FORMATS=(deb rpm pacman flatpak tarball) ;;
+            ubuntu-24.04*) FORMATS=(deb) ;;
+          esac
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             ./scripts/package.sh -v "${GITHUB_REF_NAME#v}" ${FORMATS[@]+"${FORMATS[@]}"}
           else
@@ -173,7 +174,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: packages-${{ runner.os }}-${{ runner.arch }}
+          name: packages-${{ matrix.os }}-${{ runner.arch }}
           path: dist-package/out/*
           if-no-files-found: error
 
