@@ -17,6 +17,23 @@ It aims to have feature parity with the GHCup TUI.
   alt="The preferences dialog, with the release channel toggles and the nightlies metadata URL."
 />
 
+## Installation
+
+### Linux Distributions
+
+Packages are automatically generated for the following:
+
+* ArchLinux (and derivatives)
+* Fedora 44
+* Ubuntu 26.04
+
+### macOS
+
+The `.pkg` from the [releases](https://github.com/Kleidukos/ghcup-gtk/releases)
+installs a self-contained `GHCup.app` into `/Applications`.
+It should be compatible with macOS 15 and up. However the build is not
+notarised at this time.
+
 ## Development
 
 ### System Dependencies
