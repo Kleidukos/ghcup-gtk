@@ -74,8 +74,7 @@ jobs:
       - name: Configure environment (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install gtk4 libadwaita gobject-introspection pkgconf
-          sudo gem install fpm
+          brew install gtk4 libadwaita gobject-introspection pkgconf dylibbundler librsvg
           cabal update
           cabal freeze --project-file=cabal.release.project
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build distribution packages for ghcup-gtk with fpm.
 #
 # Usage: scripts/package.sh -v <version>|head [format...]
 #   -v: mandatory; version label used in the package file name; either
@@ -80,6 +79,8 @@ for fmt in "${FORMATS[@]}"; do
   esac
 done
 
+# On Darwin the datadir is never used: the .app launcher overrides
+# it at runtime via the ghcup_gtk_datadir env variable.
 if [ "$OS" = "Darwin" ]; then
   PREFIX=/usr/local
 else
@@ -122,12 +123,70 @@ install_file() {
   install -m "$mode" "$src" "$dst"
 }
 
-install_file 755 "$BIN" "${STAGING}${PREFIX}/bin/ghcup-gtk"
-strip "${STAGING}${PREFIX}/bin/ghcup-gtk"
-install_file 644 data/style.css "${STAGING}${PREFIX}/share/ghcup-gtk/data/style.css"
-install_file 644 data/icons/funnel-symbolic.svg "${STAGING}${PREFIX}/share/ghcup-gtk/data/icons/funnel-symbolic.svg"
+macos_bundle() {
+  local brew_prefix contents loaders_src loaders_dst loader iconset size
+  brew_prefix="$(brew --prefix)"
+  contents="${ROOT}/${STAGING}/Applications/GHCup.app/Contents"
 
-if [ "$OS" = "Linux" ]; then
+  install_file 755 "$BIN" "${contents}/MacOS/ghcup-gtk-bin"
+  strip "${contents}/MacOS/ghcup-gtk-bin"
+  install_file 755 data/macos/launcher.sh "${contents}/MacOS/ghcup-gtk"
+  sed "s/@VERSION@/${VERSION}/g" data/macos/Info.plist > "${contents}/Info.plist"
+
+  install_file 644 data/style.css \
+    "${contents}/Resources/share/ghcup-gtk/data/style.css"
+  install_file 644 data/icons/funnel-symbolic.svg \
+    "${contents}/Resources/share/ghcup-gtk/data/icons/funnel-symbolic.svg"
+
+  mkdir -p "${contents}/Resources/share/glib-2.0/schemas"
+  "${brew_prefix}/bin/glib-compile-schemas" \
+    --targetdir="${contents}/Resources/share/glib-2.0/schemas" \
+    "${brew_prefix}/share/glib-2.0/schemas"
+
+  loaders_src="${brew_prefix}/lib/gdk-pixbuf-2.0/2.10.0/loaders"
+  loaders_dst="${contents}/Resources/lib/gdk-pixbuf-2.0/2.10.0/loaders"
+  mkdir -p "$loaders_dst"
+  cp "${loaders_src}"/* "${loaders_dst}/"
+
+  "${brew_prefix}/bin/gdk-pixbuf-query-loaders" "${loaders_dst}"/* \
+    | sed "s|${ROOT}/${STAGING}||g" \
+    > "${contents}/Resources/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache"
+
+  local bundler_args
+  bundler_args=(
+    -od -b
+    -x "${contents}/MacOS/ghcup-gtk-bin"
+    -d "${contents}/Frameworks"
+    -p '@executable_path/../Frameworks/'
+  )
+  for loader in "${loaders_dst}"/*; do
+    bundler_args+=(-x "$loader")
+  done
+  dylibbundler "${bundler_args[@]}"
+
+  codesign --force -s - \
+    "${contents}/Frameworks/"*.dylib \
+    "${loaders_dst}"/* \
+    "${contents}/MacOS/ghcup-gtk-bin"
+
+  iconset="${ROOT}/dist-package/ghcup-gtk.iconset"
+  mkdir -p "$iconset"
+  for size in 16 32 128 256 512; do
+    rsvg-convert -w "$size" -h "$size" \
+      data/org.haskell.GhcupGtk.svg -o "${iconset}/icon_${size}x${size}.png"
+    rsvg-convert -w "$((size * 2))" -h "$((size * 2))" \
+      data/org.haskell.GhcupGtk.svg -o "${iconset}/icon_${size}x${size}@2x.png"
+  done
+  iconutil -c icns -o "${contents}/Resources/ghcup-gtk.icns" "$iconset"
+}
+
+if [ "$OS" = "Darwin" ]; then
+  macos_bundle
+else
+  install_file 755 "$BIN" "${STAGING}${PREFIX}/bin/ghcup-gtk"
+  strip "${STAGING}${PREFIX}/bin/ghcup-gtk"
+  install_file 644 data/style.css "${STAGING}${PREFIX}/share/ghcup-gtk/data/style.css"
+  install_file 644 data/icons/funnel-symbolic.svg "${STAGING}${PREFIX}/share/ghcup-gtk/data/icons/funnel-symbolic.svg"
   install_file 644 data/org.haskell.GhcupGtk.desktop \
     "${STAGING}${PREFIX}/share/applications/org.haskell.GhcupGtk.desktop"
   install_file 644 data/org.haskell.GhcupGtk.svg \
@@ -147,6 +206,21 @@ FPM_COMMON=(
   -f
 )
 
+build_osxpkg() {
+  local pkg_name="$1"
+  local components="dist-package/osxpkg-components.plist"
+  echo "==> pkgbuild ($pkg_name)"
+  pkgbuild --analyze --root "$STAGING" "$components"
+  /usr/libexec/PlistBuddy -c "Set :0:BundleIsRelocatable false" "$components"
+  pkgbuild \
+    --root "$STAGING" \
+    --identifier org.haskell.GhcupGtk \
+    --version "$VERSION" \
+    --install-location / \
+    --component-plist "$components" \
+    "dist-package/out/${pkg_name}"
+}
+
 build_flatpak() {
   local pkg_name="$1"
   echo "==> flatpak-builder ($pkg_name)"
@@ -165,10 +239,13 @@ for fmt in "${FORMATS[@]}"; do
       build_flatpak "ghcup-gtk-${VERSION_LABEL}-${ARCH}.flatpak"
       continue
       ;;
+    osxpkg)
+      build_osxpkg "ghcup-gtk-${VERSION_LABEL}-$(min_os_for "$fmt")-${ARCH}.pkg"
+      continue
+      ;;
     deb) EXTRA=(-d libgtk-4-1 -d libadwaita-1-0); EXT=deb ;;
     rpm) EXTRA=(-d gtk4 -d libadwaita); EXT=rpm ;;
     pacman) EXTRA=(-d gtk4 -d libadwaita); EXT=pkg.tar.zst ;;
-    osxpkg) EXTRA=(--osxpkg-identifier-prefix org.haskell); EXT=pkg ;;
   esac
   PKG_NAME="ghcup-gtk-${VERSION_LABEL}-$(min_os_for "$fmt")-${ARCH}.${EXT}"
   echo "==> fpm -t $fmt ($PKG_NAME)"
