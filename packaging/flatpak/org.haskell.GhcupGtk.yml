@@ -20,4 +20,4 @@ modules:
       - cp -a ./. /app
     sources:
       - type: dir
-        path: ../dist-package/root/usr
+        path: ../../dist-package/root/usr
