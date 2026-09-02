@@ -153,18 +153,18 @@ jobs:
           restore-keys: release-${{ matrix.os }}-ghc-${{ matrix.ghc }}-
 
       - name: Cache flatpak runtimes
-        if: startsWith(matrix.os, 'ubuntu-26.04')
+        if: startsWith(matrix.os, 'ubuntu-24.04')
         uses: actions/cache@v6
         with:
           path: ~/.local/share/flatpak
-          key: flatpak-runtimes-${{ runner.arch }}-${{ hashFiles('packaging/flatpak/org.haskell.GhcupGtk.yml') }}
+          key: flatpak-runtimes-${{ matrix.os }}-${{ runner.arch }}-${{ hashFiles('packaging/flatpak/org.haskell.GhcupGtk.yml') }}
 
       - name: Build packages
         run: |
           FORMATS=()
           case "${{ matrix.os }}" in
-            ubuntu-26.04*) FORMATS=(deb rpm pacman flatpak tarball) ;;
-            ubuntu-24.04*) FORMATS=(deb) ;;
+            ubuntu-26.04*) FORMATS=(deb rpm pacman) ;;
+            ubuntu-24.04*) FORMATS=(deb flatpak tarball) ;;
           esac
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             ./scripts/package.sh -v "${GITHUB_REF_NAME#v}" ${FORMATS[@]+"${FORMATS[@]}"}
