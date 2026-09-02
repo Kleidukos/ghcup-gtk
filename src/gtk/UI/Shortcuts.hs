@@ -8,8 +8,8 @@ import GI.Gtk qualified as Gtk
 
 import UI.View (captionLabel)
 
--- | The shortcuts listed in the dialog, paired with the accelerators
--- registered in 'UI.installActions'.
+-- | The shortcuts in the dialog, with the accelerators from
+-- 'UI.installActions'.
 shortcuts :: [(Text, Text)]
 shortcuts =
   [ ("Preferences", "Ctrl+,")
@@ -17,8 +17,8 @@ shortcuts =
   , ("Quit", "Ctrl+Q")
   ]
 
--- | Hand-built shortcuts dialog. 'Gtk.ShortcutsWindow' is deprecated and
--- AdwShortcutsDialog needs libadwaita 1.8, our minimum is 1.5.
+-- | Hand-built shortcuts dialog. 'Gtk.ShortcutsWindow' is deprecated.
+-- AdwShortcutsDialog needs libadwaita 1.8. Our minimum is 1.5.
 present :: Adw.ApplicationWindow -> IO ()
 present parent = do
   group <- new Adw.PreferencesGroup [#title := "General"]

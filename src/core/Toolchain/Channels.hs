@@ -36,7 +36,7 @@ data Channel
   | ThirdParty
   deriving stock (Bounded, Enum, Eq, Ord, Show)
 
--- | The metadata channel a filter maps onto; 'Nightlies' has no
+-- | The metadata channel of a filter. 'Nightlies' has no
 -- 'ChannelAlias' upstream yet.
 channelAlias :: Channel -> Maybe ChannelAlias
 channelAlias = \case
@@ -50,7 +50,7 @@ configuredChannels :: [NewURLSource] -> Set Channel
 configuredChannels = Set.fromList . mapMaybe sourceChannel
 
 -- | The marker in the file name of the metadata URI of a channel.
--- Recognition looks at the path only, never at host, query, or fragment.
+-- Only the path is examined, not the host, query, or fragment.
 channelMarker :: Channel -> ByteString
 channelMarker = \case
   Prereleases -> "ghcup-prereleases"
@@ -58,8 +58,8 @@ channelMarker = \case
   Cross -> "ghcup-cross"
   ThirdParty -> "ghcup-3rdparty"
 
--- | The last path segment must /start/ with the marker.
--- The extension or a version must come next.
+-- | The last path segment must start with the marker, then an extension
+-- or a version.
 matchesMarker :: ByteString -> URI -> Bool
 matchesMarker marker uri =
   case Char8.stripPrefix marker (basenameOf uri) of
@@ -89,16 +89,16 @@ hasDefaultMarker uri =
   where
     versionChar c = isDigit c || c == '.' || c == '-'
 
--- | Whether a URI names a nightlies metadata file, the check the
--- preferences dialog and 'sourceChannel' must agree on.
+-- | Whether a URI names a nightlies metadata file. The preferences dialog
+-- and 'sourceChannel' must agree on this.
 hasNightliesMarker :: URI -> Bool
 hasNightliesMarker = hasMarker Nightlies
 
 nightliesMarker :: Text
 nightliesMarker = Text.Encoding.decodeUtf8 (channelMarker Nightlies)
 
--- | The nightlies metadata URL offered as a starting point. Update it when
--- upstream changes the pinned metadata version.
+-- | The default nightlies metadata URL. Update it when upstream changes
+-- the pinned metadata version.
 defaultNightliesUrl :: Text
 defaultNightliesUrl = "https://ghc.gitlab.haskell.org/ghcup-metadata/ghcup-nightlies-0.0.7.yaml"
 
@@ -107,8 +107,8 @@ uriText uri =
   serializeURIRef' uri
     & Text.Encoding.decodeUtf8With Text.Encoding.Error.lenientDecode
 
--- | Parse a user-supplied nightlies metadata URL, rejecting anything that
--- is not a strictly valid URI carrying the nightlies marker.
+-- | Parse a nightlies metadata URL from the user. It must be a valid URI
+-- with the nightlies marker.
 parseNightlies :: Text -> Maybe URI
 parseNightlies input =
   case parseURI strictURIParserOptions (Text.Encoding.encodeUtf8 (Text.strip input)) of
@@ -116,7 +116,7 @@ parseNightlies input =
     _ -> Nothing
 
 -- | The channel that a ghcup url-source entry enables. The path marker
--- identifies a URI, so versioned and legacy spellings classify the same way.
+-- decides, so versioned and legacy spellings give the same result.
 sourceChannel :: NewURLSource -> Maybe Channel
 sourceChannel = \case
   NewChannelAlias alias -> find (\channel -> channelAlias channel == Just alias) allChannels

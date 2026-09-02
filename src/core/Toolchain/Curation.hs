@@ -23,8 +23,8 @@ import GHCup.Types (Tag (..))
 
 import Toolchain.Types (Listings)
 
--- | Hide rows that cannot be installed, sort the rest newest-first.
--- Narrowing the list further is the views' job, via their filter bars.
+-- | Hide rows that cannot be installed. Sort the rest newest first.
+-- The filter bars of the views narrow the list further.
 curate :: Listings -> Listings
 curate listings =
   listings
@@ -35,9 +35,8 @@ curate listings =
   where
     installable lr = lInstalled lr || not (lNoBindist lr)
 
--- | A release family: same cross-compilation target, Major.Minor version,
--- and stability. Stability is in the key so that a prerelease or nightly,
--- whose version outranks the stable release, does not hide it as the latest.
+-- | Same cross target, Major.Minor version, and stability.
+-- Stability keeps a newer prerelease from hiding the latest stable release.
 type FamilyKey = (Maybe Text, Word, Word, Stability)
 
 data Stability
@@ -52,15 +51,15 @@ stabilityOf lr
   | Prerelease `elem` lTag lr || LatestPrerelease `elem` lTag lr = PrereleaseBuild
   | otherwise = StableRelease
 
--- | 'Nothing' when the first two version chunks are not both numeric. Such a
--- version is its own family and is never hidden by the latest-patch filter.
+-- | 'Nothing' when the first two version chunks are not both numeric.
+-- Such a version is its own family. The latest-patch filter never hides it.
 familyKey :: ListResult -> Maybe FamilyKey
 familyKey lr = case _vChunks (lVer lr) of
   Chunks (Numeric major :| Numeric minor : _) -> Just (lCross lr, major, minor, stabilityOf lr)
   _ -> Nothing
 
--- | Newest version of each family. Rows with no family are absent, they are
--- handled by 'isLatestInFamily' directly.
+-- | Newest version of each family. Rows with no family are absent.
+-- 'isLatestInFamily' handles them directly.
 latestPerFamily :: Vector ListResult -> Map FamilyKey Version
 latestPerFamily = Vector.foldl' insertRow Map.empty
   where

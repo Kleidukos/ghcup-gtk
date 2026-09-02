@@ -9,7 +9,7 @@ import Effectful.Dispatch.Dynamic
 
 import Toolchain.Types (UiMsg)
 
--- | Emission of messages toward the UI thread.
+-- | Emission of messages towards the UI thread.
 data Notify :: Effect where
   Emit :: UiMsg -> Notify m ()
 

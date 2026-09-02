@@ -90,8 +90,8 @@ atomicWriteBytes path payload = do
       _ <- try @SomeException (Directory.removeFile tmp)
       pure ()
 
--- | Flush the handle's buffers and the file's data to disk. 'handleToFd'
--- closes the handle, so nothing may be written through it afterwards.
+-- | Flush the handle and the file data to disk. 'handleToFd' closes the
+-- handle. Do not write through it after this call.
 syncHandle :: Handle -> IO ()
 syncHandle h = do
   hFlush h

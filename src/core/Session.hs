@@ -42,7 +42,7 @@ import Toolchain.Types
 data Phase = Loading | Offline | Ready
   deriving stock (Eq, Show)
 
--- | UI phase of the PATH story. 'PathStatus' is what a check finds;
+-- | UI phase of the PATH fix. 'PathStatus' is the result of a check.
 -- 'FixApplied' exists only here, after the user applied the fix.
 data PathModel
   = Unchecked
@@ -50,8 +50,8 @@ data PathModel
   | FixApplied
   deriving stock (Eq, Show)
 
--- | Whether the channel set may be edited: 'ChannelsLocked' when the
--- ghcup config could not be read at startup, so a write would clobber it.
+-- | Whether the user can edit the channel set. 'ChannelsLocked' when the
+-- ghcup config was not readable at startup. A write then destroys it.
 data ChannelsEditability
   = ChannelsEditable
   | ChannelsLocked
@@ -75,14 +75,14 @@ data Model = Model
   , urlSource :: [NewURLSource]
   -- ^ ghcup's url-source list, the source of truth for channels
   , channelsEditable :: ChannelsEditability
-  -- ^ 'ChannelsLocked' when the ghcup config could not be read at startup
+  -- ^ 'ChannelsLocked' when the ghcup config was not readable at startup
   }
   deriving stock (Eq, Show)
 
 data Event
   = -- |  The user asks for an action
     Submitted Job
-  | -- | The user clicked a row action that requires confirmation
+  | -- | The user clicked a row action that needs confirmation
     ConfirmRequested RowAction
   | -- |  Messages reported by the worker
     WorkerMsg UiMsg

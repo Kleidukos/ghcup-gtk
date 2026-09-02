@@ -1,5 +1,5 @@
-# Manifest for Flathub submission
-# After cutting a release, fill in the sha256 fields:
+# Manifest for Flathub.
+# After a release, fill in the sha256 fields:
 #   sha256sum ghcup-gtk-<version>-linux-{x86_64,aarch64}.tar.gz
 app-id: org.haskell.GhcupGtk
 runtime: org.gnome.Platform

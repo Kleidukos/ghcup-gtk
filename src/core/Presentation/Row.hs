@@ -60,8 +60,8 @@ data RowSpec = RowSpec
   , releaseDay :: Maybe Day
   , latestInFamily :: Bool
   , progress :: Maybe Progress
-  -- ^ Set while a mutation is running on this row; renderers draw it as a
-  -- pulsing bar plus the latest log line.
+  -- ^ Set while a mutation runs on this row. Renderers show a pulsing bar
+  -- and the last log line.
   , isPrerelease :: Bool
   , isNightly :: Bool
   , crossTarget :: Maybe Text
@@ -154,8 +154,8 @@ getBaseVersion tags = List.foldl' go Nothing tags
     go Nothing _ = Nothing
     go (Just b) _ = Just b
 
--- | Whether a row survives a bar's active filters. Every filter reveals a
--- category hidden by default. Shared by the list and table renderers.
+-- | Whether the active filters of a bar show this row. Each filter shows
+-- a category that is hidden by default.
 matchesFilters :: ActiveFilters -> RowSpec -> Bool
 matchesFilters active spec =
   and
@@ -251,7 +251,7 @@ instance Display Tool where
     | tool == ghcup = "GHCup"
     | otherwise = displayBuilder $ toolText tool
 
--- | \"Install\" or \"Reinstall\"; the one place this verb is derived.
+-- | \"Install\" or \"Reinstall\". The only place that picks this verb.
 installVerb :: RowSpec -> Text
 installVerb spec = if spec.installed then "Reinstall" else "Install"
 

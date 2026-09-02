@@ -51,9 +51,8 @@ import Effects.FileSystem (atomicWriteBytes)
 import Toolchain.Channels (BaseChannel, Channel, applyUrlSource, uriText)
 import Toolchain.Types
 
--- | Access 'appStateRef' only on the worker thread. 'setUrlSource' and the
--- fetch path in 'getListings' both read-modify-write it, so a second thread
--- loses one of the two updates.
+-- | Access 'appStateRef' only on the worker thread. 'setUrlSource' and
+-- 'getListings' both read-modify-write it.
 newtype GhcupEnv = GhcupEnv
   { appStateRef :: IORef AppState
   }
@@ -79,8 +78,8 @@ ghcupDirs = do
       , ghcupBaseDir = fromGHCupPath (baseDir dirs)
       }
 
--- | The url-source of the user's ghcup config, or the default channel
--- with a warning when the config cannot be read.
+-- | The url-source of the ghcup config of the user. If the config is not
+-- readable, the default channel and a warning.
 loadUrlSource :: IO ([NewURLSource], Maybe Text)
 loadUrlSource =
   try @SomeException (runE @'[JSONError] ghcupConfigFile) <&> \case
@@ -93,8 +92,7 @@ loadUrlSource =
       , Just ("Could not read the ghcup config, using the default channel: " <> reason)
       )
 
--- | The url-source list a ghcup config carries, defaulted the way ghcup
--- itself defaults it.
+-- | The url-source list of a ghcup config, with the same default as ghcup.
 urlSourceOf :: UserSettings -> [NewURLSource]
 urlSourceOf userSettings =
   maybe defaultSettings.urlSource fromURLSource userSettings.uUrlSource
@@ -106,8 +104,7 @@ updateUrlSource base requested nightlies userSettings =
         Just (SimpleList (applyUrlSource base requested nightlies (urlSourceOf userSettings)))
     }
 
--- | Enable requested channels, and the base if one is given,
--- in the ghcup config.
+-- | Enable the requested channels, and the base if given, in the ghcup config.
 saveUrlSource :: Maybe BaseChannel -> Set Channel -> Maybe URI -> IO (Either Text [NewURLSource])
 saveUrlSource base requested nightlies =
   try @SomeException write <&> either (Left . Text.pack . show) id
@@ -122,7 +119,7 @@ saveUrlSource base requested nightlies =
           atomicWriteBytes path (Yaml.encode updated)
           pure (Right (urlSourceOf updated))
 
--- | Swap the running worker's in-memory url-source, without touching disk.
+-- | Replace the in-memory url-source of the worker. Does not write to disk.
 setUrlSource :: GhcupEnv -> [NewURLSource] -> IO ()
 setUrlSource env urlSource =
   modifyIORef' env.appStateRef $ \appState ->

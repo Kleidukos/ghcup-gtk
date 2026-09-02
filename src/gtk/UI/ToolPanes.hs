@@ -33,8 +33,8 @@ data ToolPanes = ToolPanes
   , panesRef :: IORef (Vector ToolPane)
   }
 
--- | An empty sidebar and stack; 'sync' populates them once a row plan
--- exists. The Loading page hides the emptiness until then.
+-- | An empty sidebar and stack. 'sync' fills them when a row plan exists.
+-- The Loading page shows until then.
 build :: IO ToolPanes
 build = do
   sidebar <- new Gtk.ListBox [#selectionMode := Gtk.SelectionModeBrowse]
@@ -67,7 +67,7 @@ build = do
       Gtk.toWidget widget
 
 -- | Reconcile the panes with the ordered tool list. Returns 'True' when
--- the pane set changed (callers must then rebuild renderers).
+-- the pane set changed. The caller must then rebuild the renderers.
 sync :: ToolPanes -> Vector Tool -> IO Bool
 sync toolPanes tools = do
   current <- readIORef toolPanes.panesRef
@@ -86,8 +86,7 @@ sync toolPanes tools = do
         toolPanes.pages.addNamed bin (Just (toolText tool))
         pure ToolPane {tool, sidebarRow, bin}
       writeIORef toolPanes.panesRef panes
-      -- Rows were appended before panesRef held them, so the header func
-      -- ran against the old vector; rerun it against the new one.
+      -- The header func ran against the old vector. Run it again.
       toolPanes.sidebar.invalidateHeaders
       let restored = selected >>= \tool -> Vector.find (\pane -> pane.tool == tool) panes
       case restored of
