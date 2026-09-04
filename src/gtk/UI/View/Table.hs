@@ -47,6 +47,7 @@ data ActionCell = ActionCell
   { actionButton :: Gtk.Button
   , phaseLabel :: Gtk.Label
   , progressBar :: Gtk.ProgressBar
+  , box :: Gtk.Box
   }
 
 -- | The advanced renderer: a sortable, filterable 'Gtk.ColumnView'.
@@ -264,9 +265,8 @@ addColumn
   -- ^ Column id: how a persisted sort column is matched back to a column.
   -> Text
   -- ^ Title.
-  -> IO Gtk.Widget
-  -> (RowSpec -> Gtk.Widget -> IO ())
-  -> (RowSpec -> IO ())
+  -> (RowSpec -> IO Gtk.Widget)
+  -> (RowSpec -> Maybe Gtk.Widget -> IO ())
   -- ^ Run when a cell is recycled away from its row.
   -> Maybe Gtk.Sorter
   -> IO Gtk.ColumnViewColumn
@@ -381,7 +381,7 @@ bindActions window callbacksRef busyRef cellsRef spec widget = do
   box.append progressBar
   box.append actionButton
 
-  let cell = ActionCell {actionButton, phaseLabel, progressBar}
+  let cell = ActionCell {actionButton, phaseLabel, progressBar, box}
       keyText = rowKeyText spec.key
   modifyIORef' cellsRef (Map.insert keyText cell)
   busy <- readIORef busyRef
@@ -402,14 +402,23 @@ showIdle cell = do
   cell.actionButton.setVisible True
 
 -- | Data cells hold no state worth dropping when they are recycled.
-noUnbind :: RowSpec -> IO ()
-noUnbind _ = pure ()
+noUnbind :: RowSpec -> Maybe Gtk.Widget -> IO ()
+noUnbind _ _ = pure ()
 
 -- | Drop a recycled Actions cell, so 'setBusy' can never drive the widgets of
--- a row that has scrolled away. GTK unbinds a cell before rebinding it, so a
--- live key is never deleted by the cell that is taking over from it.
-unbindActions :: IORef (Map Text ActionCell) -> RowSpec -> IO ()
-unbindActions cellsRef spec = modifyIORef' cellsRef (Map.delete (rowKeyText spec.key))
+-- a row that has scrolled away. GTK may bind a row's key onto a new cell
+-- before unbinding the old one, so the delete only takes effect when the
+-- unbound child is still the one the cached cell was built from.
+unbindActions :: IORef (Map Text ActionCell) -> RowSpec -> Maybe Gtk.Widget -> IO ()
+unbindActions cellsRef spec mchild = do
+  childPtr <- traverse (fmap castPtr . unsafeManagedPtrGetPtr) mchild
+  cells <- readIORef cellsRef
+  case (childPtr, Map.lookup (rowKeyText spec.key) cells) of
+    (Just cp, Just cell) -> do
+      cellPtr <- castPtr <$> unsafeManagedPtrGetPtr cell.box
+      when (cellPtr == cp) $
+        modifyIORef' cellsRef (Map.delete (rowKeyText spec.key))
+    _ -> pure ()
 
   Gtk.toWidget box
 
