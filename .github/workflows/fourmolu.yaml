@@ -18,7 +18,7 @@ jobs:
       - ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: haskell-actions/run-fourmolu@v11
+      - uses: haskell-actions/run-fourmolu@v13
         with:
           version: "0.20.0.0"
           pattern: |
