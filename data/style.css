@@ -7,6 +7,13 @@ columnview.zebra-stripes > listview > row:nth-child(odd) {
 }
 
 
+.filter-bar {
+  margin-top: 6;
+  margin-bottom: 6;
+  margin-start: 12;
+  margin-end: 12;
+}
+
 .round-pill {
   padding-left: 0.3rem;
   padding-right: 0.3rem;
