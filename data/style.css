@@ -6,12 +6,33 @@ columnview.zebra-stripes > listview > row:nth-child(odd) {
   background-color: alpha(currentColor, 0.07);
 }
 
+columnview.card > header > button:first-child {
+  border-top-left-radius: 12px;
+}
+
+columnview.card > header > button:last-child {
+  border-top-right-radius: 12px;
+}
+
+columnview.card > listview > row:last-child {
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
+.list-container {
+  margin-top: 24px;
+  margin-bottom: 24px;
+}
+
+.table-container {
+  margin-top: 24px;
+  margin-bottom: 24px;
+}
+
 
 .filter-bar {
-  margin-top: 6;
-  margin-bottom: 6;
-  margin-start: 12;
-  margin-end: 12;
+  margin-top: 6px;
+  margin-bottom: 6px;
 }
 
 .round-pill {

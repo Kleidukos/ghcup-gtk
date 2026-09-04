@@ -44,10 +44,9 @@ build window initialFilters listCallbacks = do
       [ #child := listBox
       , #maximumSize := 600
       , #tighteningThreshold := 400
-      , #marginTop := 24
-      , #marginBottom := 24
       , #marginStart := 12
       , #marginEnd := 12
+      , #cssClasses := ["list-container"]
       ]
   scrolled <-
     new
