@@ -194,6 +194,8 @@ else
     "${STAGING}${PREFIX}/share/metainfo/org.haskell.GhcupGtk.metainfo.xml"
 fi
 
+FLATPAK_MANIFEST=packaging/flatpak/org.haskell.GhcupGtk.yml
+
 FPM_COMMON=(
   -s dir
   -n ghcup-gtk
@@ -222,13 +224,27 @@ build_osxpkg() {
     "dist-package/out/${pkg_name}"
 }
 
+check_flatpak_glibc() {
+  local runtime version binary_glibc runtime_glibc
+  runtime="$(sed -n 's/^runtime: *//p' "$FLATPAK_MANIFEST")"
+  version="$(sed -n 's/^runtime-version: *//p' "$FLATPAK_MANIFEST" | tr -d "'")"
+  binary_glibc="$(objdump -T "${STAGING}${PREFIX}/bin/ghcup-gtk" | grep -o 'GLIBC_[0-9.]*' | sed 's/^GLIBC_//' | sort -uV | tail -1)"
+  runtime_glibc="$(flatpak run --user --command=ldd "${runtime}//${version}" --version | awk 'NR == 1 { print $NF }')"
+  if ! printf '%s\n%s\n' "$binary_glibc" "$runtime_glibc" | sort -CV; then
+    echo "error: binary needs glibc ${binary_glibc} but ${runtime}//${version} ships ${runtime_glibc}; build on an older host" >&2
+    exit 1
+  fi
+  echo "==> glibc check: binary ${binary_glibc} <= runtime ${runtime_glibc}"
+}
+
 build_flatpak() {
   local pkg_name="$1"
   echo "==> flatpak-builder ($pkg_name)"
   flatpak-builder --force-clean --user --install-deps-from=flathub \
     --repo=dist-package/flatpak-repo \
     dist-package/flatpak-build \
-    packaging/flatpak/org.haskell.GhcupGtk.yml
+    "$FLATPAK_MANIFEST"
+  check_flatpak_glibc
   flatpak build-bundle dist-package/flatpak-repo \
     "dist-package/out/${pkg_name}" org.haskell.GhcupGtk
 }
