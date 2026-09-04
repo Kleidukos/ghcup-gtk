@@ -20,10 +20,11 @@ test: ## Run the test suite
 	@cabal test
 
 lint: ## Run the code linter (HLint)
-	@find app src -name "*.hs" | xargs -P $(PROCS) -I {} hlint --refactor-options="-i" --refactor {}
+	@find app src test -name "*.hs" | xargs -P $(PROCS) -I {} hlint --refactor-options="-i" --refactor {}
 
 style: ## Run the code styler (stylish-haskell)
 	@cabal-gild *.cabal
+	@fourmolu -q --mode inplace app src test
 
 dist: build ## Assemble release tarball
 	@rm -rf dist-tarball && mkdir -p dist-tarball/ghcup-gtk
