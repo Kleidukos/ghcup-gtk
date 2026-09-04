@@ -1,3 +1,11 @@
 columnview.zebra-stripes > listview > row:nth-child(odd) {
   background-color: alpha(currentColor, 0.07);
 }
+
+.round-pill {
+    padding-left: 0.3rem;
+    padding-right: 0.3rem;
+    border-radius: 0.35rem;
+    background: var(--accent-color);
+    color: var(--accent-fg-color);
+}

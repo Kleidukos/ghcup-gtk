@@ -3,6 +3,7 @@ module Presentation.Row
   , RowSpec (..)
   , RowAction (..)
   , ToolRows (..)
+  , Pill (..)
   , installConfirmation
   , jobTitle
   , planRows
@@ -11,6 +12,7 @@ module Presentation.Row
 
 import Data.List qualified as List
 import Data.Map.Strict (Map)
+import Data.Text.Display
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
@@ -35,7 +37,7 @@ data Confirmation = Confirmation
 data RowSpec = RowSpec
   { key :: RowKey
   , title :: Text
-  , pills :: [Text]
+  , pills :: [Pill]
   , installed :: Bool
   , isDefault :: Bool
   , action :: RowAction
@@ -50,6 +52,17 @@ data RowSpec = RowSpec
   -- pulsing bar plus the latest log line.
   }
   deriving stock (Eq, Show)
+
+data Pill
+  = HlsPowered
+  | RecommendedVersion
+  | LatestVersion
+  deriving stock (Eq, Ord, Show)
+
+instance Display Pill where
+  displayBuilder HlsPowered = "hls-powered"
+  displayBuilder RecommendedVersion = "recommended"
+  displayBuilder LatestVersion = "latest"
 
 data RowAction = RowAction
   { label :: Text
@@ -131,16 +144,16 @@ statusLabelOf lr
   | lInstalled lr = "installed"
   | otherwise = ""
 
-mkListResultLabels :: ListResult -> [Text]
+mkListResultLabels :: ListResult -> [Pill]
 mkListResultLabels lr =
   let tagLabels = mapMaybe mkTagLabel lr.lTag
-      hlsPoweredLabel = ["hls-powered" | lr.hlsPowered]
+      hlsPoweredLabel = [HlsPowered | lr.hlsPowered]
   in tagLabels <> hlsPoweredLabel
 
-mkTagLabel :: Tag -> Maybe Text
+mkTagLabel :: Tag -> Maybe Pill
 mkTagLabel = \case
-  Recommended -> Just "recommended"
-  Latest -> Just "latest"
+  Recommended -> Just RecommendedVersion
+  Latest -> Just LatestVersion
   _ -> Nothing
 
 subject :: SupportedTool -> ListResult -> Text

@@ -100,7 +100,7 @@ tests =
         , testCase "pills from tags" $ do
             let inst = mkLR "9.10.3" [Recommended] True False
                 specs = ghcRows (Curated False) [lr914, inst]
-            ((.pills) <$> specs) @?= Vector.fromList [["latest"], ["recommended"]]
+            ((.pills) <$> specs) @?= Vector.fromList [[LatestVersion], [RecommendedVersion]]
         , testCase "row action is install or remove per installed state" $ do
             let inst = mkLR "9.10.3" [Recommended] True False
                 specs = ghcRows (Curated False) [lr914, inst]

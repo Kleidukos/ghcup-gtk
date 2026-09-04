@@ -26,7 +26,13 @@ data View = View
 
 pillLabel :: Text -> IO Gtk.Label
 pillLabel text = do
-  pill <- new Gtk.Label [#label := text, #valign := Gtk.AlignCenter]
+  pill <-
+    new
+      Gtk.Label
+      [ #label := text
+      , #valign := Gtk.AlignCenter
+      ]
+  pill.addCssClass "round-pill"
   dimCaption pill
   pure pill
 

@@ -9,6 +9,7 @@ import Data.GI.Base
 import Data.IORef
 import Data.Int (Int32)
 import Data.Map.Strict (Map)
+import Data.Text.Display
 import Data.Map.Strict qualified as Map
 import Data.Maybe (isJust, isNothing)
 import Data.Ord (Down (..))
@@ -262,8 +263,8 @@ versionCell spec = do
   box <- new Gtk.Box [#orientation := Gtk.OrientationHorizontal, #spacing := 6]
   label <- new Gtk.Label [#label := spec.title, #xalign := 0]
   box.append label
-  forM_ spec.pills $ \text -> do
-    pill <- pillLabel text
+  forM_ spec.pills $ \p -> do
+    pill <- pillLabel (display p)
     box.append pill
   Gtk.toWidget box
 
