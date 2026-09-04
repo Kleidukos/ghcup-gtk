@@ -151,7 +151,7 @@ data Progress = Progress
   }
   deriving stock (Eq, Show)
 
--- | Progress from a raw ghcup log line, reading a "NN%" token if one appears.
+-- | Progress from a raw ghcup log line, from a "NN%" token if present.
 progressOf :: Text -> Progress
 progressOf line = Progress (Text.strip line) (fractionOf line)
 

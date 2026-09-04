@@ -35,10 +35,8 @@ data ViewState = ViewState
   , plan :: Map Tool ToolRows
   }
 
--- | One live renderer per tool. 'reconcile' rebuilds them when the pane
--- set, the url-source base, or the offered channels change. A channel that
--- no pane offers must not cause a rebuild: it loses scroll position for
--- nothing.
+-- | One live renderer per tool. 'reconcile' rebuilds them when the panes,
+-- the base, or the offered channels change. A rebuild loses scroll position.
 data Registry = Registry
   { panes :: ToolPanes
   , rowCallbacks :: RowCallbacks
@@ -46,9 +44,8 @@ data Registry = Registry
   , onBaseChanged :: BaseChannel -> IO ()
   , renderersRef :: IORef (Map Tool View)
   , appliedRef :: IORef (Maybe ViewState)
-  -- ^ The last state applied to the widgets. 'Nothing' until the first
-  -- 'reconcile', and treated as 'Nothing' after a rebuild so that the full
-  -- state is replayed onto the fresh widgets.
+  -- ^ The last state applied to the widgets. 'Nothing' before the first
+  -- 'reconcile' and after a rebuild, so the new widgets get the full state.
   }
 
 build
@@ -62,8 +59,7 @@ build panes rowCallbacks onBaseChanged =
     <*> newIORef Nothing
 
 -- | Build one renderer per tool and mount it in its pane. Each renderer
--- keeps the filter selections of its predecessor. Without a predecessor,
--- and for a newly offered channel, channels start visible.
+-- keeps the filter selections of its predecessor. New channels start visible.
 buildRenderers :: Registry -> Set Channel -> ViewState -> Map Tool ActiveFilters -> IO (Map Tool View)
 buildRenderers registry previousChannels state carried = do
   currentPanes <- readIORef registry.panes.panesRef

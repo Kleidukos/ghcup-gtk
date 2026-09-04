@@ -10,7 +10,7 @@ build: ## Build the project
 watch: ## Automatically rebuild and start the application on code change
 	@ghcid -c "cabal repl lib:ghcup-gtk" -T UI.main
 
-clean: ## Remove compilation artifacts
+clean: ## Remove compilation artefacts
 	@cabal clean
 
 repl: ## Start a REPL

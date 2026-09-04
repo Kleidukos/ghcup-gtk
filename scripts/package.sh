@@ -3,17 +3,15 @@ set -euo pipefail
 
 #
 # Usage: scripts/package.sh -v <version>|head [format...]
-#   -v: mandatory; version label used in the package file name; either
-#       a numeric version (e.g. 1.2.3) or the literal "head".
+#   -v: required. A version such as 1.2.3, or "head".
 #   formats: deb rpm pacman flatpak tarball (Linux), osxpkg (macOS)
-#   No format arguments: build every fpm format native to the host OS
-#   (flatpak is only built when requested explicitly, since it needs
-#   flatpak-builder and the GNOME runtime installed).
+#   With no format, build every fpm format for the host OS.
+#   flatpak is built only on request. It needs flatpak-builder and the
+#   GNOME runtime.
 #
-# Output lands in dist-package/out/.
+# Output goes to dist-package/out/.
 #
-# Make sure you keep the usage of the tools (tar, etc) compatible
-# with both GNU and macOS.
+# Keep tool usage (tar and others) compatible with GNU and macOS.
 
 usage() {
   echo "usage: scripts/package.sh -v <version>|head [format...]"

@@ -59,8 +59,8 @@ idleHandlers =
     , reconfigure = \_ -> pure ()
     }
 
--- | Mirrors the live interpreter's memoization: a successful acquisition
--- is cached, a failed one is retried by the next operation.
+-- | Same memoisation as the live interpreter. A success is cached.
+-- The next operation retries a failure.
 runGhcupTest :: forall es a. GhcupHandlers es -> Eff (Ghcup : es) a -> Eff es a
 runGhcupTest h = reinterpret (evalState False) $ \_ -> \case
   FetchListings -> acquiring h.getListings

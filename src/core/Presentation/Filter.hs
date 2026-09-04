@@ -61,8 +61,8 @@ channelsFor configured tool = filter (`Set.member` configured) available
       | tool == ghc = [Prereleases, Nightlies, Cross]
       | otherwise = [Prereleases]
 
--- | The configured channels these tools' filter bars can actually offer;
--- a channel no bar shows cannot warrant rebuilding any of them.
+-- | The configured channels that the filter bars of these tools offer.
+-- A channel that no bar shows does not cause a rebuild.
 reachableChannels :: (Foldable f) => Set Channel -> f Tool -> Set Channel
 reachableChannels configured = foldMap (Set.fromList . channelsFor configured)
 
@@ -70,8 +70,7 @@ seedFilters :: [Channel] -> [Channel] -> ActiveFilters -> ActiveFilters
 seedFilters offeredBefore offeredNow carried =
   carried <> ActiveFilters Set.empty (Set.fromList offeredNow `Set.difference` Set.fromList offeredBefore)
 
--- | Keep only the selections a bar offering these kinds and channels can
--- represent; a filter naming something no longer on offer is dropped.
+-- | Keep only the selections that these kinds and channels can show.
 restrictTo :: [FilterKind] -> [Channel] -> ActiveFilters -> ActiveFilters
 restrictTo kinds channels active =
   ActiveFilters

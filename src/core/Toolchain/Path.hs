@@ -56,7 +56,7 @@ data EnvSnapshot = EnvSnapshot
 marker :: Text
 marker = "# ghcup-env"
 
--- | The one non-rc file a fix may touch; planning, checking and
+-- | The only non-rc file that a fix can touch. Planning, checking, and
 -- snapshotting must agree on it.
 profilePath :: FilePath -> FilePath
 profilePath home = home </> ".profile"
@@ -140,7 +140,7 @@ filterMarker content = Text.lines content & filter (not . isMarkerLine) & Text.u
 data PathStatus
   = PathOk
   | FixedAwaitingRestart
-  | -- | The shell is unknown; all we can offer are instructions.
+  | -- | The shell is unknown. We can only give instructions.
     NeedsFixManual
   | -- | We know exactly which files to change.
     NeedsFixPlanned (Vector FileChange)

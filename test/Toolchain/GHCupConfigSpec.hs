@@ -16,8 +16,8 @@ import Toolchain.GHCup (updateUrlSource)
 external :: URI
 external = uriOf "https://example.com/my-metadata.yaml"
 
--- | A config carrying settings the dialog must not touch and a url-source
--- entry 'updateUrlSource' must not recognise as a channel.
+-- | A config with settings that the dialog must not touch, and a url-source
+-- entry that 'updateUrlSource' must not recognise as a channel.
 sample :: UserSettings
 sample =
   either (error . show) id . Yaml.decodeEither' @UserSettings . BS8.unlines $
