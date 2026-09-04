@@ -4,4 +4,3 @@ import UI
 
 main :: IO ()
 main = UI.main
-
