@@ -43,7 +43,7 @@ data RowSpec = RowSpec
   , setDefault :: Mutation
   , rank :: Int
   , releaseDay :: Maybe Day
-  , hlsPowered :: Bool
+  , passesHlsFilter :: Bool
   , latestInFamily :: Bool
   , statusLabel :: Text
   }
@@ -100,7 +100,7 @@ rowSpec tool newest rank lr =
     , setDefault = SetDefault tool (tvOf lr)
     , rank
     , releaseDay = lReleaseDay lr
-    , hlsPowered = passesHlsFilter tool lr
+    , passesHlsFilter = passesHlsFilter tool lr
     , latestInFamily = isLatestInFamily newest lr
     , statusLabel = statusLabelOf lr
     }

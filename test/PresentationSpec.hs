@@ -137,7 +137,7 @@ tests =
                     , hlsPowered = True
                     }
                 specs = ghcRows (Curated True) [dated, lr914]
-            ((\s -> (s.releaseDay, s.hlsPowered)) <$> Vector.toList specs)
+            ((\s -> (s.releaseDay, s.passesHlsFilter)) <$> Vector.toList specs)
               @?= [(Nothing, False), (Just (fromGregorian 2025 3 22), True)]
         , testCase "latestInFamily marks one row per major.minor" $ do
             let rows =
