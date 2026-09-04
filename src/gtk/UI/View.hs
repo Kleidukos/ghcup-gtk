@@ -16,27 +16,21 @@ newtype RowCallbacks = RowCallbacks
   { onSubmit :: Mutation -> IO ()
   }
 
--- | One renderer for a tool's version list. 'UI.Registry' talks to a
--- renderer only through this record, so the simple list and the advanced
--- table are interchangeable and neither knows about the other.
 data View = View
   { widget :: Gtk.Widget
-  -- ^ The renderer's root widget, mounted in its tool pane.
+  -- ^ The renderer's root widget
   , setRows :: RowCallbacks -> ToolRows -> IO ()
-  -- ^ Replace the rendered rows, busy state included ('RowSpec.progress').
+  -- ^ Replace the rendered rows
   , setSensitive :: Bool -> IO ()
   }
 
--- | A version tag ("latest", "recommended") rendered the same way in every
--- renderer; the caller attaches it.
 pillLabel :: Text -> IO Gtk.Label
 pillLabel text = do
   pill <- new Gtk.Label [#label := text, #valign := Gtk.AlignCenter]
   dimCaption pill
   pure pill
 
--- | Small muted text. ".dim-label" was renamed ".dimmed" in libadwaita 1.7;
--- setting both keeps the muted style on either side of our 1.5 floor.
+-- | Small muted text. ".dim-label" was renamed ".dimmed" in libadwaita 1.7.
 dimCaption :: Gtk.Label -> IO ()
 dimCaption label = do
   label.addCssClass "caption"

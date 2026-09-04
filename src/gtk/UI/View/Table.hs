@@ -176,9 +176,6 @@ build window initialSort initialFilters tableCallbacks = do
         set columnView [#sensitive := b]
         set filterBar [#sensitive := b]
 
-      -- Apply state this table did not originate. Setting the checkboxes fires
-      -- #toggled, whose handler reports the value back; the model sees no
-      -- change and emits nothing, so this does not loop.
       applyState sort filters = do
         applySort columnView columns sort
         hlsCheck.setActive filters.hlsPoweredOnly

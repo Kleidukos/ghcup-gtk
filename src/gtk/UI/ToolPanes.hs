@@ -25,8 +25,6 @@ displayName = \case
   HLS -> "Haskell Language Server"
   Stack -> "Stack"
 
--- | Stable 'Gtk.Stack' page identifier. Deliberately not 'toolName':
--- that is user-facing copy and may be reworded; this may not.
 pageName :: SupportedTool -> Text
 pageName = \case
   GHC -> "ghc"
@@ -34,9 +32,6 @@ pageName = \case
   HLS -> "hls"
   Stack -> "stack"
 
--- | One tool's widgets: its sidebar entry and the bin that holds the
--- active renderer. Only one renderer exists at a time; switching modes
--- replaces the bin's child ('UI.Registry.switchTo').
 data ToolPane = ToolPane
   { tool :: SupportedTool
   , sidebarRow :: Adw.ActionRow
@@ -47,7 +42,6 @@ data ToolPanes = ToolPanes
   { sidebar :: Gtk.ListBox
   , pages :: Gtk.Stack
   , panes :: Vector ToolPane
-  -- ^ In 'supportedTools' order, which is also the sidebar row order.
   }
 
 build :: IO ToolPanes

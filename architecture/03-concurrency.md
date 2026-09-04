@@ -9,7 +9,7 @@ GTK is not thread-safe: every widget call must happen on the thread running
 the GTK main loop.
 
 ### Worker thread
-ghcup operations are slow; on the main thread they would freeze the window.
+Network and Disk operations can be slow; on the main thread they would freeze the window.
 `Worker` forks a single thread at startup that loops forever: take a `Job`
 from an STM `TQueue`, run it, repeat. One thread because on-disk mutations
 must be serialised.
