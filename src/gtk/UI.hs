@@ -57,8 +57,9 @@ loadCSS = do
       >>= \case
         Nothing -> error "Could not find Display!"
         Just d -> pure d
+  cssPath <- liftIO (Paths.getDataFileName "data/style.css")
   cssProvider <- Gtk.cssProviderNew
-  Gtk.cssProviderLoadFromPath cssProvider "data/style.css"
+  Gtk.cssProviderLoadFromPath cssProvider cssPath
   Gtk.styleContextAddProviderForDisplay
     display
     cssProvider

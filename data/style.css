@@ -1,0 +1,3 @@
+columnview.zebra-stripes > listview > row:nth-child(odd) {
+  background-color: alpha(currentColor, 0.07);
+}

@@ -72,7 +72,7 @@ build window initialSort initialFilters tableCallbacks = do
   sorted <- new Gtk.SortListModel [#model := filtered]
   selection <- new Gtk.NoSelection [#model := sorted]
 
-  columnView <- new Gtk.ColumnView [#showRowSeparators := True]
+  columnView <- new Gtk.ColumnView [#showRowSeparators := True, #cssClasses := ["zebra-stripes"]]
   columnView.setModel (Just selection)
 
   -- Version sorts on RowSpec.rank, which counts down from the newest row, so
