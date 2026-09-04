@@ -7,25 +7,31 @@ import Data.GI.Base
 import Data.Int (Int32)
 import Data.Maybe (isJust, isNothing)
 import Data.Text (Text)
+import Data.Versions (Version)
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 import GI.Pango qualified as Pango
 
-import Presentation.Row (RowAction (..), RowSpec (..), installVerb)
-import Toolchain.Types (Mutation (..), Progress (..), canCompileFromSource)
+import Presentation.Row (RowAction (..), RowSpec (..), defaultAction, installMutation, installVerb, setDefaultMutation)
+import Toolchain.Types (Progress (..), canCompileFromSource)
 import UI.CompileOptionsDialog qualified as CompileOptionsDialog
-import UI.Dialog qualified as Dialog
 import UI.InstallOptionsDialog qualified as InstallOptionsDialog
 import UI.View (RowCallbacks (..), captionLabel)
 
+windowOf :: (Gtk.IsWidget w) => w -> IO (Maybe Adw.ApplicationWindow)
+windowOf widget =
+  Gtk.widgetGetRoot widget >>= \case
+    Nothing -> pure Nothing
+    Just root -> castTo Adw.ApplicationWindow root
+
 build
-  :: Adw.ApplicationWindow
-  -> RowCallbacks
+  :: RowCallbacks
   -> Gtk.CheckButton
   -> Int32
+  -> [Version]
   -> RowSpec
   -> IO Gtk.Widget
-build window callbacks defaultGroup phaseWidth spec = do
+build callbacks defaultGroup phaseWidth installedGhcs spec = do
   box <-
     new
       Gtk.Box
@@ -46,7 +52,7 @@ build window callbacks defaultGroup phaseWidth spec = do
     check.setGroup (Just defaultGroup)
     void $ on check #toggled $ do
       active <- check.getActive
-      when (active && not spec.isDefault) $ callbacks.onSubmit spec.setDefault
+      when (active && not spec.isDefault) $ callbacks.onSubmit (setDefaultMutation spec)
     box.append check
 
   phaseLabel <-
@@ -60,17 +66,15 @@ build window callbacks defaultGroup phaseWidth spec = do
   captionLabel phaseLabel
   progressBar <-
     new Gtk.ProgressBar [#valign := Gtk.AlignCenter, #visible := isJust spec.progress]
+  let action = defaultAction spec
   actionButton <-
     new
       Gtk.Button
-      [ #label := spec.action.label
+      [ #label := action.label
       , #valign := Gtk.AlignCenter
       , #visible := isNothing spec.progress
       ]
-  void $
-    on actionButton #clicked $
-      Dialog.confirm window spec.action.confirmation $ \confirmed ->
-        when confirmed $ callbacks.onSubmit spec.action.job
+  void $ on actionButton #clicked $ callbacks.onConfirm action
 
   box.append phaseLabel
   box.append progressBar
@@ -106,8 +110,9 @@ build window callbacks defaultGroup phaseWidth spec = do
   menuButton.setPopover (Just popover)
   void $ on optionsItem #clicked $ do
     popover.popdown
-    InstallOptionsDialog.present window spec $ \opts ->
-      callbacks.onSubmit (Install spec.tool spec.installReq opts)
+    mwindow <- windowOf optionsItem
+    forM_ mwindow $ \window ->
+      InstallOptionsDialog.present window spec (callbacks.onSubmit . installMutation spec)
 
   when (canCompileFromSource spec.tool) $ do
     compileItem <-
@@ -120,7 +125,9 @@ build window callbacks defaultGroup phaseWidth spec = do
     menuBox.append compileWidget
     void $ on compileItem #clicked $ do
       popover.popdown
-      CompileOptionsDialog.present window spec callbacks.onSubmit
+      mwindow <- windowOf compileItem
+      forM_ mwindow $ \window ->
+        CompileOptionsDialog.present window installedGhcs spec callbacks.onSubmit
 
   box.append menuButton
 

@@ -142,6 +142,7 @@ library
     text-display,
     time,
     vector,
+    versions,
 
   pkgconfig-depends: libadwaita-1 >=1.5
 

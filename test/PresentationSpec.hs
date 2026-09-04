@@ -23,13 +23,13 @@ tests =
     [ testGroup
         "tool confirmations"
         [ testCase "install: suggested, not destructive, names the version" $ do
-            let spec = installConfirmation ghc lr914
+            let spec = installConfirmation (Vector.head (ghcRows [lr914]))
             spec.heading @?= "Install GHC 9.14.1?"
             spec.body @?= "The download may take several minutes."
             spec.affirmLabel @?= "Install"
             spec.destructive @?= False
         , testCase "uninstall is destructive" $ do
-            let spec = removeConfirmation ghc lr914
+            let spec = removeConfirmation (Vector.head (ghcRows [lr914]))
             spec.heading @?= "Uninstall GHC 9.14.1?"
             spec.body @?= "The files will be removed from your system."
             spec.affirmLabel @?= "Uninstall"
@@ -90,7 +90,7 @@ tests =
             let dflt = mkLR "9.10.3" [Recommended] True True
                 inst = mkLR "9.8.4" [] True False
                 specs = ghcRows [lr914, dflt, inst]
-            ((\s -> (s.installed, s.isDefault, s.statusLabel)) <$> specs)
+            ((\s -> (s.installed, s.isDefault, statusLabel s)) <$> specs)
               @?= Vector.fromList
                 [ (False, False, "")
                 , (True, True, "default")
@@ -98,13 +98,13 @@ tests =
                 ]
             ((.pills) <$> specs)
               @?= Vector.fromList [[LatestVersion], [RecommendedVersion], []]
-            ((\s -> (s.action.label, s.action.job)) <$> specs)
+            ((\s -> ((defaultAction s).label, (defaultAction s).job)) <$> specs)
               @?= Vector.fromList
                 [ ("Install", Install ghc (reqOf lr914) defaultInstallOptions)
                 , ("Remove", Uninstall ghc (tvOf dflt))
                 , ("Remove", Uninstall ghc (tvOf inst))
                 ]
-            ((.setDefault) <$> specs)
+            (setDefaultMutation <$> specs)
               @?= Vector.fromList
                 [ SetDefault ghc (tvOf lr914)
                 , SetDefault ghc (tvOf dflt)
