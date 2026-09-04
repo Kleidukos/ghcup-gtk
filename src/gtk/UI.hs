@@ -30,6 +30,7 @@ import UI.Shell (Shell (..))
 import UI.Shell qualified as Shell
 import UI.Shortcuts qualified as Shortcuts
 import UI.View (RowCallbacks (..))
+import UI.View.Table qualified as TableView
 import Worker qualified
 
 main :: IO ()
@@ -58,9 +59,13 @@ activate app = do
   shell <- Shell.build app
   dirs <- GHCup.ghcupDirs
   (config, configWarning) <- runEff (runFileSystemIO Config.load)
-  registry <- Registry.build shell.window shell.panes config
   modelRef <- newIORef (Session.initialModel dirs config)
   worker <- Worker.new
+
+  dispatchRef <- newIORef (\_ -> pure ())
+  registry <-
+    Registry.build shell.window shell.panes config $
+      tableCallbacks (\event -> readIORef dispatchRef >>= ($ event))
 
   let runtime = Runtime {app, shell, registry, worker, dirs, dispatch}
       dispatch event = do
@@ -73,6 +78,8 @@ activate app = do
         void $ GLib.idleAdd GLib.PRIORITY_DEFAULT_IDLE $ do
           dispatch (Session.WorkerMsg msg)
           pure False
+
+  writeIORef dispatchRef dispatch
 
   Worker.start worker notify
 
@@ -108,8 +115,10 @@ interpretEffect rt = \case
     rt.dispatch (Session.PathFixDone result)
   Session.SetPathBanner spec ->
     PathBanner.render rt.shell.pathBanner (rt.dispatch Session.PathFixConfirmed) spec
-  Session.SetViewMode _ -> pure ()
-  Session.SetTableState _ _ -> pure ()
+  Session.SwitchRenderer mode plan -> do
+    Registry.setViewMode rt.registry mode
+    Registry.rebuild rt.registry (callbacks rt) plan
+  Session.SetTableState sort filters -> Registry.applyTableState rt.registry sort filters
   where
     pageOf :: Session.Phase -> Text
     pageOf = \case
@@ -119,6 +128,13 @@ interpretEffect rt = \case
 
 callbacks :: Runtime -> RowCallbacks
 callbacks rt = RowCallbacks {onSubmit = rt.dispatch . Session.Submitted . Mutate}
+
+tableCallbacks :: (Session.Event -> IO ()) -> TableView.TableCallbacks
+tableCallbacks dispatch =
+  TableView.TableCallbacks
+    { onSortChanged = dispatch . Session.ConfigChanged . Config.SetTableSort
+    , onFiltersChanged = dispatch . Session.ConfigChanged . Config.SetTableFilters
+    }
 
 runPathCheck :: Runtime -> IO ()
 runPathCheck rt = do
