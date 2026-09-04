@@ -94,6 +94,7 @@ library
     UI.PreferencesWindow
     UI.Row
     UI.RowRegistry
+    UI.Shell
     UI.ToolList
 
   build-depends:
