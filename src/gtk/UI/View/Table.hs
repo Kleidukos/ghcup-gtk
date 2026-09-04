@@ -10,27 +10,29 @@ import Data.Int (Int32)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Ord (Down (..))
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Display
 import Data.Vector qualified as Vector
 import Data.Versions (Version)
 import Foreign.Ptr (Ptr, castPtr)
+import GHCup.Types (Tool)
 import GI.Adw qualified as Adw
 import GI.GObject qualified as GObject
 import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
 
-import Config (Config (..), Filters, SortColumn (..), SortDirection (..), TableSort (..), sortColumnFromName, sortColumnName)
+import Config (Config (..), SortColumn (..), SortDirection (..), TableSort (..), sortColumnFromName, sortColumnName)
+import Presentation.Filter (extraFiltersFor, filtersFor)
 import Presentation.Row (RowSpec (..), ToolRows (..), matchesFilters, statusLabel)
 import Toolchain.Types (rowKeyText)
-import UI.View (FilterBar (..), RowCallbacks, View (..), buildFilterBar, emptyStateStack, pillLabel)
+import UI.View (RowCallbacks, View (..), buildFilterBar, emptyStateStack, pillLabel)
 import UI.View.ActionStrip qualified as ActionStrip
 
 -- | How the table reports state the user changed, for 'Config' to remember.
-data TableCallbacks = TableCallbacks
+newtype TableCallbacks = TableCallbacks
   { onSortChanged :: TableSort -> IO ()
-  , onFiltersChanged :: Filters -> IO ()
   }
 
 -- | The advanced renderer: a sortable, filterable 'Gtk.ColumnView'.
@@ -40,13 +42,15 @@ data TableCallbacks = TableCallbacks
 -- subclass carrying a Haskell record, so every sorter, filter and cell
 -- callback looks its row up by key.
 build
-  :: Config
+  :: Tool
+  -> Config
   -> RowCallbacks
   -> TableCallbacks
   -> IO View
-build config rowCallbacks tableCallbacks = do
+build tool config rowCallbacks tableCallbacks = do
   specsRef <- newIORef Map.empty
-  filtersRef <- newIORef config.tableFilters
+  let initial = Set.empty
+  filtersRef <- newIORef initial
   installedGhcsRef <- newIORef []
 
   defaultGroup <- new Gtk.CheckButton []
@@ -131,13 +135,17 @@ build config rowCallbacks tableCallbacks = do
         count <- Gio.listModelGetNItems filtered
         setEmpty (count == 0)
 
-  bar <- buildFilterBar config.tableFilters tableCallbacks.onFiltersChanged
+  let onFiltersChanged filters = do
+        writeIORef filtersRef filters
+        Gtk.filterChanged rowFilter Gtk.FilterChangeDifferent
+        syncEmptyState
+  bar <- buildFilterBar [filtersFor tool, extraFiltersFor tool] initial onFiltersChanged
 
   void $ on filtered #itemsChanged $ \_position _removed _added -> syncEmptyState
   syncEmptyState
 
   content <- new Gtk.Box [#orientation := Gtk.OrientationVertical]
-  content.append bar.widget
+  content.append bar
   content.append contentStack
   widget <- Gtk.toWidget content
 
@@ -151,14 +159,10 @@ build config rowCallbacks tableCallbacks = do
 
       setSensitive b = do
         set columnView [#sensitive := b]
-        set bar.widget [#sensitive := b]
+        set bar [#sensitive := b]
 
-      applyConfig newConfig = do
+      applyConfig newConfig =
         applySort columnView columns newConfig.tableSort
-        writeIORef filtersRef newConfig.tableFilters
-        bar.setFilters newConfig.tableFilters
-        Gtk.filterChanged rowFilter Gtk.FilterChangeDifferent
-        syncEmptyState
 
   pure View {widget, setRows, setSensitive, applyConfig}
 

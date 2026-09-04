@@ -3,7 +3,6 @@ module Config
   , ConfigUpdate (..)
   , SortColumn (..)
   , SortDirection (..)
-  , Filters (..)
   , TableSort (..)
   , ViewMode (..)
   , applyUpdate
@@ -41,20 +40,12 @@ data TableSort = TableSort
   }
   deriving stock (Eq, Show)
 
-data Filters = Filters
-  { hlsPoweredOnly :: Bool
-  , latestPatchOnly :: Bool
-  }
-  deriving stock (Eq, Show)
-
 data ViewMode = Simple | Advanced
   deriving stock (Eq, Ord, Show)
 
 data Config = Config
   { viewMode :: ViewMode
   , tableSort :: TableSort
-  , tableFilters :: Filters
-  , listFilters :: Filters
   , windowWidth :: Int
   , windowHeight :: Int
   }
@@ -65,8 +56,6 @@ defaultConfig =
   Config
     { viewMode = Simple
     , tableSort = TableSort ByVersion Descending
-    , tableFilters = Filters True True
-    , listFilters = Filters False False
     , windowWidth = 960
     , windowHeight = 560
     }
@@ -75,8 +64,6 @@ defaultConfig =
 data ConfigUpdate
   = SetViewMode ViewMode
   | SetTableSort TableSort
-  | SetTableFilters Filters
-  | SetListFilters Filters
   | SetWindowSize Int Int
   deriving stock (Eq, Show)
 
@@ -84,8 +71,6 @@ applyUpdate :: ConfigUpdate -> Config -> Config
 applyUpdate update config = case update of
   SetViewMode mode -> config {viewMode = mode}
   SetTableSort sort -> config {tableSort = sort}
-  SetTableFilters filters -> config {tableFilters = filters}
-  SetListFilters filters -> config {listFilters = filters}
   SetWindowSize width height -> config {windowWidth = width, windowHeight = height}
 
 parseConfigEither :: Text -> Either Text Config
@@ -102,19 +87,11 @@ parseConfigEither input = configOf <$> KDL.parse input
                     then Descending
                     else Ascending
               }
-        , tableFilters = filtersOf "filter-hls-powered" "filter-latest-patch" defaultConfig.tableFilters doc
-        , listFilters = filtersOf "list-filter-hls-powered" "list-filter-latest-patch" defaultConfig.listFilters doc
         , windowWidth = int "window-width" defaultConfig.windowWidth doc
         , windowHeight = int "window-height" defaultConfig.windowHeight doc
         }
 
     sortColumn doc = sortColumnFromName =<< stringArg "table-sort-column" doc
-
-    filtersOf hlsKey latestKey fallback doc =
-      Filters
-        { hlsPoweredOnly = bool hlsKey fallback.hlsPoweredOnly doc
-        , latestPatchOnly = bool latestKey fallback.latestPatchOnly doc
-        }
 
     bool name fallback doc = fromMaybe fallback (boolArg name doc)
 
@@ -145,14 +122,9 @@ renderConfig config =
           [ stringNode "view-mode" (viewModeName config.viewMode)
           , stringNode "table-sort-column" (sortColumnName config.tableSort.column)
           , boolNode "table-sort-descending" (config.tableSort.direction == Descending)
+          , intNode "window-width" config.windowWidth
+          , intNode "window-height" config.windowHeight
           ]
-            -- The table keys keep their unprefixed legacy names so existing
-            -- config files stay valid; only the list keys carry a prefix.
-            <> filterNodes "filter-hls-powered" "filter-latest-patch" config.tableFilters
-            <> filterNodes "list-filter-hls-powered" "list-filter-latest-patch" config.listFilters
-            <> [ intNode "window-width" config.windowWidth
-               , intNode "window-height" config.windowHeight
-               ]
       , ext = KDL.def
       }
 
@@ -180,36 +152,31 @@ sortColumnFromName = \case
   "status" -> Just ByStatus
   _ -> Nothing
 
-filterNodes :: Text -> Text -> Filters -> [KDL.Node]
-filterNodes hlsKey latestKey filters =
-  [ boolNode hlsKey filters.hlsPoweredOnly
-  , boolNode latestKey filters.latestPatchOnly
-  ]
-
 boolNode :: Text -> Bool -> KDL.Node
-boolNode name value = node name (KDL.Bool value)
+boolNode name value = node name [KDL.Bool value]
 
 stringNode :: Text -> Text -> KDL.Node
-stringNode name value = node name (KDL.String value)
+stringNode name value = node name [KDL.String value]
 
 intNode :: Text -> Int -> KDL.Node
-intNode name value = node name (KDL.Number (fromIntegral value))
+intNode name value = node name [KDL.Number (fromIntegral value)]
 
-node :: Text -> KDL.ValueData -> KDL.Node
-node name value =
+node :: Text -> [KDL.ValueData] -> KDL.Node
+node name values =
   KDL.Node
     { ann = Nothing
     , name = KDL.toIdentifier name
-    , entries =
-        [ KDL.Entry
-            { name = Nothing
-            , value = KDL.Value {ann = Nothing, data_ = value, ext = KDL.def}
-            , ext = KDL.def
-            }
-        ]
+    , entries = entryOf <$> values
     , children = Nothing
     , ext = KDL.def
     }
+  where
+    entryOf value =
+      KDL.Entry
+        { name = Nothing
+        , value = KDL.Value {ann = Nothing, data_ = value, ext = KDL.def}
+        , ext = KDL.def
+        }
 
 configFile :: (FileSystem :> es) => Eff es FilePath
 configFile = do

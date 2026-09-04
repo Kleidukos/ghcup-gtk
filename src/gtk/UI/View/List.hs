@@ -1,32 +1,28 @@
 module UI.View.List
-  ( ListCallbacks (..)
-  , build
+  ( build
   ) where
 
 import Control.Monad (forM_)
 import Data.GI.Base
 import Data.IORef
+import Data.Set qualified as Set
 import Data.Vector qualified as Vector
+import GHCup.Types (Tool)
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
-import Config (Config (..), Filters)
+import Presentation.Filter (filtersFor)
 import Presentation.Row (ToolRows (..), matchesFilters)
-import UI.View (FilterBar (..), RowCallbacks, View (..), buildFilterBar, emptyStateStack)
+import UI.View (RowCallbacks, View (..), buildFilterBar, emptyStateStack)
 import UI.View.List.Row qualified as Row
 
--- | How the list reports filter changes
-newtype ListCallbacks = ListCallbacks
-  { onFiltersChanged :: Filters -> IO ()
-  }
-
 build
-  :: Config
+  :: Tool
   -> RowCallbacks
-  -> ListCallbacks
   -> IO View
-build config rowCallbacks listCallbacks = do
-  filtersRef <- newIORef config.listFilters
+build tool rowCallbacks = do
+  let initial = Set.empty
+  filtersRef <- newIORef initial
   rowsRef <- newIORef Nothing
 
   defaultGroup <- new Gtk.CheckButton []
@@ -63,10 +59,13 @@ build config rowCallbacks listCallbacks = do
               listBox.append row
             setEmpty (Vector.null visible)
 
-  bar <- buildFilterBar config.listFilters listCallbacks.onFiltersChanged
+  let onFiltersChanged filters = do
+        writeIORef filtersRef filters
+        render
+  bar <- buildFilterBar [filtersFor tool] initial onFiltersChanged
 
   content <- new Gtk.Box [#orientation := Gtk.OrientationVertical]
-  content.append bar.widget
+  content.append bar
   content.append contentStack
   widget <- Gtk.toWidget content
 
@@ -76,11 +75,8 @@ build config rowCallbacks listCallbacks = do
 
       setSensitive b = do
         set listBox [#sensitive := b]
-        set bar.widget [#sensitive := b]
+        set bar [#sensitive := b]
 
-      applyConfig newConfig = do
-        writeIORef filtersRef newConfig.listFilters
-        bar.setFilters newConfig.listFilters
-        render
+      applyConfig _ = pure ()
 
   pure View {widget, setRows, setSensitive, applyConfig}

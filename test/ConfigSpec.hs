@@ -24,23 +24,6 @@ tests =
   testGroup
     "Config"
     [ testGroup
-        "list filters"
-        [ testCase "parses the filters independently" $ do
-            let c = parseConfig "list-filter-hls-powered #true\nlist-filter-latest-patch #false"
-            c.listFilters @?= Filters True False
-        , testCase "malformed document → the whole default config" $
-            parseConfig "{{{{" @?= defaultConfig
-        , testCase "v1-style bare bool is malformed → default" $
-            (parseConfig "list-filter-hls-powered true").listFilters.hlsPoweredOnly @?= False
-        , testCase "fresh install: list view unfiltered, table view fully filtered" $ do
-            defaultConfig.listFilters @?= Filters False False
-            defaultConfig.tableFilters @?= Filters True True
-        , testCase "applyUpdate sets only the list filters" $ do
-            let c = applyUpdate (SetListFilters (Filters True False)) defaultConfig
-            c.listFilters @?= Filters True False
-            c.tableFilters @?= defaultConfig.tableFilters
-        ]
-    , testGroup
         "view mode"
         [ testCase "parses view-mode \"advanced\"" $
             (parseConfig "view-mode \"advanced\"").viewMode @?= Advanced
@@ -59,16 +42,11 @@ tests =
             (parseConfig "table-sort-column \"status\"").tableSort.column @?= ByStatus
         , testCase "an unknown sort column falls back to version" $
             (parseConfig "table-sort-column \"colour\"").tableSort.column @?= ByVersion
-        , testCase "parses the filters independently" $ do
-            let c = parseConfig "filter-hls-powered #true\nfilter-latest-patch #false"
-            c.tableFilters @?= Filters True False
         , testCase "round-trips every setting, and the defaults" $ do
             let c =
                   Config
                     { viewMode = Advanced
                     , tableSort = TableSort ByStatus Ascending
-                    , tableFilters = Filters True True
-                    , listFilters = Filters True False
                     , windowWidth = 1024
                     , windowHeight = 768
                     }
@@ -78,20 +56,18 @@ tests =
             -- the "old config.kdl without the new keys" case: every missing
             -- node falls back, so an upgrade changes nothing
             parseConfig "" @?= defaultConfig
-        , testCase "retired nodes (show-old-versions, advanced-interface) are ignored" $ do
+        , testCase "retired nodes (show-old-versions, advanced-interface, tool-filters) are ignored" $ do
             parseConfig "show-old-versions #true" @?= defaultConfig
             parseConfig "advanced-interface #true" @?= defaultConfig
+            parseConfig "tool-filters \"ghc\" \"hls-powered\"" @?= defaultConfig
         , testCase "a missing direction node keeps the default direction" $
             (parseConfig "table-sort-column \"released\"").tableSort
               @?= TableSort ByReleased Descending
         , testCase "applyUpdate touches only its own setting" $ do
             let sorted = applyUpdate (SetTableSort (TableSort ByReleased Ascending)) defaultConfig
             sorted.tableSort @?= TableSort ByReleased Ascending
-            sorted.tableFilters @?= defaultConfig.tableFilters
             sorted.viewMode @?= Simple
             (applyUpdate (SetViewMode Advanced) defaultConfig).viewMode @?= Advanced
-            (applyUpdate (SetTableFilters (Filters True False)) defaultConfig).tableFilters
-              @?= Filters True False
         ]
     , testGroup
         "window size"
@@ -112,9 +88,9 @@ tests =
             config @?= defaultConfig
             warning @?= Nothing
         , testCase "good file is read" $ do
-            let files = Map.singleton configPath "list-filter-hls-powered #true"
+            let files = Map.singleton configPath "view-mode \"advanced\""
                 ((config, warning), _) = runFs files load
-            config.listFilters.hlsPoweredOnly @?= True
+            config.viewMode @?= Advanced
             warning @?= Nothing
         , testCase "malformed file → defaults plus a warning naming the file" $ do
             let files = Map.singleton configPath "{{{{"
@@ -129,7 +105,7 @@ tests =
             config @?= defaultConfig
             isJust warning @? "expected a warning"
         , testCase "save-then-load round-trip" $ do
-            let c = defaultConfig {listFilters = Filters True False}
+            let c = defaultConfig {viewMode = Advanced}
                 ((saved, (loaded, warning)), _) =
                   runFs Map.empty $ do
                     saveResult <- save c
