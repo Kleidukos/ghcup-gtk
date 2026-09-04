@@ -60,4 +60,4 @@ and sorts before rendering (`Toolchain.Curation`):
 Curation runs when the row plan is derived from the model
 (`Presentation.Row.planRows`, re-run on every `Reconcile`). Narrowing
 beyond that (HLS-powered only, latest patch per major.minor) belongs to
-the filter bar both renderers share.
+the per-tool filter bar the list renderer builds.

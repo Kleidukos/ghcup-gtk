@@ -25,7 +25,7 @@ import Config (Config (..), ConfigUpdate (..), applyUpdate)
 import Presentation.Filter (Channel)
 import Presentation.Path (BannerSpec, appliedBanner, pathBanner)
 import Presentation.Row (Confirmation, RowAction (..), ToolRows, jobTitle, planRows)
-import Toolchain.Channels (applyChannels, nightliesUri, uriText)
+import Toolchain.Channels (BaseChannel, applyUrlSource, configuredChannels, nightliesUri, uriText)
 import Toolchain.Path (FileChange, PathStatus (..))
 import Toolchain.Types
   ( Freshness (..)
@@ -98,6 +98,8 @@ data Event
     PathFixDone (Either OpError ())
   | -- | The user changed the channel toggles in the preferences
     ChannelsChanged (Set Channel) (Maybe URI)
+  | -- | The user changed the url-source base radio
+    BaseChanged BaseChannel
   | -- | The new url-source list was written to the ghcup config
     ChannelsSaved [NewURLSource]
   deriving stock (Eq, Show)
@@ -113,7 +115,8 @@ data Effect
   | SaveConfig Config
   | CheckPath
   | ApplyPathFix (Vector FileChange)
-  | PersistChannels (Set Channel) (Maybe URI)
+  | -- | A 'Nothing' base leaves the configured base entries untouched.
+    PersistChannels (Maybe BaseChannel) (Set Channel) (Maybe URI)
   deriving stock (Eq, Show)
 
 initialModel :: GhcupDirs -> Config -> [NewURLSource] -> ChannelsEditability -> Model
@@ -139,6 +142,12 @@ bannerFor model = case model.pathModel of
 -- | The row plan for the model's current listings.
 rowPlan :: Model -> Map Tool ToolRows
 rowPlan model = planRows model.inFlight model.listings
+
+persistUrlSource :: Maybe BaseChannel -> Set Channel -> Maybe URI -> Model -> (Model, [Effect])
+persistUrlSource base channels nightlies model
+  | model.channelsEditable == ChannelsLocked = (model, [])
+  | applyUrlSource base channels nightlies model.urlSource == model.urlSource = (model, [])
+  | otherwise = (model, [PersistChannels base channels nightlies])
 
 step :: Event -> Model -> (Model, [Effect])
 step event model = case event of
@@ -191,13 +200,10 @@ step event model = case event of
             Right () -> [Toast (jobTitle mutation), CheckPath]
             Left err -> [ErrorToast err]
       in (model', release <> (Reconcile : outcome))
-  ChannelsChanged _ _
-    | model.channelsEditable == ChannelsLocked -> (model, [])
   ChannelsChanged channels nightlies ->
-    let sources = applyChannels channels nightlies model.urlSource
-    in if sources == model.urlSource
-         then (model, [])
-         else (model, [PersistChannels channels nightlies])
+    persistUrlSource Nothing channels nightlies model
+  BaseChanged base ->
+    persistUrlSource (Just base) (configuredChannels model.urlSource) (nightliesUri model.urlSource) model
   ChannelsSaved sources ->
     let saved = nightliesUri sources <&> uriText
         remembered

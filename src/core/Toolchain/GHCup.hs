@@ -48,7 +48,7 @@ import Text.PrettyPrint.HughesPJClass (Pretty, prettyShow)
 import URI.ByteString (URI)
 
 import Effects.FileSystem (atomicWriteBytes)
-import Toolchain.Channels (Channel, applyChannels, uriText)
+import Toolchain.Channels (BaseChannel, Channel, applyUrlSource, uriText)
 import Toolchain.Types
 
 -- | Every read and write of 'appStateRef' must happen on the single worker
@@ -100,22 +100,22 @@ urlSourceOf :: UserSettings -> [NewURLSource]
 urlSourceOf userSettings =
   maybe defaultSettings.urlSource fromURLSource userSettings.uUrlSource
 
--- | Enable exactly the requested channels in a ghcup config's url-source
--- list. Entries 'applyChannels' does not recognise as a channel pass
--- through, so the settings this is applied to must come from a fresh read.
-updateUrlSource :: Set Channel -> Maybe URI -> UserSettings -> UserSettings
-updateUrlSource requested nightlies userSettings =
+updateUrlSource :: Maybe BaseChannel -> Set Channel -> Maybe URI -> UserSettings -> UserSettings
+updateUrlSource base requested nightlies userSettings =
   userSettings
-    { uUrlSource = Just (SimpleList (applyChannels requested nightlies (urlSourceOf userSettings)))
+    { uUrlSource =
+        Just (SimpleList (applyUrlSource base requested nightlies (urlSourceOf userSettings)))
     }
 
--- | Enable exactly the requested channels in the user's ghcup config, a
--- full YAML re-encode like `ghcup config` performs. Non-channel entries
--- pass through from a fresh read of the config; the channel entries are
--- the dialog's requested set, overwriting whatever the config held. The
--- written list is returned. An unreadable config is never overwritten.
-saveUrlSource :: Set Channel -> Maybe URI -> IO (Either Text [NewURLSource])
-saveUrlSource requested nightlies =
+-- | Set the base, when one is requested, and enable exactly the requested
+-- channels in the user's ghcup config, a full YAML re-encode like `ghcup
+-- config` performs. Non-channel, non-base entries pass through from a
+-- fresh read of the config; the channel entries, and the base when one is
+-- requested, are the dialog's requested selections, overwriting whatever
+-- the config held. The written list is returned. An unreadable config is
+-- never overwritten.
+saveUrlSource :: Maybe BaseChannel -> Set Channel -> Maybe URI -> IO (Either Text [NewURLSource])
+saveUrlSource base requested nightlies =
   try @SomeException write <&> either (Left . Text.pack . show) id
   where
     write =
@@ -123,7 +123,7 @@ saveUrlSource requested nightlies =
         VLeft err ->
           pure (Left ("Not overwriting an unreadable ghcup config: " <> Text.pack (prettyShow err)))
         VRight userSettings -> do
-          let updated = updateUrlSource requested nightlies userSettings
+          let updated = updateUrlSource base requested nightlies userSettings
           path <- getConfigFilePath
           atomicWriteBytes path (Yaml.encode updated)
           pure (Right (urlSourceOf updated))
