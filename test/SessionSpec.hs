@@ -8,6 +8,7 @@ import Config (Config (..), ConfigUpdate (..), defaultConfig)
 import Fixtures (anError, dirs, installJob, installMutation, listingsFor, lr914, sampleChanges)
 import Presentation (appliedBanner, pathBanner, planRows)
 import Session
+import Toolchain.Curation (CurationMode (..))
 import Toolchain.Path (PathStatus (..))
 import Toolchain.Types
 
@@ -53,7 +54,7 @@ tests =
         [ testCase "ready: rerender, banner, list page" $ do
             let (model, effects) = step (WorkerMsg (ListingsReady sampleListings False)) model0
             effects
-              @?= [ Rerender (planRows False sampleListings)
+              @?= [ Rerender (planRows (Curated False) sampleListings)
                   , RevealStaleBanner False
                   , SwitchPage Ready
                   ]
@@ -99,7 +100,7 @@ tests =
             effects
               @?= [ Release
                   , SetIdle installKey
-                  , Rerender (planRows False sampleListings)
+                  , Rerender (planRows (Curated False) sampleListings)
                   , ErrorToast anError
                   , SetSensitive True
                   ]
@@ -134,7 +135,7 @@ tests =
             let (ready, _) = step (WorkerMsg (ListingsReady sampleListings False)) model0
                 newConfig = defaultConfig {showOldVersions = True}
                 (model, effects) = step (ConfigChanged (SetShowOldVersions True)) ready
-            effects @?= [SaveConfig newConfig, Rerender (planRows True sampleListings)]
+            effects @?= [SaveConfig newConfig, Rerender (planRows (Curated True) sampleListings)]
             model.config @?= newConfig
         , testCase "sequential config updates all apply" $ do
             let (model, _) =

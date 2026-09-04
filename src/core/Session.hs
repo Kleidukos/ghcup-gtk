@@ -16,6 +16,7 @@ import Data.Vector (Vector)
 
 import Config (Config (..), ConfigUpdate, applyUpdate)
 import Presentation (BannerSpec, ToolRows, appliedBanner, jobTitle, pathBanner, planRows)
+import Toolchain.Curation (CurationMode (..))
 import Toolchain.Path (FileChange, PathStatus (..))
 import Toolchain.Types
   ( GhcupDirs
@@ -110,7 +111,7 @@ bannerFor model = case model.pathModel of
 
 -- | The row plan for a model's current listings and preferences.
 rerender :: Model -> Effect
-rerender model = Rerender (planRows model.config.showOldVersions model.listings)
+rerender model = Rerender (planRows (Curated model.config.showOldVersions) model.listings)
 
 step :: Event -> Model -> (Model, [Effect])
 step event model =
