@@ -54,7 +54,8 @@ library core
     Effects.FileSystem
     Effects.Ghcup
     Effects.Notify
-    Presentation
+    Presentation.Path
+    Presentation.Row
     Session
     Toolchain.Curation
     Toolchain.GHCup
@@ -73,8 +74,10 @@ library core
     mtl,
     pretty,
     resourcet,
+    scientific,
     stm,
     text ^>=2.1,
+    time,
     variant,
     vector,
     versions,
@@ -89,11 +92,18 @@ library
     UI.Dialog
     UI.HeaderBar
     UI.PathBanner
-    UI.PreferencesWindow
-    UI.Row
-    UI.RowRegistry
-    UI.ToolList
+    UI.Preferences
+    UI.Registry
+    UI.Shell
+    UI.Shortcuts
+    UI.ToolPanes
+    UI.View
+    UI.View.List
+    UI.View.List.Row
+    UI.View.Table
 
+  other-modules: Paths_ghcup_gtk
+  autogen-modules: Paths_ghcup_gtk
   build-depends:
     base,
     containers,
@@ -102,14 +112,14 @@ library
     ghcup,
     ghcup-gtk:core,
     gi-adwaita ^>=1.0,
-    gi-gdk4 ^>=4.0,
     gi-gio ^>=2.0,
     gi-glib ^>=2.0,
-    gi-gsk ^>=4.0,
+    gi-gobject ^>=2.0,
     gi-gtk ^>=4.0,
     gi-pango ^>=1.0,
     haskell-gi-base,
     text,
+    time,
     vector,
 
   pkgconfig-depends: libadwaita-1 >=1.5
@@ -156,5 +166,6 @@ test-suite ghcup-gtk-test
     tasty,
     tasty-hunit,
     text,
+    time,
     vector,
     versions,

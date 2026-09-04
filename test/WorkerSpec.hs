@@ -127,4 +127,17 @@ tests =
                 (_, count) = run handlers [installJob, RefreshListings]
             count @?= 1
         ]
+    , testGroup
+        "progress lines"
+        [ testCase "a percentage becomes a fraction" $
+            progressOf "downloading 42%" @?= Progress "downloading 42%" (Just 0.42)
+        , testCase "decimal percentages parse" $
+            (progressOf "12.5%").fraction @?= Just 0.125
+        , testCase "the phase text is stripped" $
+            (progressOf "  unpacking \n").phase @?= "unpacking"
+        , testCase "no percentage → no fraction" $
+            (progressOf "unpacking").fraction @?= Nothing
+        , testCase "out-of-range percentages are ignored" $
+            (progressOf "999%").fraction @?= Nothing
+        ]
     ]

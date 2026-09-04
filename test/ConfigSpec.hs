@@ -33,9 +33,72 @@ tests =
         (parseConfig "{{{{").showOldVersions @?= False
     , testCase "v1-style bare bool is malformed → default" $
         (parseConfig "show-old-versions true").showOldVersions @?= False
-    , testCase "round-trip" $ do
-        let c = Config {showOldVersions = True}
-        (parseConfig (renderConfig c)).showOldVersions @?= True
+    , testGroup
+        "advanced interface"
+        [ testCase "parses advanced-interface #true" $
+            (parseConfig "advanced-interface #true").advancedInterface @?= True
+        , testCase "missing node → simple interface" $
+            (parseConfig "").advancedInterface @?= False
+        , testCase "viewMode follows the flag" $ do
+            viewMode defaultConfig @?= Simple
+            viewMode defaultConfig {advancedInterface = True} @?= Advanced
+        ]
+    , testGroup
+        "table state"
+        [ testCase "parses the sort column and direction" $ do
+            let c = parseConfig "table-sort-column \"released\"\ntable-sort-descending #false"
+            c.tableSort @?= TableSort ByReleased Ascending
+        , testCase "parses status as a sort column" $
+            (parseConfig "table-sort-column \"status\"").tableSort.column @?= ByStatus
+        , testCase "an unknown sort column falls back to version" $
+            (parseConfig "table-sort-column \"colour\"").tableSort.column @?= ByVersion
+        , testCase "parses the filters independently" $ do
+            let c = parseConfig "filter-hls-powered #true\nfilter-latest-patch #false"
+            c.tableFilters @?= TableFilters True False
+        , testCase "round-trips every setting" $ do
+            let c =
+                  Config
+                    { showOldVersions = True
+                    , advancedInterface = True
+                    , tableSort = TableSort ByStatus Ascending
+                    , tableFilters = TableFilters True True
+                    , windowWidth = 1024
+                    , windowHeight = 768
+                    }
+            parseConfig (renderConfig c) @?= c
+        , testCase "round-trips the defaults" $
+            parseConfig (renderConfig defaultConfig) @?= defaultConfig
+        , testCase "an empty document is exactly the defaults" $
+            -- the "old config.kdl without the new keys" case: every missing
+            -- node falls back, so an upgrade changes nothing
+            parseConfig "" @?= defaultConfig
+        , testCase "a missing direction node keeps the default direction" $
+            (parseConfig "table-sort-column \"released\"").tableSort
+              @?= TableSort ByReleased Descending
+        , testCase "applyUpdate touches only its own setting" $ do
+            let sorted = applyUpdate (SetTableSort (TableSort ByReleased Ascending)) defaultConfig
+            sorted.tableSort @?= TableSort ByReleased Ascending
+            sorted.tableFilters @?= defaultConfig.tableFilters
+            sorted.advancedInterface @?= False
+            (applyUpdate (SetAdvancedInterface True) defaultConfig).advancedInterface @?= True
+            (applyUpdate (SetTableFilters (TableFilters True False)) defaultConfig).tableFilters
+              @?= TableFilters True False
+        ]
+    , testGroup
+        "window size"
+        [ testCase "parses both dimensions" $ do
+            let c = parseConfig "window-width 1024\nwindow-height 768"
+            (c.windowWidth, c.windowHeight) @?= (1024, 768)
+        , testCase "missing nodes → defaults" $ do
+            (parseConfig "").windowWidth @?= 760
+            (parseConfig "").windowHeight @?= 560
+        , testCase "a non-positive or non-integral dimension falls back" $ do
+            (parseConfig "window-width -3").windowWidth @?= 760
+            (parseConfig "window-width 12.5").windowWidth @?= 760
+        , testCase "applyUpdate sets both dimensions" $ do
+            let c = applyUpdate (SetWindowSize 800 600) defaultConfig
+            (c.windowWidth, c.windowHeight) @?= (800, 600)
+        ]
     , testGroup
         "load/save (pure filesystem)"
         [ testCase "missing file → defaults, no warning" $ do
@@ -60,7 +123,7 @@ tests =
             config @?= defaultConfig
             isJust warning @? "expected a warning"
         , testCase "save-then-load round-trip" $ do
-            let c = Config {showOldVersions = True}
+            let c = defaultConfig {showOldVersions = True}
                 ((saved, (loaded, warning)), _) =
                   runFs Map.empty $ do
                     saveResult <- save c

@@ -27,20 +27,20 @@ tests =
               , mkLR "9.8.4" [] True True
               , mkLR "8.10.7" [] False False
               ]
-        versionsOf GHC (curate False (listingsFor GHC rows))
+        versionsOf GHC (curate (Curated False) (listingsFor GHC rows))
           @?= map lVer [rows !! 1, head rows, rows !! 2]
     , testCase "toggle reveals everything" $ do
         let rows =
               [ mkLR "9.14.1" [Latest] False False
               , mkLR "8.10.7" [] False False
               ]
-        length (versionsOf GHC (curate True (listingsFor GHC rows))) @?= 2
+        length (versionsOf GHC (curate (Curated True) (listingsFor GHC rows))) @?= 2
     , testCase "sorts descending by version" $ do
         let rows =
               [ mkLR "3.10.3.0" [] True False
               , mkLR "3.14.1.0" [Latest] False False
               ]
-        versionsOf Cabal (curate False (listingsFor Cabal rows))
+        versionsOf Cabal (curate (Curated False) (listingsFor Cabal rows))
           @?= map lVer [rows !! 1, head rows]
     , testCase "tools stay separate" $ do
         let listings =
@@ -48,12 +48,65 @@ tests =
                 [ (GHC, Vector.fromList [mkLR "9.14.1" [Latest] False False])
                 , (Cabal, Vector.fromList [mkLR "3.14.1.0" [Latest] False False])
                 ]
-        Map.keys (curate False listings) @?= Map.keys listings
+        Map.keys (curate (Curated False) listings) @?= Map.keys listings
     , testCase "empty input, empty output" $
-        curate False Map.empty @?= Map.empty
+        curate (Curated False) Map.empty @?= Map.empty
     , testCase "no-bindist rows hidden unless installed, even with toggle on" $ do
         let noBindist = (mkLR "9.14.1" [Latest] False False) {lNoBindist = True}
             installedNoBindist = (mkLR "9.8.4" [] True False) {lNoBindist = True}
-        versionsOf GHC (curate True (listingsFor GHC [noBindist, installedNoBindist]))
+        versionsOf GHC (curate (Curated True) (listingsFor GHC [noBindist, installedNoBindist]))
           @?= [lVer installedNoBindist]
+    , testCase "Full keeps installable rows the curated mode hides" $ do
+        let rows =
+              [ mkLR "9.14.1" [Latest] False False
+              , mkLR "9.12.1" [] False False
+              , mkLR "8.10.7" [] False False
+              ]
+        length (versionsOf GHC (curate Full (listingsFor GHC rows))) @?= 3
+    , testCase "Full still hides uninstalled rows with no bindist" $ do
+        let latest = mkLR "9.14.1" [Latest] False False
+            noBindist = (mkLR "9.12.1" [] False False) {lNoBindist = True}
+            rows = [latest, noBindist]
+        versionsOf GHC (curate Full (listingsFor GHC rows))
+          @?= [lVer latest]
+    , testGroup
+        "version families"
+        [ testCase "familyKey is (cross, major, minor)" $
+            familyKey (mkLR "9.12.2" [] False False) @?= Just (Nothing, 9, 12)
+        , testCase "a cross build is its own family" $ do
+            let cross = (mkLR "9.12.2" [] False False) {lCross = Just "aarch64-unknown-linux"}
+            familyKey cross @?= Just (Just "aarch64-unknown-linux", 9, 12)
+        , testCase "a non-numeric version has no family" $
+            familyKey (mkLR "head" [] False False) @?= Nothing
+        , testCase "latestPerFamily keeps the newest of each family" $ do
+            let newestMinor = mkLR "9.12.2" [] False False
+                rows =
+                  [ newestMinor
+                  , mkLR "9.12.1" [] False False
+                  , mkLR "9.10.1" [] False False
+                  ]
+                newest = latestPerFamily (Vector.fromList rows)
+            Map.lookup (Nothing, 9, 12) newest @?= Just (lVer newestMinor)
+            Map.lookup (Nothing, 9, 10) newest @?= Just (lVer (rows !! 2))
+        , testCase "latestPerFamily does not depend on input order" $ do
+            let rows = [mkLR "9.12.1" [] False False, mkLR "9.12.2" [] False False]
+            latestPerFamily (Vector.fromList rows)
+              @?= latestPerFamily (Vector.fromList (reverse rows))
+        , testCase "isLatestInFamily marks only the newest patch" $ do
+            let newer = mkLR "9.12.2" [] False False
+                older = mkLR "9.12.1" [] False False
+                newest = latestPerFamily (Vector.fromList [newer, older])
+            isLatestInFamily newest newer @? "9.12.2 is latest in 9.12"
+            not (isLatestInFamily newest older) @? "9.12.1 is not"
+        , testCase "a cross build never masks the native release" $ do
+            let native = mkLR "9.12.1" [] False False
+                cross = (mkLR "9.12.2" [] False False) {lCross = Just "aarch64-unknown-linux"}
+                newest = latestPerFamily (Vector.fromList [native, cross])
+            isLatestInFamily newest native @? "native 9.12.1 is latest of its family"
+            isLatestInFamily newest cross @? "cross 9.12.2 is latest of its family"
+        , testCase "a version with no family always counts as latest" $ do
+            let odd' = mkLR "head" [] False False
+                newest = latestPerFamily (Vector.fromList [odd'])
+            isLatestInFamily newest odd' @? "unparseable version is never filtered out"
+        ]
     ]
