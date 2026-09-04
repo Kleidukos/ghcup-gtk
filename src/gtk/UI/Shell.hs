@@ -65,7 +65,7 @@ build app config = do
   staleBanner <-
     new
       Adw.Banner
-      [ #title := "Version data may be outdated — network unreachable"
+      [ #title := "Version data may be outdated – network unreachable"
       , #revealed := False
       ]
   contentBox <- new Gtk.Box [#orientation := Gtk.OrientationVertical]
