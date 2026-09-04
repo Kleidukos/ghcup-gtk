@@ -61,14 +61,14 @@ tests =
             assertBool "expected an error" (isJust (ghcFieldError model GhcBuildConfigField))
             let make = stepGhcForm (GhcBuildSystemChanged (Just Make)) model
             fmap (.buildConfig) (toGhcOptions make) @?= Right (Just "/tmp/build.mk")
-        , testCase "picking an isolate dir clears and locks set" $ do
+        , testCase "picking an isolate dir locks set" $ do
             let model = ghcSteps [GhcSetToggled True, GhcIsolatePicked "/opt/ghc"] seededGhc
-            model.setCompile @?= False
             model.isolateDir @?= Just "/opt/ghc"
-            (stepGhcForm (GhcSetToggled True) model).setCompile @?= False
+            effectiveSetCompileGhc model @?= False
+            fmap (.setCompile) (toGhcOptions model) @?= Right False
             let cleared = stepGhcForm GhcIsolateCleared model
-            cleared.setCompile @?= True
             cleared.isolateDir @?= Nothing
+            effectiveSetCompileGhc cleared @?= True
         , testCase "patches accept a directory or URLs" $ do
             let byDir = stepGhcForm (GhcPatchesChanged "/opt/patches") seededGhc
             fmap (fmap (either Just (const Nothing)) . (.patches)) (toGhcOptions byDir)
@@ -112,13 +112,13 @@ tests =
         , testCase "a malformed target version blocks compilation" $ do
             let model = stepHlsForm (HlsTargetGhcsChanged "9.6.5 !!!") (initHlsFormModel [])
             assertBool "expected an error" (isJust (hlsFieldError model HlsTargetGhcsField))
-        , testCase "picking an isolate dir clears and locks set" $ do
+        , testCase "picking an isolate dir locks set" $ do
             let model =
                   hlsSteps
                     [HlsSetToggled True, HlsIsolatePicked "/opt/hls"]
                     (initHlsFormModel [mkV "9.6.5"])
-            model.setCompile @?= False
-            (stepHlsForm HlsIsolateCleared model).setCompile @?= True
+            effectiveSetCompileHls model @?= False
+            effectiveSetCompileHls (stepHlsForm HlsIsolateCleared model) @?= True
         , testCase "a malformed cabal.project.local URL blocks compilation" $ do
             let model =
                   stepHlsForm

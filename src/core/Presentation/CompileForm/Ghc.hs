@@ -6,6 +6,7 @@ module Presentation.CompileForm.Ghc
   , stepGhcForm
   , ghcFieldError
   , canCompileGhc
+  , effectiveSetCompileGhc
   , toGhcOptions
   ) where
 
@@ -13,7 +14,7 @@ import Control.Monad (void)
 import Data.Bifunctor (bimap)
 import Data.Either (isRight)
 import Data.Function ((&))
-import Data.Maybe (isJust)
+import Data.Maybe (isNothing)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Versions (Version, prettyVer)
@@ -33,7 +34,6 @@ data GhcFormModel = GhcFormModel
   , crossTarget :: Text
   , addConfArgs :: Text
   , setCompile :: Bool
-  , priorSetCompile :: Bool
   , overwriteVer :: Text
   , buildFlavour :: Text
   , buildSystem :: Maybe BuildSystem
@@ -76,7 +76,6 @@ initGhcFormModel installedGhcs =
     , crossTarget = ""
     , addConfArgs = ""
     , setCompile = False
-    , priorSetCompile = False
     , overwriteVer = ""
     , buildFlavour = ""
     , buildSystem = Nothing
@@ -95,16 +94,12 @@ stepGhcForm event model = case event of
   GhcPatchesChanged text -> model {patches = text}
   GhcCrossTargetChanged text -> model {crossTarget = text}
   GhcConfArgsChanged text -> model {addConfArgs = text}
-  GhcSetToggled b
-    | isJust model.isolateDir -> model
-    | otherwise -> model {setCompile = b, priorSetCompile = b}
+  GhcSetToggled b -> model {setCompile = b}
   GhcOverwriteChanged text -> model {overwriteVer = text}
   GhcFlavourChanged text -> model {buildFlavour = text}
   GhcBuildSystemChanged system -> model {buildSystem = system}
-  GhcIsolatePicked path
-    | isJust model.isolateDir -> model {isolateDir = Just path}
-    | otherwise -> model {isolateDir = Just path, setCompile = False}
-  GhcIsolateCleared -> model {isolateDir = Nothing, setCompile = model.priorSetCompile}
+  GhcIsolatePicked path -> model {isolateDir = Just path}
+  GhcIsolateCleared -> model {isolateDir = Nothing}
   GhcGitRefChanged text -> model {gitRef = text}
   GhcInstallTargetsChanged text -> model {installTargets = text}
   GhcDocsChanged text -> model {docs = text}
@@ -130,6 +125,9 @@ ghcFieldError model field = either Just (const Nothing) $ case field of
 canCompileGhc :: GhcFormModel -> Bool
 canCompileGhc = isRight . toGhcOptions
 
+effectiveSetCompileGhc :: GhcFormModel -> Bool
+effectiveSetCompileGhc model = isNothing model.isolateDir && model.setCompile
+
 toGhcOptions :: GhcFormModel -> Either Text CompileGhcOptions
 toGhcOptions model = do
   bootstrapGhc <- parsedBootstrap model.bootstrapGhc
@@ -147,7 +145,7 @@ toGhcOptions model = do
       , patches
       , crossTarget = nonEmpty model.crossTarget
       , addConfArgs = words (Text.unpack model.addConfArgs)
-      , setCompile = model.setCompile
+      , setCompile = effectiveSetCompileGhc model
       , overwriteVer
       , buildFlavour = Text.unpack <$> nonEmpty model.buildFlavour
       , buildSystem = model.buildSystem

@@ -103,6 +103,7 @@ library
     UI.Dialog
     UI.HeaderBar
     UI.InstallOptionsDialog
+    UI.OptionsDialog
     UI.PathBanner
     UI.Preferences
     UI.Registry

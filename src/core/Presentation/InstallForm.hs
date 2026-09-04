@@ -5,13 +5,14 @@ module Presentation.InstallForm
   , stepForm
   , urlError
   , canInstall
-  , setDefaultLocked
+  , effectiveSetDefault
+  , effectiveForce
   , toOptions
   ) where
 
 import Data.Bifunctor (bimap)
 import Data.Function ((&))
-import Data.Maybe (isJust)
+import Data.Maybe (isNothing)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import GHCup.Input.Parsers (uriParser)
@@ -25,8 +26,6 @@ data FormModel = FormModel
   { setDefault :: Bool
   , force :: Bool
   , isolate :: Maybe FilePath
-  , priorSetDefault :: Bool
-  , priorForce :: Bool
   , url :: Text
   , extraArgs :: Text
   , targets :: Text
@@ -49,8 +48,6 @@ initFormModel spec =
     { setDefault = spec.isDefault
     , force = spec.installed
     , isolate = Nothing
-    , priorSetDefault = spec.isDefault
-    , priorForce = spec.installed
     , url = ""
     , extraArgs = ""
     , targets = ""
@@ -59,31 +56,18 @@ initFormModel spec =
 stepForm :: FormEvent -> FormModel -> FormModel
 stepForm event model = case event of
   UrlChanged text -> model {url = text}
-  IsolatePicked path
-    | isJust model.isolate -> model {isolate = Just path}
-    | otherwise ->
-        model
-          { isolate = Just path
-          , setDefault = False
-          , force = False
-          }
-  IsolateCleared ->
-    model
-      { isolate = Nothing
-      , setDefault = model.priorSetDefault
-      , force = model.priorForce
-      }
-  SetDefaultToggled b
-    | setDefaultLocked model -> model
-    | otherwise -> model {setDefault = b, priorSetDefault = b}
-  ForceToggled b
-    | isJust model.isolate -> model {force = b}
-    | otherwise -> model {force = b, priorForce = b}
+  IsolatePicked path -> model {isolate = Just path}
+  IsolateCleared -> model {isolate = Nothing}
+  SetDefaultToggled b -> model {setDefault = b}
+  ForceToggled b -> model {force = b}
   ArgsChanged text -> model {extraArgs = text}
   TargetsChanged text -> model {targets = text}
 
-setDefaultLocked :: FormModel -> Bool
-setDefaultLocked model = isJust model.isolate
+effectiveSetDefault :: FormModel -> Bool
+effectiveSetDefault model = isNothing model.isolate && model.setDefault
+
+effectiveForce :: FormModel -> Bool
+effectiveForce model = isNothing model.isolate && model.force
 
 parsedUrl :: FormModel -> Either Text (Maybe URI)
 parsedUrl model
@@ -104,8 +88,8 @@ toOptions model = case parsedUrl model of
   Right bindistUrl ->
     Just
       defaultInstallOptions
-        { setAsDefault = model.setDefault
-        , forceInstall = model.force
+        { setAsDefault = effectiveSetDefault model
+        , forceInstall = effectiveForce model
         , installDir = maybe GHCupInternal IsolateDir model.isolate
         , bindistUrl
         , extraConfArgs = words (Text.unpack model.extraArgs)
