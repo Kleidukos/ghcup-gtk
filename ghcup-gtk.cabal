@@ -27,6 +27,7 @@ common options
     -Wno-unused-do-bind
     -fshow-hole-constraints
     -Wno-unticked-promoted-constructors
+    -fwrite-ide-info
 
   default-extensions:
     DuplicateRecordFields

@@ -4,8 +4,6 @@ with-compiler: ghc-9.14.1
 
 tests: True
 
-documentation: False
-
 test-show-details: direct
 
 semaphore: True
