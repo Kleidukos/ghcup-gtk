@@ -1,4 +1,4 @@
-start: ## Start the application
+run: ## Start the application
 	@cabal run
 
 deps: ## Install the dependencies of the backend
