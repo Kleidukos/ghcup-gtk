@@ -154,6 +154,8 @@ executable ghcup-gtk
 
 test-suite ghcup-gtk-test
   import: options
+  hs-source-dirs: test
+  -- cabal-gild: discover test/ --exclude test/Main.hs
   other-modules:
     ConfigSpec
     Fixtures
@@ -165,7 +167,6 @@ test-suite ghcup-gtk-test
     WorkerSpec
 
   type: exitcode-stdio-1.0
-  hs-source-dirs: test
   main-is: Main.hs
   build-depends:
     base,

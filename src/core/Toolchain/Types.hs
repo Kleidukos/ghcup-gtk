@@ -1,9 +1,6 @@
 module Toolchain.Types
-  ( SupportedTool (..)
-  , supportedTools
-  , toGhcupTool
-  , fromGhcupTool
-  , toolName
+  ( toolText
+  , sortTools
   , Listings
   , GhcupDirs (..)
   , Mutation (..)
@@ -20,40 +17,17 @@ module Toolchain.Types
   , UiMsg (..)
   ) where
 
+import Data.List qualified as List
 import Data.Map.Strict (Map)
-import Data.Maybe (listToMaybe)
+import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Vector (Vector)
-import Data.Vector qualified as Vector
 import GHCup.Command.List (ListResult (..))
-import GHCup.Types (TargetVersion (..), TargetVersionReq (..), Tool, cabal, ghc, hls, stack, tVerToText)
+import GHCup.Types (TargetVersion (..), TargetVersionReq (..), Tool (..), tVerToText, toolPriority)
 import Text.Read (readMaybe)
 
-data SupportedTool = GHC | Cabal | HLS | Stack
-  deriving stock (Eq, Ord, Show, Enum, Bounded)
-
-supportedTools :: Vector SupportedTool
-supportedTools = Vector.fromList [minBound .. maxBound]
-
-toGhcupTool :: SupportedTool -> Tool
-toGhcupTool = \case
-  GHC -> ghc
-  Cabal -> cabal
-  HLS -> hls
-  Stack -> stack
-
-fromGhcupTool :: Tool -> Maybe SupportedTool
-fromGhcupTool tool = Vector.find (\supported -> toGhcupTool supported == tool) supportedTools
-
-toolName :: SupportedTool -> Text
-toolName = \case
-  GHC -> "GHC"
-  Cabal -> "Cabal"
-  HLS -> "HLS"
-  Stack -> "Stack"
-
-type Listings = Map SupportedTool (Vector ListResult)
+type Listings = Map Tool (Vector ListResult)
 
 data GhcupDirs = GhcupDirs
   { ghcupBinDir :: FilePath
@@ -63,9 +37,9 @@ data GhcupDirs = GhcupDirs
 
 -- | A job that changes an installation and sends the UI a 'JobDone'.
 data Mutation
-  = Install SupportedTool TargetVersionReq
-  | Uninstall SupportedTool TargetVersion
-  | SetDefault SupportedTool TargetVersion
+  = Install Tool TargetVersionReq
+  | Uninstall Tool TargetVersion
+  | SetDefault Tool TargetVersion
   deriving stock (Eq, Show)
 
 data Job
@@ -79,10 +53,10 @@ tvOf lr = TargetVersion (lCross lr) (lVer lr)
 reqOf :: ListResult -> TargetVersionReq
 reqOf lr = TargetVersionReq (tvOf lr) (Just (fst (lRev lr)))
 
-newtype RowKey = RowKey (SupportedTool, Text)
+newtype RowKey = RowKey (Tool, Text)
   deriving stock (Eq, Ord, Show)
 
-keyOfListing :: SupportedTool -> ListResult -> RowKey
+keyOfListing :: Tool -> ListResult -> RowKey
 keyOfListing tool lr = RowKey (tool, tVerToText (tvOf lr))
 
 keyOfMutation :: Mutation -> RowKey
@@ -98,7 +72,7 @@ keyOfMutation mutation =
 -- | Stable text encoding of a 'RowKey', for widget models that can only hold
 -- strings
 rowKeyText :: RowKey -> Text
-rowKeyText (RowKey (tool, ver)) = Text.pack (show tool) <> ":" <> ver
+rowKeyText (RowKey (tool, ver)) = toolText tool <> ":" <> ver
 
 data Progress = Progress
   { phase :: Text
@@ -135,3 +109,13 @@ data UiMsg
   | JobProgress Job Progress
   | JobDone Mutation (Either OpError ())
   deriving stock (Eq, Show)
+
+-- | The tool's identifier as it appears in ghcup metadata, e.g. "ghc",
+-- "hlint".
+toolText :: Tool -> Text
+toolText (Tool name) = Text.pack name
+
+-- | Sidebar order: ghcup's priority ranking for the tools it knows
+-- (ghc, cabal, hls, stack, ghcup), then everything else alphabetically.
+sortTools :: [Tool] -> [Tool]
+sortTools = List.sortOn (\tool -> (fromMaybe maxBound (toolPriority tool), toolText tool))
