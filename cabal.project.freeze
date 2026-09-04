@@ -48,8 +48,8 @@ constraints: any.Cabal ==3.8.1.0,
              any.happy ==1.20.1.1,
              any.hashable ==1.4.2.0,
              hashable +integer-gmp -random-initial-seed,
-             any.haskell-gi ==0.26.4,
-             any.haskell-gi-base ==0.26.3,
+             any.haskell-gi ==0.26.5,
+             any.haskell-gi-base ==0.26.4,
              any.haskell-gi-overloading ==1.0,
              any.haskell-lexer ==1.1.1,
              any.hsc2hs ==0.68.9,
@@ -98,4 +98,4 @@ constraints: any.Cabal ==3.8.1.0,
              any.xml-types ==0.3.8,
              any.zlib ==0.6.3.0,
              zlib -bundled-c-zlib -non-blocking-ffi -pkg-config
-index-state: hackage.haskell.org 2023-05-23T10:11:14Z
+index-state: hackage.haskell.org 2023-05-31T01:01:17Z
