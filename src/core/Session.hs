@@ -12,6 +12,7 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Vector (Vector)
+import GHCup.Types (Tool)
 
 import Config (Config (..), ConfigUpdate (..), Filters, TableSort, applyUpdate)
 import Presentation.Path (BannerSpec, appliedBanner, pathBanner)
@@ -24,7 +25,6 @@ import Toolchain.Types
   , OpError
   , Progress (Progress)
   , RowKey
-  , SupportedTool
   , UiMsg (..)
   , keyOfMutation
   )
@@ -82,9 +82,9 @@ data Effect
   | RevealStaleBanner Bool
   | Toast Text
   | ErrorToast OpError
-  | Rerender (Map SupportedTool ToolRows)
+  | Rerender (Map Tool ToolRows)
   | SaveConfig Config
-  | SwitchRenderer (Map SupportedTool ToolRows) Config
+  | SwitchRenderer (Map Tool ToolRows) Config
   | SetTableState TableSort Filters
   | SetListState Filters
   | CheckPath
@@ -110,7 +110,7 @@ bannerFor model = case model.pathModel of
   FixApplied -> Just appliedBanner
 
 -- | The row plan for the model's current listings.
-rowPlan :: Model -> Map SupportedTool ToolRows
+rowPlan :: Model -> Map Tool ToolRows
 rowPlan model = planRows model.inFlight model.listings
 
 rerender :: Model -> Effect

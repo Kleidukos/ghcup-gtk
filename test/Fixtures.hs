@@ -15,7 +15,7 @@ import Data.Vector (Vector)
 import Data.Vector qualified as Vector
 import Data.Versions (version)
 import GHCup.Command.List (ListResult (..), RevTag (..))
-import GHCup.Types (Tag (..))
+import GHCup.Types (Tag (..), Tool, ghc)
 
 import Toolchain.Path (FileChange (..), WriteMode (..))
 import Toolchain.Types
@@ -45,12 +45,12 @@ anError :: OpError
 anError = OpError "boom" "details"
 
 installMutation :: Mutation
-installMutation = Install GHC (reqOf lr914)
+installMutation = Install ghc (reqOf lr914)
 
 installJob :: Job
 installJob = Mutate installMutation
 
-listingsFor :: SupportedTool -> [ListResult] -> Listings
+listingsFor :: Tool -> [ListResult] -> Listings
 listingsFor tool = Map.singleton tool . Vector.fromList
 
 sampleChanges :: Vector FileChange

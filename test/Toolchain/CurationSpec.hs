@@ -4,15 +4,15 @@ import Data.Map.Strict qualified as Map
 import Data.Vector qualified as Vector
 import Data.Versions (Version)
 import GHCup.Command.List (ListResult (..))
-import GHCup.Types (Tag (..))
+import GHCup.Types (Tag (..), Tool, cabal, ghc)
 import Test.Tasty
 import Test.Tasty.HUnit
 
 import Fixtures (listingsFor, mkLR)
 import Toolchain.Curation
-import Toolchain.Types (Listings, SupportedTool (..))
+import Toolchain.Types (Listings)
 
-versionsOf :: SupportedTool -> Listings -> [Version]
+versionsOf :: Tool -> Listings -> [Version]
 versionsOf tool listings =
   map lVer (Vector.toList (Map.findWithDefault Vector.empty tool listings))
 
@@ -26,19 +26,19 @@ tests =
               , mkLR "9.12.1" [] False False
               , mkLR "8.10.7" [] False False
               ]
-        length (versionsOf GHC (curate (listingsFor GHC rows))) @?= 3
+        length (versionsOf ghc (curate (listingsFor ghc rows))) @?= 3
     , testCase "sorts descending by version" $ do
         let rows =
               [ mkLR "3.10.3.0" [] True False
               , mkLR "3.14.1.0" [Latest] False False
               ]
-        versionsOf Cabal (curate (listingsFor Cabal rows))
+        versionsOf cabal (curate (listingsFor cabal rows))
           @?= map lVer [rows !! 1, head rows]
     , testCase "tools stay separate" $ do
         let listings =
               Map.fromList
-                [ (GHC, Vector.fromList [mkLR "9.14.1" [Latest] False False])
-                , (Cabal, Vector.fromList [mkLR "3.14.1.0" [Latest] False False])
+                [ (ghc, Vector.fromList [mkLR "9.14.1" [Latest] False False])
+                , (cabal, Vector.fromList [mkLR "3.14.1.0" [Latest] False False])
                 ]
         Map.keys (curate listings) @?= Map.keys listings
     , testCase "empty input, empty output" $
@@ -46,7 +46,7 @@ tests =
     , testCase "no-bindist rows hidden unless installed" $ do
         let noBindist = (mkLR "9.14.1" [Latest] False False) {lNoBindist = True}
             installedNoBindist = (mkLR "9.8.4" [] True False) {lNoBindist = True}
-        versionsOf GHC (curate (listingsFor GHC [noBindist, installedNoBindist]))
+        versionsOf ghc (curate (listingsFor ghc [noBindist, installedNoBindist]))
           @?= [lVer installedNoBindist]
     , testGroup
         "version families"
