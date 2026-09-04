@@ -214,12 +214,27 @@ jobs:
 
       - name: Update rolling head release
         if: github.ref == 'refs/heads/main'
+        env:
+          TAG: ghcup-gtk-head
+          RELEASES: repos/${{ github.repository }}/releases
         run: |
-          git tag -f ghcup-gtk-head
-          git push -f origin ghcup-gtk-head
-          gh release view ghcup-gtk-head >/dev/null 2>&1 || \
-            gh release create ghcup-gtk-head \
-              --prerelease \
-              --title "ghcup-gtk-head" \
-              --notes "Rolling build of the latest commit on main."
-          gh release upload ghcup-gtk-head packages/* --clobber
+          drafts() {
+            gh api "$RELEASES" --jq ".[] | select(.draft and .tag_name == \"$TAG\") | .id"
+          }
+          for id in $(drafts); do
+            gh api -X DELETE "$RELEASES/$id"
+          done
+          gh release create "$TAG" \
+            --draft \
+            --prerelease \
+            --title "$TAG" \
+            --notes "Rolling build of the latest commit on main." \
+            packages/*
+          draft_id="$(drafts)"
+          : "${draft_id:?no draft release found after upload}"
+          if published_id="$(gh api "$RELEASES/tags/$TAG" --jq .id 2>/dev/null)"; then
+            gh api -X DELETE "$RELEASES/$published_id"
+          fi
+          git tag -f "$TAG"
+          git push -f origin "$TAG"
+          gh api -X PATCH "$RELEASES/$draft_id" -F draft=false
