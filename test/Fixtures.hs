@@ -14,9 +14,9 @@ import Data.Text (Text)
 import Data.Vector (Vector)
 import Data.Vector qualified as Vector
 import Data.Versions (version)
-
 import GHCup.Command.List (ListResult (..), RevTag (..))
 import GHCup.Types (Tag (..))
+
 import Toolchain.Path (FileChange (..), WriteMode (..))
 import Toolchain.Types
 
@@ -39,7 +39,7 @@ lr914 :: ListResult
 lr914 = mkLR "9.14.1" [Latest] False False
 
 dirs :: GhcupDirs
-dirs = GhcupDirs{ghcupBinDir = "/home/u/.ghcup/bin", ghcupBaseDir = "/home/u/.ghcup"}
+dirs = GhcupDirs {ghcupBinDir = "/home/u/.ghcup/bin", ghcupBaseDir = "/home/u/.ghcup"}
 
 anError :: OpError
 anError = OpError "boom" "details"

@@ -27,14 +27,14 @@ newtype Config = Config
   deriving stock (Eq, Show)
 
 defaultConfig :: Config
-defaultConfig = Config{showOldVersions = False}
+defaultConfig = Config {showOldVersions = False}
 
 -- | A preference change
 data ConfigUpdate = SetShowOldVersions Bool
   deriving stock (Eq, Show)
 
 applyUpdate :: ConfigUpdate -> Config -> Config
-applyUpdate (SetShowOldVersions b) config = config{showOldVersions = b}
+applyUpdate (SetShowOldVersions b) config = config {showOldVersions = b}
 
 parseConfigEither :: Text -> Either Text Config
 parseConfigEither input = configOf <$> KDL.parse input
@@ -45,7 +45,7 @@ parseConfigEither input = configOf <$> KDL.parse input
             fromMaybe defaultConfig.showOldVersions (boolArg "show-old-versions" doc)
         }
     boolArg name doc = case KDL.getArgAt name doc of
-      Just KDL.Value{data_ = KDL.Bool b} -> Just b
+      Just KDL.Value {data_ = KDL.Bool b} -> Just b
       _ -> Nothing
 
 parseConfig :: Text -> Config

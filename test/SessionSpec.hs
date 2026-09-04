@@ -25,7 +25,7 @@ run = foldl' go (model0, [])
   where
     go (model, effects) event =
       let (model', new) = step event model
-       in (model', effects <> new)
+      in (model', effects <> new)
 
 tests :: TestTree
 tests =
@@ -132,7 +132,7 @@ tests =
             model.phase @?= Loading
         , testCase "config change saves and rerenders with the new flag" $ do
             let (ready, _) = step (WorkerMsg (ListingsReady sampleListings False)) model0
-                newConfig = defaultConfig{showOldVersions = True}
+                newConfig = defaultConfig {showOldVersions = True}
                 (model, effects) = step (ConfigChanged (SetShowOldVersions True)) ready
             effects @?= [SaveConfig newConfig, Rerender (planRows True sampleListings)]
             model.config @?= newConfig
@@ -148,7 +148,7 @@ tests =
         "PATH fix"
         [ testCase "PathOk: no banner" $
             step (PathChecked PathOk) model0
-              @?= (model0{pathModel = Checked PathOk}, [SetPathBanner Nothing])
+              @?= (model0 {pathModel = Checked PathOk}, [SetPathBanner Nothing])
         , testCase "a fixable status renders the offer banner" $ do
             let status = NeedsFixPlanned sampleChanges
                 (model, effects) = step (PathChecked status) model0

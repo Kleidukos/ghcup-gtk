@@ -119,62 +119,60 @@ step event model =
         [ SetSensitive (Set.null model'.inFlight)
         | Set.null model'.inFlight /= Set.null model.inFlight
         ]
-   in (model', effects <> sensitivity)
+  in (model', effects <> sensitivity)
 
 apply :: Event -> Model -> (Model, [Effect])
 apply event model = case event of
   Submitted job@(Mutate mutation)
     | key <- keyOfMutation mutation
     , not (Set.member key model.inFlight) ->
-        ( model{inFlight = Set.insert key model.inFlight}
+        ( model {inFlight = Set.insert key model.inFlight}
         , [Hold, Enqueue job]
         )
   Submitted job -> (model, [Enqueue job])
   RetryClicked ->
-    (model{phase = Loading}, [SwitchPage Loading, Enqueue RefreshListings])
+    (model {phase = Loading}, [SwitchPage Loading, Enqueue RefreshListings])
   ConfigChanged update ->
-    let model' = model{config = applyUpdate update model.config}
-     in (model', [SaveConfig model'.config, rerender model'])
+    let model' = model {config = applyUpdate update model.config}
+    in (model', [SaveConfig model'.config, rerender model'])
   PathChecked status ->
-    let model' = model{pathModel = Checked status}
-     in (model', [SetPathBanner (bannerFor model')])
+    let model' = model {pathModel = Checked status}
+    in (model', [SetPathBanner (bannerFor model')])
   PathFixConfirmed -> case model.pathModel of
     Checked (NeedsFixPlanned changes) -> (model, [ApplyPathFix changes])
     _ -> (model, [])
   PathFixDone (Right ()) ->
-    let model' = model{pathModel = FixApplied}
-     in (model', [SetPathBanner (bannerFor model')])
+    let model' = model {pathModel = FixApplied}
+    in (model', [SetPathBanner (bannerFor model')])
   PathFixDone (Left err) -> (model, [ErrorToast err])
   WorkerMsg msg -> case msg of
     ListingsReady listings stale ->
-      let model' = model{listings, phase = Ready}
-       in ( model'
-          ,
-            [ rerender model'
-            , RevealStaleBanner stale
-            , SwitchPage Ready
-            ]
-          )
+      let model' = model {listings, phase = Ready}
+      in ( model'
+         ,
+           [ rerender model'
+           , RevealStaleBanner stale
+           , SwitchPage Ready
+           ]
+         )
     ListingsFailed err -> case model.phase of
       Ready ->
         ( model
         , [RevealStaleBanner True, ErrorToast err]
         )
-      _ -> (model{phase = Offline}, [SwitchPage Offline])
+      _ -> (model {phase = Offline}, [SwitchPage Offline])
     JobProgress job progress ->
       (model, [SetBusy (keyOfMutation mutation) progress | Mutate mutation <- [job]])
     JobDone mutation result ->
-      let
-        key = keyOfMutation mutation
-        (model', release)
-          | Set.member key model.inFlight =
-              (model{inFlight = Set.delete key model.inFlight}, [Release])
-          | otherwise = (model, [])
-        outcome = case result of
-          Right () -> [Toast (jobTitle mutation), CheckPath]
-          Left err ->
-            [ rerender model'
-            , ErrorToast err
-            ]
-       in
-        (model', release <> (SetIdle key : outcome))
+      let key = keyOfMutation mutation
+          (model', release)
+            | Set.member key model.inFlight =
+                (model {inFlight = Set.delete key model.inFlight}, [Release])
+            | otherwise = (model, [])
+          outcome = case result of
+            Right () -> [Toast (jobTitle mutation), CheckPath]
+            Left err ->
+              [ rerender model'
+              , ErrorToast err
+              ]
+      in (model', release <> (SetIdle key : outcome))

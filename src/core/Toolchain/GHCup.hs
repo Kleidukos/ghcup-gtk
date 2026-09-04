@@ -19,8 +19,6 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Variant.Excepts
 import Data.Vector qualified as Vector
-import Text.PrettyPrint.HughesPJClass (Pretty, prettyShow)
-
 import GHCup.Command.Install (installTool)
 import GHCup.Command.List
 import GHCup.Command.Rm (rmToolVersion)
@@ -31,6 +29,7 @@ import GHCup.Query.GHCupDirs (fromGHCupPath, getAllDirs)
 import GHCup.Query.System (platformRequest)
 import GHCup.Setup (ensureDirectories)
 import GHCup.Types
+import Text.PrettyPrint.HughesPJClass (Pretty, prettyShow)
 
 import Toolchain.Types
 
@@ -65,7 +64,7 @@ newEnv logSink = do
   dirs <- getAllDirs
   ensureDirectories dirs
 
-  let settings = defaultSettings{cache = True, metaMode = Strict}
+  let settings = defaultSettings {cache = True, metaMode = Strict}
       loggerConfig =
         LoggerConfig
           { lcPrintDebugLvl = Nothing
@@ -83,7 +82,7 @@ newEnv logSink = do
       let emptyInfo = GHCupInfo mempty (GHCupDownloads mempty) Nothing
       appStateRef <- newIORef (AppState settings dirs defaultKeyBindings emptyInfo pfreq loggerConfig)
       staleRef <- newIORef False
-      pure (Right GhcupEnv{appStateRef, staleRef})
+      pure (Right GhcupEnv {appStateRef, staleRef})
 
 fetchInfo :: LeanAppState -> PlatformRequest -> IO (Either OpError (GHCupInfo, Bool))
 fetchInfo lean pfreq = do
@@ -91,9 +90,9 @@ fetchInfo lean pfreq = do
   case first of
     VRight gi -> pure (Right (gi, False))
     VLeft _ -> do
-      let LeanAppState{settings = onlineSettings, dirs, keyBindings, pfreq = p, loggerConfig} = lean
+      let LeanAppState {settings = onlineSettings, dirs, keyBindings, pfreq = p, loggerConfig} = lean
           offline =
-            LeanAppState (onlineSettings{noNetwork = True}) dirs keyBindings p loggerConfig
+            LeanAppState (onlineSettings {noNetwork = True}) dirs keyBindings p loggerConfig
       second <- runFetch offline
       pure (fmap (,True) (toOpError "Could not fetch toolchain metadata" second))
   where
@@ -114,12 +113,12 @@ fetchInfo lean pfreq = do
 getListings :: GhcupEnv -> IO (Either OpError (Listings, Bool))
 getListings env = do
   appState <- readIORef env.appStateRef
-  let AppState{settings, dirs, keyBindings, pfreq, loggerConfig} = appState
+  let AppState {settings, dirs, keyBindings, pfreq, loggerConfig} = appState
       lean = LeanAppState settings dirs keyBindings pfreq loggerConfig
   fetchInfo lean pfreq >>= \case
     Left err -> pure (Left err)
     Right (ghcupInfo, stale) -> do
-      let refreshed = appState{ghcupInfo = ghcupInfo} :: AppState
+      let refreshed = appState {ghcupInfo = ghcupInfo} :: AppState
       writeIORef env.appStateRef refreshed
       writeIORef env.staleRef stale
       fmap (,stale) <$> runList refreshed

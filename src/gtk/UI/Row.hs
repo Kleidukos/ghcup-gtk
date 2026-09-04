@@ -91,4 +91,4 @@ build window spec callbacks = do
         phaseLabel.setVisible False
         actionButton.setVisible True
 
-  pure RowHandle{row, setBusy, setIdle, defaultCheck}
+  pure RowHandle {row, setBusy, setIdle, defaultCheck}

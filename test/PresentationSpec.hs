@@ -4,12 +4,12 @@ import Data.List (sort)
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as Text
 import Data.Vector qualified as Vector
+import GHCup.Command.List (ListResult)
+import GHCup.Types (Tag (..))
 import Test.Tasty
 import Test.Tasty.HUnit
 
 import Fixtures (dirs, listingsFor, lr914, mkLR, sampleChanges)
-import GHCup.Command.List (ListResult)
-import GHCup.Types (Tag (..))
 import Presentation
 import Toolchain.Path (PathStatus (..), sourceLine)
 import Toolchain.Types (Mutation (..), SupportedTool (..), keyOfMutation, reqOf, supportedTools, tvOf)
