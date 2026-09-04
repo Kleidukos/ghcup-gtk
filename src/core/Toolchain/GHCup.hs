@@ -10,26 +10,30 @@ module Toolchain.GHCup
   ) where
 
 import Control.Monad (void)
-import Control.Monad.Reader (runReaderT)
+import Control.Monad.Reader (lift, runReaderT)
 import Control.Monad.Trans.Resource (runResourceT)
 import Data.Functor ((<&>))
 import Data.IORef
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Text.Encoding
+import Data.Text.Encoding.Error qualified as Text.Encoding.Error
 import Data.Variant.Excepts
 import Data.Vector qualified as Vector
-import GHCup.Command.Install (installTool)
+import GHCup.Command.Install (installBindist, installTool)
 import GHCup.Command.List
 import GHCup.Command.Rm (rmToolVersion)
 import GHCup.Command.Set (setToolVersion)
 import GHCup.Download (getDownloadsF)
 import GHCup.Errors
 import GHCup.Query.GHCupDirs (fromGHCupPath, getAllDirs)
+import GHCup.Query.Metadata (getDownloadInfoE')
 import GHCup.Query.System (platformRequest)
 import GHCup.Setup (ensureDirectories)
 import GHCup.Types
 import Text.PrettyPrint.HughesPJClass (Pretty, prettyShow)
+import URI.ByteString (serializeURIRef')
 
 import Toolchain.Types
 
@@ -146,10 +150,19 @@ runList appState = do
     toOpError "Could not list versions" result
       <&> Map.map (Vector.fromList . snd)
 
-install :: GhcupEnv -> Tool -> TargetVersionReq -> IO (Either OpError ())
-install env tool tvr = runIn env $ \appState -> do
+bindistTarDir :: Tool -> Maybe TarDir
+bindistTarDir = \case
+  Tool "ghc" -> Just (RegexDir "ghc-.*")
+  Tool "hls" -> Just (RegexDir "haskell-language-server-*")
+  _ -> Nothing
+
+install :: GhcupEnv -> Tool -> TargetVersionReq -> InstallOptions -> IO (Either OpError ())
+install env tool tvr opts = runIn env $ \appState -> do
+  let effectiveState = case opts.bindistUrl of
+        Nothing -> appState
+        Just _ -> appState {settings = appState.settings {noVerify = True}} :: AppState
   result <-
-    flip runReaderT appState
+    flip runReaderT effectiveState
       . runResourceT
       . runE
         @'[ AlreadyInstalled
@@ -174,10 +187,50 @@ install env tool tvr = runIn env $ \appState -> do
           , MalformedInstallInfo
           , InvalidBuildConfig
           ]
-      $ liftE (installTool tool tvr GHCupInternal False [] Nothing)
-  pure $ case result of
-    VLeft (V (AlreadyInstalled _ _)) -> Right ()
-    other -> void (toOpError "Installation failed" other)
+      $ case opts.bindistUrl of
+        Nothing ->
+          liftE (void $ installTool tool tvr opts.installDir opts.forceInstall opts.extraConfArgs opts.installTargets)
+        Just uri -> do
+          rev <- case tvr of
+            TargetVersionReq _ (Just r) -> pure r
+            TargetVersionReq _ Nothing -> do
+              revE <- lift (runE @'[NoDownload] (getDownloadInfoE' tool tvr))
+              pure $ case revE of
+                VRight (r, _) -> r
+                VLeft _ -> 0
+          let uriText =
+                Text.Encoding.decodeUtf8With
+                  Text.Encoding.Error.lenientDecode
+                  (serializeURIRef' uri)
+              dlInfo = DownloadInfo uriText (bindistTarDir tool) "" Nothing Nothing Nothing Nothing
+              GHCupInfo {_ghcupDownloads = dls} = appState.ghcupInfo
+              toolDesc = Map.lookup tool (unGHCupDownloads dls) >>= _toolDetails
+              TargetVersionReq tv _ = tvr
+          liftE
+            ( void $
+                installBindist
+                  tool
+                  toolDesc
+                  dlInfo
+                  (TargetVersionRev tv rev)
+                  opts.installDir
+                  opts.forceInstall
+                  opts.extraConfArgs
+                  opts.installTargets
+            )
+  let installOutcome = case result of
+        VLeft (V (AlreadyInstalled _ _)) -> Right ()
+        other -> void (toOpError "Installation failed" other)
+  case installOutcome of
+    Left err -> pure (Left err)
+    Right ()
+      | opts.setAsDefault && opts.installDir == GHCupInternal -> do
+          setResult <-
+            flip runReaderT appState
+              . runE @'[ParseError, NotInstalled]
+              $ liftE (setToolVersion tool (tvr._tvqTargetVer))
+          pure (void (toOpError "Installed, but could not set as default" setResult))
+      | otherwise -> pure (Right ())
 
 uninstall :: GhcupEnv -> Tool -> TargetVersion -> IO (Either OpError ())
 uninstall env tool tv = runIn env $ \appState ->

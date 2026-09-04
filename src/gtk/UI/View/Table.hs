@@ -25,8 +25,9 @@ import GI.Pango qualified as Pango
 
 import Config (Filters, SortColumn (..), SortDirection (..), TableSort (..), sortColumnFromName, sortColumnName)
 import Presentation.Row (RowAction (..), RowSpec (..), ToolRows (..), matchesFilters)
-import Toolchain.Types (Progress (..), rowKeyText)
+import Toolchain.Types (Mutation (..), Progress (..), rowKeyText)
 import UI.Dialog qualified as Dialog
+import UI.InstallOptionsDialog qualified as InstallOptionsDialog
 import UI.View (FilterBar (..), RowCallbacks (..), View (..), buildFilterBar, captionLabel, emptyStateStack, pillLabel)
 
 -- | How the table reports state the user changed, for 'Config' to remember.
@@ -312,6 +313,35 @@ actionsCell window callbacksRef defaultGroup spec = do
   box.append phaseLabel
   box.append progressBar
   box.append actionButton
+
+  let menuLabel :: Text
+      menuLabel =
+        if spec.installed
+          then "Reinstall with options…"
+          else "Install with options…"
+  optionsItem <-
+    new
+      Gtk.Button
+      [ #label := menuLabel
+      , #cssClasses := ["flat"]
+      ]
+  popover <- new Gtk.Popover []
+  optionsWidget <- Gtk.toWidget optionsItem
+  popover.setChild (Just optionsWidget)
+  menuButton <-
+    new
+      Gtk.MenuButton
+      [ #iconName := "view-more-symbolic"
+      , #valign := Gtk.AlignCenter
+      , #cssClasses := ["flat"]
+      , #visible := isNothing spec.progress
+      ]
+  menuButton.setPopover (Just popover)
+  void $ on optionsItem #clicked $ do
+    popover.popdown
+    InstallOptionsDialog.present window spec $ \opts ->
+      callbacks.onSubmit (Install spec.tool spec.installReq opts)
+  box.append menuButton
 
   forM_ spec.progress $ \progress -> do
     phaseLabel.setLabel progress.phase

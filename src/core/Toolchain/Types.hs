@@ -5,6 +5,8 @@ module Toolchain.Types
   , Listings
   , GhcupDirs (..)
   , Mutation (..)
+  , InstallOptions (..)
+  , defaultInstallOptions
   , Job (..)
   , tvOf
   , reqOf
@@ -25,8 +27,9 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Vector (Vector)
 import GHCup.Command.List (ListResult (..))
-import GHCup.Types (TargetVersion (..), TargetVersionReq (..), Tool (..), tVerToText, toolPriority)
+import GHCup.Types (InstallDir (..), TargetVersion (..), TargetVersionReq (..), Tool (..), tVerToText, toolPriority)
 import Text.Read (readMaybe)
+import URI.ByteString (URI)
 
 type Listings = Map Tool (Vector ListResult)
 
@@ -36,9 +39,30 @@ data GhcupDirs = GhcupDirs
   }
   deriving stock (Eq, Show)
 
+data InstallOptions = InstallOptions
+  { setAsDefault :: Bool
+  , forceInstall :: Bool
+  , installDir :: InstallDir
+  , bindistUrl :: Maybe URI
+  , extraConfArgs :: [String]
+  , installTargets :: Maybe [String]
+  }
+  deriving stock (Eq, Show)
+
+defaultInstallOptions :: InstallOptions
+defaultInstallOptions =
+  InstallOptions
+    { setAsDefault = False
+    , forceInstall = False
+    , installDir = GHCupInternal
+    , bindistUrl = Nothing
+    , extraConfArgs = []
+    , installTargets = Nothing
+    }
+
 -- | A job that changes an installation and sends the UI a 'JobDone'.
 data Mutation
-  = Install Tool TargetVersionReq
+  = Install Tool TargetVersionReq InstallOptions
   | Uninstall Tool TargetVersion
   | SetDefault Tool TargetVersion
   deriving stock (Eq, Show)
@@ -66,7 +90,7 @@ keyOfMutation mutation =
   in RowKey (tool, tVerToText tv)
   where
     target = \case
-      Install tool (TargetVersionReq tv _) -> (tool, tv)
+      Install tool (TargetVersionReq tv _) _ -> (tool, tv)
       Uninstall tool tv -> (tool, tv)
       SetDefault tool tv -> (tool, tv)
 

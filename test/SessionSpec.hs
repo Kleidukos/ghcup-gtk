@@ -44,7 +44,7 @@ tests =
     [ testGroup
         "RowKey"
         [ testCase "job-side and listings-side keys agree for every mutation" $ do
-            keyOfMutation (Install ghc (reqOf lr914)) @?= installKey
+            keyOfMutation (Install ghc (reqOf lr914) defaultInstallOptions) @?= installKey
             keyOfMutation (Uninstall ghc (tvOf lr914)) @?= installKey
             keyOfMutation (SetDefault ghc (tvOf lr914)) @?= installKey
         , testCase "rowKeyText is stable and distinguishes tool and version" $ do

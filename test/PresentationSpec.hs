@@ -14,7 +14,7 @@ import Fixtures (dirs, listingsFor, lr914, mkLR, sampleChanges)
 import Presentation.Path
 import Presentation.Row
 import Toolchain.Path (PathStatus (..), sourceLine)
-import Toolchain.Types (Mutation (..), Progress (..), keyOfMutation, reqOf, tvOf)
+import Toolchain.Types (Mutation (..), Progress (..), defaultInstallOptions, keyOfMutation, reqOf, tvOf)
 
 tests :: TestTree
 tests =
@@ -82,7 +82,7 @@ tests =
         [ testCase "row keys agree with the keys Session mints from mutations" $ do
             let specs = ghcRows [lr914]
             ((.key) <$> Vector.toList specs)
-              @?= [ keyOfMutation (Install ghc (reqOf lr914))
+              @?= [ keyOfMutation (Install ghc (reqOf lr914) defaultInstallOptions)
                   ]
             ((.key) <$> Vector.toList specs)
               @?= [ keyOfMutation (SetDefault ghc (tvOf lr914))
@@ -104,7 +104,7 @@ tests =
                 specs = ghcRows [lr914, inst]
             ((\s -> (s.action.label, s.action.job)) <$> specs)
               @?= Vector.fromList
-                [ ("Install", Install ghc (reqOf lr914))
+                [ ("Install", Install ghc (reqOf lr914) defaultInstallOptions)
                 , ("Remove", Uninstall ghc (tvOf inst))
                 ]
             ((.setDefault) <$> specs)
@@ -161,7 +161,7 @@ tests =
                   Nothing -> error "planRows lost the cabal entry"
             ((.passesHlsFilter) <$> Vector.toList specs) @?= [True]
         , testCase "a busy map stamps progress onto the matching row" $ do
-            let key = keyOfMutation (Install ghc (reqOf lr914))
+            let key = keyOfMutation (Install ghc (reqOf lr914) defaultInstallOptions)
                 busy = Map.singleton key (Progress "unpacking" Nothing)
                 specs = case Map.lookup ghc (planRows busy (listingsFor ghc [lr914])) of
                   Just toolRows -> toolRows.rows
@@ -170,7 +170,7 @@ tests =
         , testCase "rows without a stamp carry Nothing" $
             ((.progress) <$> Vector.toList (ghcRows [lr914])) @?= [Nothing]
         , testCase "a stamp for a key outside the listings is dropped" $ do
-            let busy = Map.singleton (keyOfMutation (Install cabal (reqOf lr914))) (Progress "x" Nothing)
+            let busy = Map.singleton (keyOfMutation (Install cabal (reqOf lr914) defaultInstallOptions)) (Progress "x" Nothing)
                 specs = case Map.lookup ghc (planRows busy (listingsFor ghc [lr914])) of
                   Just toolRows -> toolRows.rows
                   Nothing -> error "planRows lost the ghc entry"

@@ -20,7 +20,7 @@ import System.FilePath ((</>))
 import Effects.FileSystem (FileSystem (..))
 import Effects.Ghcup (Ghcup (..))
 import Effects.Notify (Notify (..))
-import Toolchain.Types (Listings, OpError, UiMsg)
+import Toolchain.Types (InstallOptions, Listings, OpError, UiMsg)
 
 -- | Record every emitted 'UiMsg' in order.
 runNotifyCollect :: Eff (Notify : es) a -> Eff es (a, [UiMsg])
@@ -34,7 +34,7 @@ data GhcupHandlers es = GhcupHandlers
   { acquire :: Eff es (Either OpError ())
   , getListings :: Eff es (Either OpError (Listings, Bool))
   , relist :: Eff es (Either OpError (Listings, Bool))
-  , install :: Tool -> TargetVersionReq -> Eff es (Either OpError ())
+  , install :: Tool -> TargetVersionReq -> InstallOptions -> Eff es (Either OpError ())
   , uninstall :: Tool -> TargetVersion -> Eff es (Either OpError ())
   , setDefault :: Tool -> TargetVersion -> Eff es (Either OpError ())
   }
@@ -45,7 +45,7 @@ idleHandlers =
     { acquire = pure (Right ())
     , getListings = pure (Right (Map.empty, False))
     , relist = pure (Right (Map.empty, False))
-    , install = \_ _ -> pure (Right ())
+    , install = \_ _ _ -> pure (Right ())
     , uninstall = \_ _ -> pure (Right ())
     , setDefault = \_ _ -> pure (Right ())
     }
@@ -56,7 +56,7 @@ runGhcupTest :: forall es a. GhcupHandlers es -> Eff (Ghcup : es) a -> Eff es a
 runGhcupTest h = reinterpret (evalState False) $ \_ -> \case
   FetchListings -> acquiring h.getListings
   RelistListings -> acquiring h.relist
-  InstallTool tool tvr -> acquiring (h.install tool tvr)
+  InstallTool tool tvr opts -> acquiring (h.install tool tvr opts)
   UninstallTool tool tv -> acquiring (h.uninstall tool tv)
   SetDefaultVersion tool tv -> acquiring (h.setDefault tool tv)
   where

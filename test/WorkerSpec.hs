@@ -45,22 +45,22 @@ tests =
     "Worker"
     [ testGroup
         "env acquisition"
-        [ testCase "failure on a mutation: exactly one JobDone, relist never attempted" $ do
+        [ testCase "failure on a mutation: JobDone, then the now-mandatory relist also fails (env unusable)" $ do
             let handlers =
                   idleHandlers
                     { acquire = pure (Left anError)
                     , relist = bump >> pure emptyReady
                     }
                 (msgs, count) = run handlers [installJob]
-            msgs @?= [JobDone installMutation (Left anError)]
+            msgs @?= [JobDone installMutation (Left anError), ListingsFailed anError]
             count @?= 0
         , testCase "failure on a refresh: ListingsFailed only" $ do
             let (msgs, _) = run idleHandlers {acquire = pure (Left anError)} [RefreshListings]
             msgs @?= [ListingsFailed anError]
-        , testCase "a failed env build is retried on the next job" $ do
+        , testCase "a failed env build is retried on the next job: three acquisition attempts per install job (install, relist, refresh fallback)" $ do
             let handlers = idleHandlers {acquire = bump >> pure (Left anError)}
                 (_, count) = run handlers [installJob, installJob]
-            count @?= 2
+            count @?= 6
         , testCase "a held env is never rebuilt" $ do
             let handlers = idleHandlers {acquire = bump >> pure (Right ())}
                 (_, count) = run handlers [RefreshListings, RefreshListings]
@@ -83,15 +83,15 @@ tests =
               @?= [ JobDone installMutation (Right ())
                   , ListingsReady Map.empty False
                   ]
-        , testCase "failure: one JobDone, relist never attempted" $ do
+        , testCase "failure: one JobDone, then relist still runs and succeeds" $ do
             let handlers =
                   idleHandlers
-                    { install = \_ _ -> pure (Left anError)
+                    { install = \_ _ _ -> pure (Left anError)
                     , relist = bump >> pure emptyReady
                     }
                 (msgs, count) = run handlers [installJob]
-            msgs @?= [JobDone installMutation (Left anError)]
-            count @?= 0
+            msgs @?= [JobDone installMutation (Left anError), ListingsReady Map.empty False]
+            count @?= 1
         , testCase "relist failure degrades to a full refresh" $ do
             let (msgs, _) = run idleHandlers {relist = pure (Left anError)} [installJob]
             msgs
@@ -110,7 +110,7 @@ tests =
                   , ListingsFailed anError
                   ]
         , testCase "an operation that throws maps to one Unexpected-error JobDone" $ do
-            let handlers = idleHandlers {install = \_ _ -> throwIO (userError "disk on fire")}
+            let handlers = idleHandlers {install = \_ _ _ -> throwIO (userError "disk on fire")}
                 (msgs, _) = run handlers [installJob]
             length (jobDones msgs) @?= 1
             case msgs of
@@ -122,7 +122,7 @@ tests =
             let handlers =
                   idleHandlers
                     { acquire = bump >> pure (Right ())
-                    , install = \_ _ -> throwIO (userError "disk on fire")
+                    , install = \_ _ _ -> throwIO (userError "disk on fire")
                     }
                 (_, count) = run handlers [installJob, RefreshListings]
             count @?= 1
