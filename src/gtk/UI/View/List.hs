@@ -1,18 +1,43 @@
-module UI.View.List (build) where
+module UI.View.List
+  ( ListView (..)
+  , ListCallbacks (..)
+  , build
+  ) where
 
 import Control.Monad (forM, forM_)
 import Data.GI.Base
+import Data.IORef
 import Data.Vector qualified as Vector
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
-import Presentation.Row (RowSpec (..), ToolRows (..))
-import UI.View (View (..))
+import Config (Filters)
+import Presentation.Row (ToolRows (..), matchesFilters)
+import UI.View (FilterBar (..), View (..), buildFilterBar, emptyStateStack)
 import UI.View.List.Row (RowHandle (..))
 import UI.View.List.Row qualified as Row
 
-build :: Adw.ApplicationWindow -> IO View
-build window = do
+-- | How the list reports filter changes, for 'Config' to remember.
+newtype ListCallbacks = ListCallbacks
+  { onFiltersChanged :: Filters -> IO ()
+  }
+
+-- | A built list: its 'View' plus the handle for applying filters this list
+-- did not originate.
+data ListView = ListView
+  { view :: View
+  , applyFilters :: Filters -> IO ()
+  }
+
+build
+  :: Adw.ApplicationWindow
+  -> Filters
+  -> ListCallbacks
+  -> IO ListView
+build window initialFilters listCallbacks = do
+  filtersRef <- newIORef initialFilters
+  stateRef <- newIORef Nothing
+
   listBox <- new Gtk.ListBox [#selectionMode := Gtk.SelectionModeNone]
   listBox.addCssClass "boxed-list"
   clamp <-
@@ -33,19 +58,42 @@ build window = do
       , #vexpand := True
       , #hscrollbarPolicy := Gtk.PolicyTypeNever
       ]
-  widget <- Gtk.toWidget scrolled
+  scrolledWidget <- Gtk.toWidget scrolled
+  (contentStack, setEmpty) <- emptyStateStack scrolledWidget
+
+  let render = do
+        filters <- readIORef filtersRef
+        listBox.removeAll
+        readIORef stateRef >>= \case
+          Nothing -> pure ()
+          Just (callbacks, toolRows) -> do
+            let visible = Vector.filter (matchesFilters filters) toolRows.rows
+            handles <- forM visible $ \spec -> do
+              handle <- Row.build window spec callbacks
+              listBox.append handle.row
+              pure handle
+            -- One radio group per pane, anchored on the first installed row.
+            case Vector.uncons (Vector.mapMaybe (.defaultCheck) handles) of
+              Just (anchor, rest) -> forM_ rest $ \check -> check.setGroup (Just anchor)
+              Nothing -> pure ()
+            setEmpty (Vector.null visible)
+
+  bar <- buildFilterBar initialFilters $ \filters -> do
+    writeIORef filtersRef filters
+    render
+    listCallbacks.onFiltersChanged filters
+
+  content <- new Gtk.Box [#orientation := Gtk.OrientationVertical]
+  content.append bar.widget
+  content.append contentStack
+  widget <- Gtk.toWidget content
 
   let setRows callbacks toolRows = do
-        listBox.removeAll
-        handles <- forM toolRows.rows $ \spec -> do
-          handle <- Row.build window spec callbacks
-          listBox.append handle.row
-          pure (spec.key, handle)
-        -- One radio group per pane, anchored on the first installed row.
-        case Vector.uncons (Vector.mapMaybe ((.defaultCheck) . snd) handles) of
-          Just (anchor, rest) -> forM_ rest $ \check -> check.setGroup (Just anchor)
-          Nothing -> pure ()
+        writeIORef stateRef (Just (callbacks, toolRows))
+        render
 
-      setSensitive b = set listBox [#sensitive := b]
+      setSensitive b = do
+        set listBox [#sensitive := b]
+        set bar.widget [#sensitive := b]
 
-  pure View {widget, setRows, setSensitive}
+  pure ListView {view = View {widget, setRows, setSensitive}, applyFilters = bar.setFilters}
