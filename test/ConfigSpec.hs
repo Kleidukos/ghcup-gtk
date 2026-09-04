@@ -49,8 +49,6 @@ tests =
             defaultConfig.viewMode @?= Simple
         , testCase "an unknown view mode falls back to the default" $
             (parseConfig "view-mode \"fancy\"").viewMode @?= Simple
-        , testCase "the retired advanced-interface bool is ignored" $
-            (parseConfig "advanced-interface #true").viewMode @?= Simple
         ]
     , testGroup
         "table state"
@@ -80,8 +78,9 @@ tests =
             -- the "old config.kdl without the new keys" case: every missing
             -- node falls back, so an upgrade changes nothing
             parseConfig "" @?= defaultConfig
-        , testCase "a retired show-old-versions node is ignored" $
+        , testCase "retired nodes (show-old-versions, advanced-interface) are ignored" $ do
             parseConfig "show-old-versions #true" @?= defaultConfig
+            parseConfig "advanced-interface #true" @?= defaultConfig
         , testCase "a missing direction node keeps the default direction" $
             (parseConfig "table-sort-column \"released\"").tableSort
               @?= TableSort ByReleased Descending

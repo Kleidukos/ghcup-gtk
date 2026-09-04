@@ -38,7 +38,7 @@ tests =
     , testCase "an installed default row seeds both switches" $ do
         installedModel.setDefault @?= True
         installedModel.force @?= True
-    , testCase "picking an isolate dir locks set-default and force" $ do
+    , testCase "picking an isolate dir locks set-default and force, clearing restores intent" $ do
         let model = stepForm (IsolatePicked "/opt/ghc") installedModel
         model.isolate @?= Just "/opt/ghc"
         effectiveSetDefault model @?= False
@@ -47,9 +47,7 @@ tests =
         fmap (.installDir) (toOptions model) @?= Just (IsolateDir "/opt/ghc")
         fmap (.setAsDefault) (toOptions model) @?= Just False
         fmap (.forceInstall) (toOptions model) @?= Just False
-    , testCase "clearing the isolate dir restores the prior switches" $
-        steps [IsolatePicked "/opt/ghc", IsolateCleared] installedModel
-          @?= installedModel
+        stepForm IsolateCleared model @?= installedModel
     , testCase "a malformed URL blocks install until corrected" $ do
         let bad = stepForm (UrlChanged "not a uri") freshModel
         assertBool "expected a url error" (isJust (urlError bad))
