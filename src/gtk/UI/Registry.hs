@@ -37,7 +37,6 @@ data Registry = Registry
   , tablesRef :: IORef (Map SupportedTool TableView.Table)
   , planRef :: IORef (Map SupportedTool ToolRows)
   , sensitiveRef :: IORef Bool
-
   }
 
 build
