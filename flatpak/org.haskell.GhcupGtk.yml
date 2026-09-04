@@ -1,0 +1,23 @@
+app-id: org.haskell.GhcupGtk
+runtime: org.gnome.Platform
+runtime-version: '49'
+sdk: org.gnome.Sdk
+command: ghcup-gtk
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --filesystem=host
+  # Query the host's real $SHELL and $PATH via flatpak-spawn
+  - --talk-name=org.freedesktop.Flatpak
+  - --env=ghcup_gtk_datadir=/app/share/ghcup-gtk
+modules:
+  - name: ghcup-gtk
+    buildsystem: simple
+    build-commands:
+      - cp -a ./. /app
+    sources:
+      - type: dir
+        path: ../dist-package/root/usr

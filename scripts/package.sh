@@ -6,8 +6,10 @@ set -euo pipefail
 # Usage: scripts/package.sh -v <version>|head [format...]
 #   -v: mandatory; version label used in the package file name; either
 #       a numeric version (e.g. 1.2.3) or the literal "head".
-#   formats: deb rpm pacman (Linux), osxpkg (macOS)
-#   No format arguments: build every format native to the host OS.
+#   formats: deb rpm pacman flatpak (Linux), osxpkg (macOS)
+#   No format arguments: build every fpm format native to the host OS
+#   (flatpak is only built when requested explicitly, since it needs
+#   flatpak-builder and the GNOME runtime installed).
 #
 # Output lands in dist-package/out/.
 #
@@ -18,7 +20,7 @@ usage() {
   echo "usage: scripts/package.sh -v <version>|head [format...]"
   echo "  -v   mandatory; version label for the package file name:"
   echo "       a numeric version (e.g. 1.2.3) or \"head\""
-  echo "  formats: deb rpm pacman (Linux), osxpkg (macOS)"
+  echo "  formats: deb rpm pacman flatpak (Linux), osxpkg (macOS)"
 }
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -70,7 +72,7 @@ fi
 
 for fmt in "${FORMATS[@]}"; do
   case "$OS,$fmt" in
-    Darwin,osxpkg | Linux,deb | Linux,rpm | Linux,pacman) ;;
+    Darwin,osxpkg | Linux,deb | Linux,rpm | Linux,pacman | Linux,flatpak) ;;
     *)
       echo "error: cannot build '$fmt' on $OS" >&2
       exit 1
@@ -105,7 +107,7 @@ min_os_for() {
 }
 
 echo "==> Building ghcup-gtk ${VERSION}"
-CONFIGURE_FLAGS=(-f -development --datadir="${PREFIX}/share" --datasubdir=ghcup-gtk)
+CONFIGURE_FLAGS=(--project-file=cabal.release.project --datadir="${PREFIX}/share" --datasubdir=ghcup-gtk)
 cabal build exe:ghcup-gtk "${CONFIGURE_FLAGS[@]}"
 BIN="$(cabal list-bin ghcup-gtk "${CONFIGURE_FLAGS[@]}" | tail -1)"
 
@@ -145,9 +147,24 @@ FPM_COMMON=(
   -f
 )
 
+build_flatpak() {
+  local pkg_name="$1"
+  echo "==> flatpak-builder ($pkg_name)"
+  flatpak-builder --force-clean --user --install-deps-from=flathub \
+    --repo=dist-package/flatpak-repo \
+    dist-package/flatpak-build \
+    flatpak/org.haskell.GhcupGtk.yml
+  flatpak build-bundle dist-package/flatpak-repo \
+    "dist-package/out/${pkg_name}" org.haskell.GhcupGtk
+}
+
 for fmt in "${FORMATS[@]}"; do
   EXTRA=()
   case "$fmt" in
+    flatpak)
+      build_flatpak "ghcup-gtk-${VERSION_LABEL}-${ARCH}.flatpak"
+      continue
+      ;;
     deb) EXTRA=(-d libgtk-4-1 -d libadwaita-1-0); EXT=deb ;;
     rpm) EXTRA=(-d gtk4 -d libadwaita); EXT=rpm ;;
     pacman) EXTRA=(-d gtk4 -d libadwaita); EXT=pkg.tar.zst ;;

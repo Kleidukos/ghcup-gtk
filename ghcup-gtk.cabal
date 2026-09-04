@@ -60,6 +60,7 @@ library core
     Config
     Effects.FileSystem
     Effects.Ghcup
+    Effects.HostEnv
     Effects.Notify
     Presentation.CompileForm
     Presentation.CompileForm.Ghc
@@ -81,6 +82,7 @@ library core
     bytestring,
     containers,
     directory,
+    effectful,
     effectful-core,
     filepath,
     ghcup,
@@ -94,6 +96,7 @@ library core
     text,
     text-display,
     time,
+    typed-process-effectful,
     unix,
     uri-bytestring,
     variant,
@@ -134,6 +137,7 @@ library
     base,
     containers,
     directory,
+    effectful,
     effectful-core,
     ghcup,
     ghcup-gtk:core,
@@ -148,6 +152,7 @@ library
     text,
     text-display,
     time,
+    typed-process-effectful,
     uri-bytestring,
     vector,
     versions,

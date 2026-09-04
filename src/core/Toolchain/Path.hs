@@ -27,6 +27,7 @@ import Effectful
 import System.FilePath (equalFilePath, splitSearchPath, (</>))
 
 import Effects.FileSystem (FileSystem, doesFileExist, getHomeDirectory, lookupEnv, readFileText, writeFileAtomic)
+import Effects.HostEnv (HostEnv, getHostEnvironment)
 import Toolchain.Types (GhcupDirs (..), OpError (..))
 
 data Shell = Bash | Zsh | Fish | UnknownShell Text
@@ -146,12 +147,15 @@ data PathStatus
   deriving stock (Eq, Show)
 
 snapshotEnvironment
-  :: (FileSystem :> es)
+  :: (FileSystem :> es, HostEnv :> es)
   => GhcupDirs
   -> Eff es EnvSnapshot
 snapshotEnvironment envDirs = do
-  envShell <- maybe "" Text.pack <$> lookupEnv "SHELL"
-  envPath <- maybe "" Text.pack <$> lookupEnv "PATH"
+  localShell <- maybe "" Text.pack <$> lookupEnv "SHELL"
+  localPath <- maybe "" Text.pack <$> lookupEnv "PATH"
+  (hostShell, hostPath) <- getHostEnvironment
+  let envShell = fromMaybe localShell hostShell
+      envPath = fromMaybe localPath hostPath
   envHome <- getHomeDirectory
 
   envZdotdir <- mfilter (not . null) <$> lookupEnv "ZDOTDIR"
@@ -159,7 +163,7 @@ snapshotEnvironment envDirs = do
   pure EnvSnapshot {envShell, envPath, envHome, envZdotdir, envProfileExists, envDirs}
 
 checkPath
-  :: (FileSystem :> es)
+  :: (FileSystem :> es, HostEnv :> es)
   => GhcupDirs
   -> Eff es PathStatus
 checkPath dirs = do
