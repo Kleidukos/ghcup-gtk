@@ -17,9 +17,8 @@ shortcuts =
   , ("Quit", "Ctrl+Q")
   ]
 
--- | Hand-built keyboard shortcuts dialog: 'Gtk.ShortcutsWindow' is
--- deprecated, and its replacement (AdwShortcutsDialog) needs libadwaita 1.8
--- where our floor is 1.5.
+-- | Hand-built shortcuts dialog. 'Gtk.ShortcutsWindow' is deprecated and
+-- AdwShortcutsDialog needs libadwaita 1.8, our minimum is 1.5.
 present :: Adw.ApplicationWindow -> IO ()
 present parent = do
   group <- new Adw.PreferencesGroup [#title := "General"]

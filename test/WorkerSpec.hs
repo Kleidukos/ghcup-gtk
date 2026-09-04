@@ -21,8 +21,7 @@ emptyRelist :: Either OpError Listings
 emptyRelist = Right Map.empty
 
 -- | Run jobs through 'processJob' with a fake ghcup. Returns the emitted
--- messages and the final value of the test counter (bumped by whichever
--- handler a test wires 'bump' into).
+-- messages and the test counter, incremented by handlers wired to 'bump'.
 run :: GhcupHandlers TestEs -> [Job] -> ([UiMsg], Int)
 run handlers jobs =
   let ((_, msgs), count) =

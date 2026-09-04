@@ -1,7 +1,4 @@
--- | Field parsers shared by the GHC and HLS compile forms. The models
--- themselves live in "Presentation.CompileForm.Ghc" and
--- "Presentation.CompileForm.Hls": each keeps its record fields alone in
--- scope, so record updates stay unambiguous.
+-- | Field parsers shared by the GHC and HLS compile forms.
 module Presentation.CompileForm
   ( nonEmpty
   , whenEmpty
