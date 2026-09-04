@@ -17,13 +17,11 @@ import UI.View (FilterBar (..), View (..), buildFilterBar, emptyStateStack)
 import UI.View.List.Row (RowHandle (..))
 import UI.View.List.Row qualified as Row
 
--- | How the list reports filter changes, for 'Config' to remember.
+-- | How the list reports filter changes
 newtype ListCallbacks = ListCallbacks
   { onFiltersChanged :: Filters -> IO ()
   }
 
--- | A built list: its 'View' plus the handle for applying filters this list
--- did not originate.
 data ListView = ListView
   { view :: View
   , applyFilters :: Filters -> IO ()

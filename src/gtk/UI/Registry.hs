@@ -35,8 +35,8 @@ viewOf = \case
   TableRenderer table -> table.view
   ListRenderer list -> list.view
 
--- | One live renderer per tool. Only the active mode's renderers exist;
--- 'switchTo' destroys them and builds the other mode's.
+-- | One live renderer per tool. Only the active mode's renderers exist,
+-- becase 'switchTo' destroys them and builds the other mode's.
 data Registry = Registry
   { panes :: ToolPanes
   , window :: Adw.ApplicationWindow
@@ -66,8 +66,7 @@ build window panes config tableCallbacks listCallbacks = do
     <*> newIORef Map.empty
     <*> newIORef True
 
--- | Build one renderer per tool and mount each in its pane, dropping
--- whatever the pane held before.
+-- | Build one renderer per tool and mount each in its pane
 buildRenderers
   :: Adw.ApplicationWindow
   -> ToolPanes
