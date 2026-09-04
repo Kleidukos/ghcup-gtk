@@ -99,6 +99,7 @@ library
     UI.View
     UI.View.List
     UI.View.List.Row
+    UI.View.Table
 
   build-depends:
     base,
@@ -111,11 +112,12 @@ library
     gi-gdk4 ^>=4.0,
     gi-gio ^>=2.0,
     gi-glib ^>=2.0,
-    gi-gsk ^>=4.0,
+    gi-gobject ^>=2.0,
     gi-gtk ^>=4.0,
     gi-pango ^>=1.0,
     haskell-gi-base,
     text,
+    time,
     vector,
 
   pkgconfig-depends: libadwaita-1 >=1.5
