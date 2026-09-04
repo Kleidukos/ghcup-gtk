@@ -36,6 +36,8 @@ build window initialFilters listCallbacks = do
   filtersRef <- newIORef initialFilters
   stateRef <- newIORef Nothing
 
+  defaultGroup <- new Gtk.CheckButton []
+
   listBox <- new Gtk.ListBox [#selectionMode := Gtk.SelectionModeNone]
   listBox.addCssClass "boxed-list"
   clamp <-
@@ -69,10 +71,8 @@ build window initialFilters listCallbacks = do
               handle <- Row.build window spec callbacks
               listBox.append handle.row
               pure handle
-            -- One radio group per pane, anchored on the first installed row.
-            case Vector.uncons (Vector.mapMaybe (.defaultCheck) handles) of
-              Just (anchor, rest) -> forM_ rest $ \check -> check.setGroup (Just anchor)
-              Nothing -> pure ()
+            forM_ (Vector.mapMaybe (.defaultCheck) handles) $ \check ->
+              check.setGroup (Just defaultGroup)
             setEmpty (Vector.null visible)
 
   bar <- buildFilterBar initialFilters $ \filters -> do

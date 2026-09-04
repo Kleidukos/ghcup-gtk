@@ -20,9 +20,10 @@ import GI.Gtk qualified as Gtk
 #ifdef DEVELOPMENT
 import Development.Reload qualified as Reload
 #endif
-import System.Environment (getArgs, getProgName)
+import System.Environment (getProgName)
 import System.IO (hPutStrLn, stderr)
 
+import CLI qualified
 import Config qualified
 import Effects.FileSystem (runFileSystemIO)
 import Paths_ghcup_gtk qualified as Paths
@@ -44,16 +45,16 @@ import Worker qualified
 
 startUI :: IO ()
 startUI = do
+  options <- CLI.getOptions
   app <-
     new
       Adw.Application
       [ #applicationId := "org.haskell.GhcupGtk"
-      , On #activate (activate ?self)
+      , On #activate (activate options.forcedView ?self)
       , On #startup loadCSS
       ]
-  args <- getArgs
   progName <- getProgName
-  void (app.run $ Just $ progName : args)
+  void (app.run $ Just $ progName : options.gtkArgs)
 
 {- FOURMOLU_DISABLE -}
 loadCSS :: (MonadIO m) => m ()
@@ -85,10 +86,13 @@ data Runtime = Runtime
   , dispatch :: Session.Event -> IO ()
   }
 
-activate :: Adw.Application -> IO ()
-activate app = do
+activate :: Maybe Config.ViewMode -> Adw.Application -> IO ()
+activate forcedView app = do
   dirs <- GHCup.ghcupDirs
-  (config, configWarning) <- runEff (runFileSystemIO Config.load)
+  (loadedConfig, configWarning) <- runEff (runFileSystemIO Config.load)
+  let config = case forcedView of
+        Nothing -> loadedConfig
+        Just mode -> loadedConfig {Config.advancedInterface = mode == Config.Advanced}
   shell <- Shell.build app config
   modelRef <- newIORef (Session.initialModel dirs config)
   worker <- Worker.new
