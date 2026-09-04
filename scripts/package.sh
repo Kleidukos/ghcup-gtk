@@ -48,6 +48,20 @@ else
   VERSION="${CABAL_VERSION}.git$(git rev-parse --short HEAD)"
 fi
 
+GIT_HASH="$(git rev-parse --short HEAD)"
+ARCH="$(uname -m)"
+
+# Minimum supported OS per package format. Keep in sync with the
+# runners in .github/workflows/release.yml.
+min_os_for() {
+  case "$1" in
+    deb) echo ubuntu-26 ;;
+    rpm) echo fedora-44 ;;
+    pacman) echo archlinux ;;
+    osxpkg) echo macos-15 ;;
+  esac
+}
+
 echo "==> Building ghcup-gtk ${VERSION}"
 CONFIGURE_FLAGS=(-f -development --datadir="${PREFIX}/share" --datasubdir=ghcup-gtk)
 cabal build exe:ghcup-gtk "${CONFIGURE_FLAGS[@]}"
@@ -85,20 +99,20 @@ FPM_COMMON=(
   --url "https://github.com/Kleidukos/ghcup-gtk"
   -a native
   -C "$STAGING"
-  -p dist-package/out/
   -f
 )
 
 for fmt in "${FORMATS[@]}"; do
   EXTRA=()
   case "$fmt" in
-    deb) EXTRA=(-d libgtk-4-1 -d libadwaita-1-0) ;;
-    rpm) EXTRA=(-d gtk4 -d libadwaita) ;;
-    pacman) EXTRA=(-d gtk4 -d libadwaita) ;;
-    osxpkg) EXTRA=(--osxpkg-identifier-prefix org.haskell) ;;
+    deb) EXTRA=(-d libgtk-4-1 -d libadwaita-1-0); EXT=deb ;;
+    rpm) EXTRA=(-d gtk4 -d libadwaita); EXT=rpm ;;
+    pacman) EXTRA=(-d gtk4 -d libadwaita); EXT=pkg.tar.zst ;;
+    osxpkg) EXTRA=(--osxpkg-identifier-prefix org.haskell); EXT=pkg ;;
   esac
-  echo "==> fpm -t $fmt"
-  fpm "${FPM_COMMON[@]}" -t "$fmt" "${EXTRA[@]}" .
+  PKG_NAME="ghcup-gtk-${GIT_HASH}-$(min_os_for "$fmt")-${ARCH}.${EXT}"
+  echo "==> fpm -t $fmt ($PKG_NAME)"
+  fpm "${FPM_COMMON[@]}" -t "$fmt" -p "dist-package/out/${PKG_NAME}" "${EXTRA[@]}" .
 done
 
 echo "==> Packages:"
