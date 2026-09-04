@@ -20,7 +20,7 @@ import System.FilePath ((</>))
 import Effects.FileSystem (FileSystem (..))
 import Effects.Ghcup (Ghcup (..))
 import Effects.Notify (Notify (..))
-import Toolchain.Types (InstallOptions, Listings, OpError, UiMsg)
+import Toolchain.Types (CompileGhcOptions, CompileHlsOptions, InstallOptions, Listings, OpError, UiMsg)
 
 -- | Record every emitted 'UiMsg' in order.
 runNotifyCollect :: Eff (Notify : es) a -> Eff es (a, [UiMsg])
@@ -37,6 +37,8 @@ data GhcupHandlers es = GhcupHandlers
   , install :: Tool -> TargetVersionReq -> InstallOptions -> Eff es (Either OpError ())
   , uninstall :: Tool -> TargetVersion -> Eff es (Either OpError ())
   , setDefault :: Tool -> TargetVersion -> Eff es (Either OpError ())
+  , compileGhc :: TargetVersion -> CompileGhcOptions -> Eff es (Either OpError ())
+  , compileHls :: TargetVersion -> CompileHlsOptions -> Eff es (Either OpError ())
   }
 
 idleHandlers :: GhcupHandlers es
@@ -48,6 +50,8 @@ idleHandlers =
     , install = \_ _ _ -> pure (Right ())
     , uninstall = \_ _ -> pure (Right ())
     , setDefault = \_ _ -> pure (Right ())
+    , compileGhc = \_ _ -> pure (Right ())
+    , compileHls = \_ _ -> pure (Right ())
     }
 
 -- | Mirrors the live interpreter's memoization: a successful acquisition
@@ -59,6 +63,8 @@ runGhcupTest h = reinterpret (evalState False) $ \_ -> \case
   InstallTool tool tvr opts -> acquiring (h.install tool tvr opts)
   UninstallTool tool tv -> acquiring (h.uninstall tool tv)
   SetDefaultVersion tool tv -> acquiring (h.setDefault tool tv)
+  CompileGhcTool tv opts -> acquiring (h.compileGhc tv opts)
+  CompileHlsTool tv opts -> acquiring (h.compileHls tv opts)
   where
     acquiring :: Eff es (Either OpError b) -> Eff (State Bool : es) (Either OpError b)
     acquiring op =

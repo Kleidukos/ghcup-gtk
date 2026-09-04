@@ -16,6 +16,8 @@ module Toolchain.Path
 
 import Control.Monad (mfilter)
 import Data.Either (fromRight)
+import Data.Function ((&))
+import Data.Functor ((<&>))
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -132,7 +134,7 @@ isMarkerLine :: Text -> Bool
 isMarkerLine = (marker `Text.isSuffixOf`) . Text.stripEnd
 
 filterMarker :: Text -> Text
-filterMarker = Text.unlines . filter (not . isMarkerLine) . Text.lines
+filterMarker content = Text.lines content & filter (not . isMarkerLine) & Text.unlines
 
 data PathStatus
   = PathOk
@@ -168,10 +170,12 @@ checkPath dirs = do
     else do
       let plan = planFix env
           candidates = case plan of
-            Just changes -> [c.path | c <- Vector.toList changes, c.mode == FilteredAppend]
+            Just changes ->
+              Vector.toList
+                (Vector.map (.path) (Vector.filter (\c -> c.mode == FilteredAppend) changes))
             Nothing -> [profilePath env.envHome]
       markerPresent <-
-        or <$> traverse (fmap (any isMarkerLine . Text.lines) . readFileOrEmpty) candidates
+        or <$> traverse (\candidate -> readFileOrEmpty candidate <&> Text.lines <&> any isMarkerLine) candidates
       pure $
         if markerPresent
           then FixedAwaitingRestart

@@ -6,21 +6,27 @@ module Toolchain.GHCup
   , install
   , uninstall
   , setDefault
+  , compileGhc
+  , compileHls
   , ghcupDirs
   ) where
 
 import Control.Monad (void)
 import Control.Monad.Reader (lift, runReaderT)
 import Control.Monad.Trans.Resource (runResourceT)
+import Data.Function ((&))
 import Data.Functor ((<&>))
 import Data.IORef
 import Data.Map.Strict qualified as Map
+import Data.Maybe (isNothing)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text.Encoding
 import Data.Text.Encoding.Error qualified as Text.Encoding.Error
 import Data.Variant.Excepts
 import Data.Vector qualified as Vector
+import GHCup.Command.Compile.GHC qualified as CompileGHC
+import GHCup.Command.Compile.HLS qualified as CompileHLS
 import GHCup.Command.Install (installBindist, installTool)
 import GHCup.Command.List
 import GHCup.Command.Rm (rmToolVersion)
@@ -77,9 +83,9 @@ newEnv logSink = do
           , fancyColors = False
           }
   pfreqE <-
-    flip runReaderT loggerConfig
-      . runE @'[NoCompatiblePlatform, NoCompatibleArch, DistroNotFound]
-      $ liftE platformRequest
+    liftE platformRequest
+      & runE @'[NoCompatiblePlatform, NoCompatibleArch, DistroNotFound]
+      & flip runReaderT loggerConfig
   case toOpError "Unsupported platform" pfreqE of
     Left err -> pure (Left err)
     Right pfreq -> do
@@ -101,8 +107,8 @@ fetchInfo lean pfreq = do
       pure (fmap (,True) (toOpError "Could not fetch toolchain metadata" second))
   where
     runFetch env =
-      flip runReaderT env
-        . runE
+      liftE (getDownloadsF pfreq)
+        & runE
           @'[ DigestError
             , ContentLengthError
             , GPGError
@@ -112,7 +118,7 @@ fetchInfo lean pfreq = do
             , StackPlatformDetectError
             , UnsupportedMetadataFormat
             ]
-        $ liftE (getDownloadsF pfreq)
+        & flip runReaderT env
 
 getListings :: GhcupEnv -> IO (Either OpError (Listings, Bool))
 getListings env = do
@@ -136,16 +142,16 @@ relistListings env = do
 runList :: AppState -> IO (Either OpError Listings)
 runList appState = do
   result <-
-    flip runReaderT appState
-      . runE @'[ParseError]
-      $ liftE
-      $ listVersions
-        Nothing
-        []
-        ShowNone
-        False
-        NShowNone
-        (Nothing, Nothing)
+    listVersions
+      Nothing
+      []
+      ShowNone
+      False
+      NShowNone
+      (Nothing, Nothing)
+      & liftE
+      & runE @'[ParseError]
+      & flip runReaderT appState
   pure $
     toOpError "Could not list versions" result
       <&> Map.map (Vector.fromList . snd)
@@ -161,33 +167,7 @@ install env tool tvr opts = runIn env $ \appState -> do
   let effectiveState = case opts.bindistUrl of
         Nothing -> appState
         Just _ -> appState {settings = appState.settings {noVerify = True}} :: AppState
-  result <-
-    flip runReaderT effectiveState
-      . runResourceT
-      . runE
-        @'[ AlreadyInstalled
-          , CopyError
-          , DigestError
-          , ContentLengthError
-          , GPGError
-          , DownloadFailed
-          , NoDownload
-          , NotInstalled
-          , UnknownArchive
-          , TarDirDoesNotExist
-          , ArchiveResult
-          , FileAlreadyExistsError
-          , URIParseError
-          , NoInstallInfo
-          , MergeFileTreeError
-          , ProcessError
-          , ParseError
-          , DirNotEmpty
-          , UninstallFailed
-          , MalformedInstallInfo
-          , InvalidBuildConfig
-          ]
-      $ case opts.bindistUrl of
+      installAction = case opts.bindistUrl of
         Nothing ->
           liftE (void $ installTool tool tvr opts.installDir opts.forceInstall opts.extraConfArgs opts.installTargets)
         Just uri -> do
@@ -218,6 +198,33 @@ install env tool tvr opts = runIn env $ \appState -> do
                   opts.extraConfArgs
                   opts.installTargets
             )
+  result <-
+    installAction
+      & runE
+        @'[ AlreadyInstalled
+          , CopyError
+          , DigestError
+          , ContentLengthError
+          , GPGError
+          , DownloadFailed
+          , NoDownload
+          , NotInstalled
+          , UnknownArchive
+          , TarDirDoesNotExist
+          , ArchiveResult
+          , FileAlreadyExistsError
+          , URIParseError
+          , NoInstallInfo
+          , MergeFileTreeError
+          , ProcessError
+          , ParseError
+          , DirNotEmpty
+          , UninstallFailed
+          , MalformedInstallInfo
+          , InvalidBuildConfig
+          ]
+      & runResourceT
+      & flip runReaderT effectiveState
   let installOutcome = case result of
         VLeft (V (AlreadyInstalled _ _)) -> Right ()
         other -> void (toOpError "Installation failed" other)
@@ -226,24 +233,133 @@ install env tool tvr opts = runIn env $ \appState -> do
     Right ()
       | opts.setAsDefault && opts.installDir == GHCupInternal -> do
           setResult <-
-            flip runReaderT appState
-              . runE @'[ParseError, NotInstalled]
-              $ liftE (setToolVersion tool tvr._tvqTargetVer)
+            liftE (setToolVersion tool tvr._tvqTargetVer)
+              & runE @'[ParseError, NotInstalled]
+              & flip runReaderT appState
           pure (void (toOpError "Installed, but could not set as default" setResult))
       | otherwise -> pure (Right ())
 
+compileGhc :: GhcupEnv -> TargetVersion -> CompileGhcOptions -> IO (Either OpError ())
+compileGhc env tv opts = runIn env $ \appState -> do
+  let ghcVer = case opts.gitRef of
+        Just ref -> CompileGHC.GitDist (GitBranch ref Nothing)
+        Nothing -> CompileGHC.SourceDist tv._tvVersion
+  result <-
+    CompileGHC.compileGHC
+      ghcVer
+      opts.crossTarget
+      opts.overwriteVer
+      opts.bootstrapGhc
+      opts.hadrianGhc
+      opts.jobs
+      opts.buildConfig
+      opts.patches
+      opts.addConfArgs
+      opts.buildFlavour
+      opts.buildSystem
+      (maybe GHCupInternal IsolateDir opts.isolateDir)
+      opts.installTargets
+      opts.docs
+      & liftE
+      & runE
+        @'[ AlreadyInstalled
+          , BuildFailed
+          , DigestError
+          , ContentLengthError
+          , GPGError
+          , DownloadFailed
+          , GHCupSetError
+          , NoDownload
+          , NotFoundInPATH
+          , PatchFailed
+          , UnknownArchive
+          , TarDirDoesNotExist
+          , NotInstalled
+          , DirNotEmpty
+          , ArchiveResult
+          , FileDoesNotExistError
+          , HadrianNotFound
+          , InvalidBuildConfig
+          , ProcessError
+          , CopyError
+          , UninstallFailed
+          , MergeFileTreeError
+          , URIParseError
+          , ParseError
+          , FileAlreadyExistsError
+          , NoInstallInfo
+          , MalformedInstallInfo
+          ]
+      & runResourceT
+      & flip runReaderT appState
+  setAfterCompile
+    appState
+    (opts.setCompile && isNothing opts.isolateDir)
+    ghc
+    (toOpError "GHC compilation failed" result)
+
+compileHls :: GhcupEnv -> TargetVersion -> CompileHlsOptions -> IO (Either OpError ())
+compileHls env tv opts = runIn env $ \appState -> do
+  let hlsVer = case opts.gitRef of
+        Just ref -> CompileHLS.GitDist (GitBranch ref Nothing)
+        Nothing -> CompileHLS.SourceDist tv._tvVersion
+  result <-
+    CompileHLS.compileHLS
+      hlsVer
+      opts.targetGhcs
+      opts.jobs
+      opts.overwriteVer
+      (maybe GHCupInternal IsolateDir opts.isolateDir)
+      opts.cabalProject
+      opts.cabalProjectLocal
+      opts.updateCabal
+      opts.patches
+      opts.cabalArgs
+      & liftE
+      & runE
+        @'[ NoDownload
+          , GPGError
+          , DownloadFailed
+          , DigestError
+          , ContentLengthError
+          , UnknownArchive
+          , TarDirDoesNotExist
+          , ArchiveResult
+          , BuildFailed
+          , NotInstalled
+          , URIParseError
+          ]
+      & runResourceT
+      & flip runReaderT appState
+  setAfterCompile
+    appState
+    (opts.setCompile && isNothing opts.isolateDir)
+    hls
+    (fmap mkTVer (toOpError "HLS compilation failed" result))
+
+setAfterCompile :: AppState -> Bool -> Tool -> Either OpError TargetVersion -> IO (Either OpError ())
+setAfterCompile appState setCompile tool = \case
+  Left err -> pure (Left err)
+  Right targetVer
+    | setCompile -> do
+        setResult <-
+          liftE (setToolVersion tool targetVer)
+            & runE @'[ParseError, NotInstalled]
+            & flip runReaderT appState
+        pure (void (toOpError "Compiled, but could not set as default" setResult))
+    | otherwise -> pure (Right ())
+
 uninstall :: GhcupEnv -> Tool -> TargetVersion -> IO (Either OpError ())
 uninstall env tool tv = runIn env $ \appState ->
-  toOpError "Uninstall failed"
-    <$> ( flip runReaderT appState
-            . runE @'[NotInstalled, UninstallFailed, ParseError, MalformedInstallInfo]
-            $ liftE (rmToolVersion tool tv)
-        )
+  liftE (rmToolVersion tool tv)
+    & runE @'[NotInstalled, UninstallFailed, ParseError, MalformedInstallInfo]
+    & flip runReaderT appState
+    <&> toOpError "Uninstall failed"
 
 setDefault :: GhcupEnv -> Tool -> TargetVersion -> IO (Either OpError ())
 setDefault env tool tv = runIn env $ \appState -> do
   result <-
-    flip runReaderT appState
-      . runE @'[ParseError, NotInstalled]
-      $ liftE (setToolVersion tool tv)
+    liftE (setToolVersion tool tv)
+      & runE @'[ParseError, NotInstalled]
+      & flip runReaderT appState
   pure (void (toOpError "Could not set default" result))

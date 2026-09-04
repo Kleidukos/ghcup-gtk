@@ -86,6 +86,8 @@ runJob setCurrent = \case
       Install tool tvr opts -> installTool tool tvr opts
       Uninstall tool tv -> uninstallTool tool tv
       SetDefault tool tv -> setDefaultVersion tool tv
+      CompileGhc tv opts -> compileGhcTool tv opts
+      CompileHls tv opts -> compileHlsTool tv opts
 
     relistAfterMutation = do
       setCurrent RefreshListings

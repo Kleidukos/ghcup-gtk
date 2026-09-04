@@ -15,6 +15,7 @@ module Presentation.Row
   , toolShortName
   ) where
 
+import Data.Function ((&))
 import Data.List qualified as List
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
@@ -58,6 +59,7 @@ data RowSpec = RowSpec
   , progress :: Maybe Progress
   -- ^ Set while a mutation is running on this row; renderers draw it as a
   -- pulsing bar plus the latest log line.
+  , installedGhcs :: [Version]
   }
   deriving stock (Eq, Show)
 
@@ -86,21 +88,28 @@ data ToolRows = ToolRows
   deriving stock (Eq, Show)
 
 planRows :: Map RowKey Progress -> Listings -> Map Tool ToolRows
-planRows busy listings = Map.mapWithKey (planTool busy) (curate listings)
+planRows busy listings = Map.mapWithKey (planTool busy installedGhcs) (curate listings)
+  where
+    installedGhcs =
+      maybe
+        []
+        (\results -> Vector.filter lInstalled results & Vector.map lVer & Vector.toList)
+        (Map.lookup ghc listings)
 
-planTool :: Map RowKey Progress -> Tool -> Vector ListResult -> ToolRows
-planTool busy tool toolRows =
+planTool :: Map RowKey Progress -> [Version] -> Tool -> Vector ListResult -> ToolRows
+planTool busy installedGhcs tool toolRows =
   ToolRows
-    { rows = Vector.imap (rowSpec busy tool newest) toolRows
+    { rows = Vector.imap (rowSpec busy scopedGhcs tool newest) toolRows
     , subtitle = case lVer <$> Vector.find lSet toolRows of
         Just v -> "Default: " <> prettyVer v
         Nothing -> ""
     }
   where
     newest = latestPerFamily toolRows
+    scopedGhcs = if canCompileFromSource tool then installedGhcs else []
 
-rowSpec :: Map RowKey Progress -> Tool -> Map FamilyKey Version -> Int -> ListResult -> RowSpec
-rowSpec busy tool newest rank lr =
+rowSpec :: Map RowKey Progress -> [Version] -> Tool -> Map FamilyKey Version -> Int -> ListResult -> RowSpec
+rowSpec busy installedGhcs tool newest rank lr =
   RowSpec
     { key
     , title
@@ -120,6 +129,7 @@ rowSpec busy tool newest rank lr =
     , latestInFamily = isLatestInFamily newest lr
     , statusLabel = statusLabelOf lr
     , progress = Map.lookup key busy
+    , installedGhcs
     }
   where
     key = keyOfListing tool lr
@@ -184,6 +194,8 @@ jobTitle = \case
   Install tool (TargetVersionReq tv _) _ -> done tool tv "installed"
   Uninstall tool tv -> done tool tv "uninstalled"
   SetDefault tool tv -> done tool tv "is now the default"
+  CompileGhc tv _ -> done ghc tv "compiled and installed"
+  CompileHls tv _ -> done hls tv "compiled and installed"
   where
     done :: Tool -> TargetVersion -> Text -> Text
     done tool tv outcome = toolShortName tool <> " " <> tVerToText tv <> " " <> outcome

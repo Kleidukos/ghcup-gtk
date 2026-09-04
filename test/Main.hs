@@ -2,6 +2,7 @@ module Main where
 
 import Test.Tasty
 
+import CompileFormSpec qualified
 import ConfigSpec qualified
 import InstallFormSpec qualified
 import PresentationSpec qualified
@@ -15,7 +16,8 @@ main =
   defaultMain $
     testGroup
       "ghcup-gtk"
-      [ ConfigSpec.tests
+      [ CompileFormSpec.tests
+      , ConfigSpec.tests
       , InstallFormSpec.tests
       , PresentationSpec.tests
       , SessionSpec.tests

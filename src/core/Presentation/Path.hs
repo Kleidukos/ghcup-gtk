@@ -50,16 +50,16 @@ pathFixConfirmation changes =
           & Vector.filter (\c -> c.mode == FilteredAppend)
           <&> (.payload)
           & Vector.toList
+      describeChange c =
+        Text.pack c.path
+          <> (if c.mode == CreateOrReplace then " (created, PATH setup)" else "")
   in Confirmation
        { heading = "Set Up Your PATH?"
        , body =
            Text.unlines $
              concat
                [ ["This will modify:", ""]
-               , [ Text.pack c.path
-                     <> (if c.mode == CreateOrReplace then " (created, PATH setup)" else "")
-                 | c <- Vector.toList changes
-                 ]
+               , Vector.toList (Vector.map describeChange changes)
                , ["", "Lines to be written:", ""]
                ]
                <> filteredChanges

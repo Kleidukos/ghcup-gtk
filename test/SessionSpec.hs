@@ -1,7 +1,7 @@
 module SessionSpec (tests) where
 
 import Data.Map.Strict qualified as Map
-import GHCup.Types (cabal, ghc)
+import GHCup.Types (cabal, ghc, hls)
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -10,7 +10,7 @@ import Config
   , ConfigUpdate (..)
   , defaultConfig
   )
-import Fixtures (anError, dirs, installJob, installMutation, listingsFor, lr914, sampleChanges)
+import Fixtures (anError, defaultCompileGhcOptions, defaultCompileHlsOptions, dirs, installJob, installMutation, listingsFor, lr914, sampleChanges)
 import Presentation.Path (appliedBanner, pathBanner)
 import Presentation.Row (planRows)
 import Session
@@ -36,6 +36,8 @@ tests =
             keyOfMutation (Install ghc (reqOf lr914) defaultInstallOptions) @?= installKey
             keyOfMutation (Uninstall ghc (tvOf lr914)) @?= installKey
             keyOfMutation (SetDefault ghc (tvOf lr914)) @?= installKey
+            keyOfMutation (CompileGhc (tvOf lr914) (defaultCompileGhcOptions (Right "/usr/bin/ghc"))) @?= installKey
+            keyOfMutation (CompileHls (tvOf lr914) (defaultCompileHlsOptions [])) @?= keyOfListing hls lr914
         , testCase "rowKeyText is stable and distinguishes tool and version" $ do
             rowKeyText installKey @?= "ghc:9.14.1"
             rowKeyText (keyOfListing cabal lr914) @?= "cabal:9.14.1"
