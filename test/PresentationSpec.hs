@@ -3,8 +3,9 @@ module PresentationSpec (tests) where
 import Data.List (sort)
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as Text
+import Data.Time.Calendar (fromGregorian)
 import Data.Vector qualified as Vector
-import GHCup.Command.List (ListResult)
+import GHCup.Command.List (ListResult (..))
 import GHCup.Types (Tag (..))
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -124,6 +125,34 @@ tests =
             let plan = planRows (Curated False) Map.empty
             Map.keys plan @?= sort (Vector.toList supportedTools)
             ((.rows) <$> Map.elems plan) @?= replicate 4 Vector.empty
+        , testCase "rank is the newest-first position, so it sorts like the version" $ do
+            let specs = ghcRows (Curated True) [mkLR "9.2.8" [] False False, lr914]
+            ((\s -> (s.title, s.rank)) <$> Vector.toList specs)
+              @?= [("9.14.1", 0), ("9.2.8", 1)]
+        , testCase "release day and hls-powered mirror the listing" $ do
+            let dated =
+                  (mkLR "9.12.2" [] False False)
+                    { lReleaseDay = Just (fromGregorian 2025 3 22)
+                    , hlsPowered = True
+                    }
+                specs = ghcRows (Curated True) [dated, lr914]
+            ((\s -> (s.releaseDay, s.hlsPowered)) <$> Vector.toList specs)
+              @?= [(Nothing, False), (Just (fromGregorian 2025 3 22), True)]
+        , testCase "latestInFamily marks one row per major.minor" $ do
+            let rows =
+                  [ mkLR "9.12.2" [] False False
+                  , mkLR "9.12.1" [] False False
+                  , mkLR "9.10.1" [] False False
+                  ]
+                specs = ghcRows (Curated True) rows
+            ((\s -> (s.title, s.latestInFamily)) <$> Vector.toList specs)
+              @?= [("9.12.2", True), ("9.12.1", False), ("9.10.1", True)]
+        , testCase "statusLabel names the row's state" $ do
+            let dflt = mkLR "9.10.3" [] True True
+                inst = mkLR "9.8.4" [] True False
+                specs = ghcRows (Curated True) [lr914, dflt, inst]
+            -- newest-first: 9.14.1 (neither), 9.10.3 (default), 9.8.4 (installed)
+            ((.statusLabel) <$> Vector.toList specs) @?= ["", "default", "installed"]
         ]
     ]
   where

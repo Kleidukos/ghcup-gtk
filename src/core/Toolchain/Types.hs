@@ -13,6 +13,7 @@ module Toolchain.Types
   , RowKey
   , keyOfListing
   , keyOfMutation
+  , rowKeyText
   , Progress (..)
   , OpError (..)
   , UiMsg (..)
@@ -20,6 +21,7 @@ module Toolchain.Types
 
 import Data.Map.Strict (Map)
 import Data.Text (Text)
+import Data.Text qualified as Text
 import Data.Vector (Vector)
 import Data.Vector qualified as Vector
 import GHCup.Command.List (ListResult (..))
@@ -89,6 +91,11 @@ keyOfMutation mutation =
       Install tool (TargetVersionReq tv _) -> (tool, tv)
       Uninstall tool tv -> (tool, tv)
       SetDefault tool tv -> (tool, tv)
+
+-- | Stable text encoding of a 'RowKey', for widget models that can only hold
+-- strings
+rowKeyText :: RowKey -> Text
+rowKeyText (RowKey (tool, ver)) = Text.pack (show tool) <> ":" <> ver
 
 newtype Progress = Progress
   { phase :: Text

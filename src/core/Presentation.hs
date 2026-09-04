@@ -23,13 +23,14 @@ import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Data.Time.Calendar (Day)
 import Data.Vector (Vector)
 import Data.Vector qualified as Vector
-import Data.Versions (prettyVer)
+import Data.Versions (Version, prettyVer)
 import GHCup.Command.List (ListResult (..))
 import GHCup.Types (Tag (..), TargetVersion, TargetVersionReq (..), tVerToText)
 
-import Toolchain.Curation (CurationMode (..), curate)
+import Toolchain.Curation (CurationMode (..), FamilyKey, curate, isLatestInFamily, latestPerFamily)
 import Toolchain.Path (FileChange (..), PathStatus (..), WriteMode (..), sourceLine)
 import Toolchain.Types
 
@@ -76,6 +77,11 @@ data RowSpec = RowSpec
   , isDefault :: Bool
   , action :: RowAction
   , setDefault :: Mutation
+  , rank :: Int
+  , releaseDay :: Maybe Day
+  , hlsPowered :: Bool
+  , latestInFamily :: Bool
+  , statusLabel :: Text
   }
   deriving stock (Eq, Show)
 
@@ -107,14 +113,16 @@ planRows mode listings =
 planTool :: SupportedTool -> Vector ListResult -> ToolRows
 planTool tool toolRows =
   ToolRows
-    { rows = fmap (rowSpec tool) toolRows
+    { rows = Vector.imap (rowSpec tool newest) toolRows
     , subtitle = case lVer <$> Vector.find lSet toolRows of
         Just v -> "Default: " <> prettyVer v
         Nothing -> ""
     }
+  where
+    newest = latestPerFamily toolRows
 
-rowSpec :: SupportedTool -> ListResult -> RowSpec
-rowSpec tool lr =
+rowSpec :: SupportedTool -> Map FamilyKey Version -> Int -> ListResult -> RowSpec
+rowSpec tool newest rank lr =
   RowSpec
     { key = keyOfListing tool lr
     , title = prettyVer (lVer lr)
@@ -126,7 +134,18 @@ rowSpec tool lr =
           then RowAction "Remove" (removeConfirmation tool lr) (Uninstall tool (tvOf lr))
           else RowAction "Install" (installConfirmation tool lr) (Install tool (reqOf lr))
     , setDefault = SetDefault tool (tvOf lr)
+    , rank
+    , releaseDay = lReleaseDay lr
+    , hlsPowered = hlsPowered lr
+    , latestInFamily = isLatestInFamily newest lr
+    , statusLabel = statusLabelOf lr
     }
+
+statusLabelOf :: ListResult -> Text
+statusLabelOf lr
+  | lSet lr = "default"
+  | lInstalled lr = "installed"
+  | otherwise = ""
 
 pillLabel :: Tag -> Maybe Text
 pillLabel = \case

@@ -24,8 +24,8 @@ import Toolchain.Types (Listings)
 
 -- | How we curate a version list
 data CurationMode
-  =  Curated Bool
-  |  Full
+  = Curated Bool
+  | Full
   deriving stock (Eq, Show)
 
 curate :: CurationMode -> Listings -> Listings
