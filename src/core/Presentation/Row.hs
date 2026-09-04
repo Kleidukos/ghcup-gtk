@@ -7,6 +7,7 @@ module Presentation.Row
   , ToolRows (..)
   , Pill (..)
   , installConfirmation
+  , installVerb
   , jobTitle
   , matchesFilters
   , planRows
@@ -204,6 +205,10 @@ instance Display Tool where
     | tool == stack = "Stack"
     | tool == ghcup = "GHCup"
     | otherwise = displayBuilder $ toolText tool
+
+-- | \"Install\" or \"Reinstall\"; the one place this verb is derived.
+installVerb :: RowSpec -> Text
+installVerb spec = if spec.installed then "Reinstall" else "Install"
 
 -- | Short name for dialog headings and toasts.
 toolShortName :: Tool -> Text

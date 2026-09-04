@@ -47,27 +47,18 @@ tests :: TestTree
 tests =
   testGroup
     "Path"
-    [ testGroup
-        "detectShell"
-        [ testCase "zsh" $ detectShell "/usr/bin/zsh" @?= Zsh
-        , testCase "bash" $ detectShell "/bin/bash" @?= Bash
-        , testCase "fish" $ detectShell "/usr/bin/fish" @?= Fish
-        , testCase "sh is unknown (no $BASH/$ZSH_VERSION in a GUI process)" $
-            detectShell "/bin/sh" @?= UnknownShell "/bin/sh"
-        , testCase "empty is unknown" $ detectShell "" @?= UnknownShell ""
-        ]
-    , testGroup
-        "pathContains"
-        [ testCase "present" $
-            pathContains "/home/u/.ghcup/bin" "/usr/bin:/home/u/.ghcup/bin:/bin" @?= True
-        , testCase "absent" $ pathContains "/home/u/.ghcup/bin" "/usr/bin:/bin" @?= False
-        , testCase "trailing slash tolerated" $
-            pathContains "/home/u/.ghcup/bin" "/home/u/.ghcup/bin/:/bin" @?= True
-        , testCase "no substring false-positive" $
-            pathContains "/home/u/.ghcup/bin" "/home/u/.ghcup/bin-extra:/bin" @?= False
-        , testCase "empty PATH" $
-            pathContains "/home/u/.ghcup/bin" "" @?= False
-        ]
+    [ testCase "detectShell knows zsh, bash and fish; sh (no $BASH/$ZSH_VERSION in a GUI process) and empty are unknown" $ do
+        detectShell "/usr/bin/zsh" @?= Zsh
+        detectShell "/bin/bash" @?= Bash
+        detectShell "/usr/bin/fish" @?= Fish
+        detectShell "/bin/sh" @?= UnknownShell "/bin/sh"
+        detectShell "" @?= UnknownShell ""
+    , testCase "pathContains matches whole entries only, tolerating a trailing slash" $ do
+        pathContains "/home/u/.ghcup/bin" "/usr/bin:/home/u/.ghcup/bin:/bin" @?= True
+        pathContains "/home/u/.ghcup/bin" "/usr/bin:/bin" @?= False
+        pathContains "/home/u/.ghcup/bin" "/home/u/.ghcup/bin/:/bin" @?= True
+        pathContains "/home/u/.ghcup/bin" "/home/u/.ghcup/bin-extra:/bin" @?= False
+        pathContains "/home/u/.ghcup/bin" "" @?= False
     , testGroup
         "planFix"
         [ testCase "zsh: env file + .zshrc line" $ do
@@ -137,10 +128,12 @@ tests =
         [ testCase "bin dir on PATH → PathOk" $ do
             let vars = Map.fromList [("SHELL", "/bin/bash"), ("PATH", "/usr/bin:/home/u/.ghcup/bin")]
             fst (runCheck vars Map.empty) @?= PathOk
-        , testCase "marker already in rc → FixedAwaitingRestart" $ do
+        , testCase "marker already in rc → FixedAwaitingRestart, trailing whitespace tolerated" $ do
             let vars = Map.fromList [("SHELL", "/bin/bash"), ("PATH", "/usr/bin")]
                 files = Map.singleton "/fake/home/.bashrc" "source env # ghcup-env\n"
             fst (runCheck vars files) @?= FixedAwaitingRestart
+            let trailing = Map.singleton "/fake/home/.bashrc" "source env # ghcup-env  \n"
+            fst (runCheck vars trailing) @?= FixedAwaitingRestart
         , testCase "bash without marker → NeedsFixPlanned" $ do
             let vars = Map.fromList [("SHELL", "/bin/bash"), ("PATH", "/usr/bin")]
             case fst (runCheck vars Map.empty) of
@@ -156,10 +149,6 @@ tests =
             case fst (runCheck vars files) of
               NeedsFixPlanned _ -> pure ()
               other -> assertFailure ("expected NeedsFixPlanned, got: " <> show other)
-        , testCase "marker line with trailing whitespace still counts as fixed" $ do
-            let vars = Map.fromList [("SHELL", "/bin/bash"), ("PATH", "/usr/bin")]
-                files = Map.singleton "/fake/home/.bashrc" "source env # ghcup-env  \n"
-            fst (runCheck vars files) @?= FixedAwaitingRestart
         ]
     , testGroup
         "applyFix (pure interpreters)"

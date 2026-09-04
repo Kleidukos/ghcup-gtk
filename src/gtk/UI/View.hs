@@ -14,7 +14,7 @@ import Data.Text (Text)
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
-import Config (Filters (..))
+import Config (Config, Filters (..))
 import Presentation.Row (ToolRows)
 import Toolchain.Types (Mutation)
 
@@ -25,9 +25,10 @@ newtype RowCallbacks = RowCallbacks
 data View = View
   { widget :: Gtk.Widget
   -- ^ The renderer's root widget
-  , setRows :: RowCallbacks -> ToolRows -> IO ()
+  , setRows :: ToolRows -> IO ()
   -- ^ Replace the rendered rows
   , setSensitive :: Bool -> IO ()
+  , applyConfig :: Config -> IO ()
   }
 
 -- | The filter checkboxes shared by the list and table renderers.

@@ -3,6 +3,7 @@ module Main where
 import Test.Tasty
 
 import ConfigSpec qualified
+import InstallFormSpec qualified
 import PresentationSpec qualified
 import SessionSpec qualified
 import Toolchain.CurationSpec qualified
@@ -15,6 +16,7 @@ main =
     testGroup
       "ghcup-gtk"
       [ ConfigSpec.tests
+      , InstallFormSpec.tests
       , PresentationSpec.tests
       , SessionSpec.tests
       , Toolchain.CurationSpec.tests

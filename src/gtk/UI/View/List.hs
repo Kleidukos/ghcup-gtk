@@ -1,20 +1,18 @@
 module UI.View.List
-  ( ListView (..)
-  , ListCallbacks (..)
+  ( ListCallbacks (..)
   , build
   ) where
 
-import Control.Monad (forM, forM_)
+import Control.Monad (forM_)
 import Data.GI.Base
 import Data.IORef
 import Data.Vector qualified as Vector
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
-import Config (Filters)
+import Config (Config (..), Filters)
 import Presentation.Row (ToolRows (..), matchesFilters)
-import UI.View (FilterBar (..), View (..), buildFilterBar, emptyStateStack)
-import UI.View.List.Row (RowHandle (..))
+import UI.View (FilterBar (..), RowCallbacks, View (..), buildFilterBar, emptyStateStack)
 import UI.View.List.Row qualified as Row
 
 -- | How the list reports filter changes
@@ -22,19 +20,15 @@ newtype ListCallbacks = ListCallbacks
   { onFiltersChanged :: Filters -> IO ()
   }
 
-data ListView = ListView
-  { view :: View
-  , applyFilters :: Filters -> IO ()
-  }
-
 build
   :: Adw.ApplicationWindow
-  -> Filters
+  -> Config
+  -> RowCallbacks
   -> ListCallbacks
-  -> IO ListView
-build window initialFilters listCallbacks = do
-  filtersRef <- newIORef initialFilters
-  stateRef <- newIORef Nothing
+  -> IO View
+build window config rowCallbacks listCallbacks = do
+  filtersRef <- newIORef config.listFilters
+  rowsRef <- newIORef Nothing
 
   defaultGroup <- new Gtk.CheckButton []
 
@@ -61,19 +55,16 @@ build window initialFilters listCallbacks = do
   let render = do
         filters <- readIORef filtersRef
         listBox.removeAll
-        readIORef stateRef >>= \case
+        readIORef rowsRef >>= \case
           Nothing -> pure ()
-          Just (callbacks, toolRows) -> do
+          Just toolRows -> do
             let visible = Vector.filter (matchesFilters filters) toolRows.rows
-            handles <- forM visible $ \spec -> do
-              handle <- Row.build window spec callbacks
-              listBox.append handle.row
-              pure handle
-            forM_ (Vector.mapMaybe (.defaultCheck) handles) $ \check ->
-              check.setGroup (Just defaultGroup)
+            forM_ visible $ \spec -> do
+              row <- Row.build window defaultGroup spec rowCallbacks
+              listBox.append row
             setEmpty (Vector.null visible)
 
-  bar <- buildFilterBar initialFilters $ \filters -> do
+  bar <- buildFilterBar config.listFilters $ \filters -> do
     writeIORef filtersRef filters
     render
     listCallbacks.onFiltersChanged filters
@@ -83,12 +74,14 @@ build window initialFilters listCallbacks = do
   content.append contentStack
   widget <- Gtk.toWidget content
 
-  let setRows callbacks toolRows = do
-        writeIORef stateRef (Just (callbacks, toolRows))
+  let setRows toolRows = do
+        writeIORef rowsRef (Just toolRows)
         render
 
       setSensitive b = do
         set listBox [#sensitive := b]
         set bar.widget [#sensitive := b]
 
-  pure ListView {view = View {widget, setRows, setSensitive}, applyFilters = bar.setFilters}
+      applyConfig newConfig = bar.setFilters newConfig.listFilters
+
+  pure View {widget, setRows, setSensitive, applyConfig}

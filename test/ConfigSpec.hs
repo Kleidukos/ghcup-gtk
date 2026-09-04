@@ -44,8 +44,6 @@ tests =
         "advanced interface"
         [ testCase "parses advanced-interface #true" $
             (parseConfig "advanced-interface #true").advancedInterface @?= True
-        , testCase "missing node → simple interface" $
-            (parseConfig "").advancedInterface @?= False
         , testCase "viewMode follows the flag" $ do
             viewMode defaultConfig @?= Simple
             viewMode defaultConfig {advancedInterface = True} @?= Advanced
@@ -62,7 +60,7 @@ tests =
         , testCase "parses the filters independently" $ do
             let c = parseConfig "filter-hls-powered #true\nfilter-latest-patch #false"
             c.tableFilters @?= Filters True False
-        , testCase "round-trips every setting" $ do
+        , testCase "round-trips every setting, and the defaults" $ do
             let c =
                   Config
                     { advancedInterface = True
@@ -73,7 +71,6 @@ tests =
                     , windowHeight = 768
                     }
             parseConfig (renderConfig c) @?= c
-        , testCase "round-trips the defaults" $
             parseConfig (renderConfig defaultConfig) @?= defaultConfig
         , testCase "an empty document is exactly the defaults" $
             -- the "old config.kdl without the new keys" case: every missing
@@ -98,9 +95,6 @@ tests =
         [ testCase "parses both dimensions" $ do
             let c = parseConfig "window-width 1024\nwindow-height 768"
             (c.windowWidth, c.windowHeight) @?= (1024, 768)
-        , testCase "missing nodes → defaults" $ do
-            (parseConfig "").windowWidth @?= 960
-            (parseConfig "").windowHeight @?= 560
         , testCase "a non-positive or non-integral dimension falls back" $ do
             (parseConfig "window-width -3").windowWidth @?= 960
             (parseConfig "window-width 12.5").windowWidth @?= 960

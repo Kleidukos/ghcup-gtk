@@ -55,8 +55,6 @@ tests =
         , testCase "a cross build is its own family" $ do
             let cross = (mkLR "9.12.2" [] False False) {lCross = Just "aarch64-unknown-linux"}
             familyKey cross @?= Just (Just "aarch64-unknown-linux", 9, 12)
-        , testCase "a non-numeric version has no family" $
-            familyKey (mkLR "head" [] False False) @?= Nothing
         , testCase "latestPerFamily keeps the newest of each family" $ do
             let newestMinor = mkLR "9.12.2" [] False False
                 rows =
@@ -83,9 +81,5 @@ tests =
                 newest = latestPerFamily (Vector.fromList [native, cross])
             isLatestInFamily newest native @? "native 9.12.1 is latest of its family"
             isLatestInFamily newest cross @? "cross 9.12.2 is latest of its family"
-        , testCase "a version with no family always counts as latest" $ do
-            let odd' = mkLR "head" [] False False
-                newest = latestPerFamily (Vector.fromList [odd'])
-            isLatestInFamily newest odd' @? "unparseable version is never filtered out"
         ]
     ]

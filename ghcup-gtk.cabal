@@ -58,6 +58,7 @@ library core
     Effects.FileSystem
     Effects.Ghcup
     Effects.Notify
+    Presentation.InstallForm
     Presentation.Path
     Presentation.Row
     Session
@@ -105,6 +106,7 @@ library
     UI.Shortcuts
     UI.ToolPanes
     UI.View
+    UI.View.ActionStrip
     UI.View.List
     UI.View.List.Row
     UI.View.Table
@@ -161,6 +163,7 @@ test-suite ghcup-gtk-test
   other-modules:
     ConfigSpec
     Fixtures
+    InstallFormSpec
     PresentationSpec
     SessionSpec
     TestInterpreters

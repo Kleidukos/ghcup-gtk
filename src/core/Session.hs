@@ -5,6 +5,8 @@ module Session
   , Event (..)
   , Effect (..)
   , initialModel
+  , bannerFor
+  , rowPlan
   , step
   ) where
 
@@ -14,7 +16,7 @@ import Data.Text (Text)
 import Data.Vector (Vector)
 import GHCup.Types (Tool)
 
-import Config (Config (..), ConfigUpdate (..), Filters, TableSort, applyUpdate)
+import Config (Config (..), ConfigUpdate (..), applyUpdate)
 import Presentation.Path (BannerSpec, appliedBanner, pathBanner)
 import Presentation.Row (ToolRows, jobTitle, planRows)
 import Toolchain.Path (FileChange, PathStatus (..))
@@ -53,6 +55,7 @@ data Model = Model
   -- ^ ghcup's directories
   , pathModel :: PathModel
   -- ^ Status of the PATH fixing
+  , stale :: Bool
   }
   deriving stock (Eq, Show)
 
@@ -77,19 +80,12 @@ data Effect
   = Enqueue Job
   | Hold
   | Release
-  | SetSensitive Bool
-  | SwitchPage Phase
-  | RevealStaleBanner Bool
   | Toast Text
   | ErrorToast OpError
-  | Rerender (Map Tool ToolRows)
+  | Reconcile
   | SaveConfig Config
-  | SwitchRenderer (Map Tool ToolRows) Config
-  | SetTableState TableSort Filters
-  | SetListState Filters
   | CheckPath
   | ApplyPathFix (Vector FileChange)
-  | SetPathBanner (Maybe BannerSpec)
   deriving stock (Eq, Show)
 
 initialModel :: GhcupDirs -> Config -> Model
@@ -101,6 +97,7 @@ initialModel ghcupDirs config =
     , inFlight = Map.empty
     , ghcupDirs
     , pathModel = Unchecked
+    , stale = False
     }
 
 bannerFor :: Model -> Maybe BannerSpec
@@ -113,75 +110,45 @@ bannerFor model = case model.pathModel of
 rowPlan :: Model -> Map Tool ToolRows
 rowPlan model = planRows model.inFlight model.listings
 
-rerender :: Model -> Effect
-rerender model = Rerender (rowPlan model)
-
-tableState :: Model -> Effect
-tableState model = SetTableState model.config.tableSort model.config.tableFilters
-
 step :: Event -> Model -> (Model, [Effect])
-step event model =
-  let (model', effects) = apply event model
-      sensitivity =
-        [ SetSensitive (Map.null model'.inFlight)
-        | Map.null model'.inFlight /= Map.null model.inFlight
-        ]
-  in (model', effects <> sensitivity)
-
-apply :: Event -> Model -> (Model, [Effect])
-apply event model = case event of
+step event model = case event of
   Submitted (Mutate mutation)
     | Map.member (keyOfMutation mutation) model.inFlight -> (model, [])
   Submitted job@(Mutate mutation) ->
     let key = keyOfMutation mutation
         model' = model {inFlight = Map.insert key (Progress "" Nothing) model.inFlight}
-    in (model', [Hold, Enqueue job, rerender model'])
+    in (model', [Hold, Enqueue job, Reconcile])
   Submitted job -> (model, [Enqueue job])
   RetryClicked ->
-    (model {phase = Loading}, [SwitchPage Loading, Enqueue RefreshListings])
+    (model {phase = Loading}, [Reconcile, Enqueue RefreshListings])
   ConfigChanged update ->
     let model' = model {config = applyUpdate update model.config}
         echoesCurrentConfig = model'.config == model.config
         redraw = case update of
-          SetAdvancedInterface _ -> [SwitchRenderer (rowPlan model') model'.config]
-          SetTableSort _ -> [tableState model']
-          SetTableFilters _ -> [tableState model']
-          SetListFilters _ -> [SetListState model'.config.listFilters]
           SetWindowSize _ _ -> []
+          _ -> [Reconcile]
     in if echoesCurrentConfig
          then (model, [])
          else (model', SaveConfig model'.config : redraw)
   PathChecked status ->
-    let model' = model {pathModel = Checked status}
-    in (model', [SetPathBanner (bannerFor model')])
+    (model {pathModel = Checked status}, [Reconcile])
   PathFixConfirmed -> case model.pathModel of
     Checked (NeedsFixPlanned changes) -> (model, [ApplyPathFix changes])
     _ -> (model, [])
   PathFixDone (Right ()) ->
-    let model' = model {pathModel = FixApplied}
-    in (model', [SetPathBanner (bannerFor model')])
+    (model {pathModel = FixApplied}, [Reconcile])
   PathFixDone (Left err) -> (model, [ErrorToast err])
   WorkerMsg msg -> case msg of
     ListingsReady listings stale ->
-      let model' = model {listings, phase = Ready}
-      in ( model'
-         ,
-           [ rerender model'
-           , RevealStaleBanner stale
-           , SwitchPage Ready
-           ]
-         )
+      (model {listings, phase = Ready, stale}, [Reconcile])
     ListingsFailed err -> case model.phase of
-      Ready ->
-        ( model
-        , [RevealStaleBanner True, ErrorToast err]
-        )
-      _ -> (model {phase = Offline}, [SwitchPage Offline])
+      Ready -> (model {stale = True}, [Reconcile, ErrorToast err])
+      _ -> (model {phase = Offline}, [Reconcile])
     JobProgress (Mutate mutation) progress
       | key <- keyOfMutation mutation
       , Map.member key model.inFlight ->
           let model' = model {inFlight = Map.insert key progress model.inFlight}
-          in (model', [rerender model'])
+          in (model', [Reconcile])
     JobProgress _ _ -> (model, [])
     JobDone mutation result ->
       let key = keyOfMutation mutation
@@ -192,4 +159,4 @@ apply event model = case event of
           outcome = case result of
             Right () -> [Toast (jobTitle mutation), CheckPath]
             Left err -> [ErrorToast err]
-      in (model', release <> (rerender model' : outcome))
+      in (model', release <> (Reconcile : outcome))

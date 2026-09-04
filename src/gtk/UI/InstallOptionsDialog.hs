@@ -3,50 +3,55 @@ module UI.InstallOptionsDialog
   ) where
 
 import Control.Exception (try)
-import Control.Monad (void)
+import Control.Monad (forM_, void, when)
 import Data.GI.Base
 import Data.IORef
 import Data.Text (Text)
 import Data.Text qualified as Text
-import GHCup.Input.Parsers (uriParser)
-import GHCup.Types (InstallDir (..), TargetVersionReq (..), tVerToText)
+import GHCup.Types (TargetVersionReq (..), tVerToText)
 import GI.Adw qualified as Adw
 import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
 
-import Presentation.Row (RowSpec (..), toolShortName)
-import Toolchain.Types (InstallOptions (..), defaultInstallOptions)
+import Presentation.InstallForm (FormEvent (..), FormModel (..), canInstall, initFormModel, setDefaultLocked, stepForm, toOptions, urlError)
+import Presentation.Row (RowSpec (..), installVerb, toolShortName)
+import Toolchain.Types (InstallOptions)
+
+defaultSubtitle :: Text
+defaultSubtitle = "Make this the active version after install"
+
+isolateSubtitle :: Text
+isolateSubtitle = "Install into ghcup's own directory"
 
 present :: Adw.ApplicationWindow -> RowSpec -> (InstallOptions -> IO ()) -> IO ()
 present window spec onInstall = do
-  let verb = if spec.installed then "Reinstall" else "Install"
+  let verb = installVerb spec
       TargetVersionReq tv _ = spec.installReq
       heading = verb <> " " <> toolShortName spec.tool <> " " <> tVerToText tv
 
-  isolateRef <- newIORef Nothing
-  urlRef <- newIORef (Right Nothing)
+  let initialModel = initFormModel spec
+  modelRef <- newIORef initialModel
 
   setRow <-
     new
       Adw.SwitchRow
       [ #title := "Set as default"
-      , #subtitle := "Make this the active version after install"
-      , #active := spec.isDefault
+      , #subtitle := defaultSubtitle
+      , #active := initialModel.setDefault
       ]
   forceRow <-
     new
       Adw.SwitchRow
       [ #title := "Force reinstall"
       , #subtitle := "Overwrite an existing installation"
-      , #active := spec.installed
+      , #active := initialModel.force
       ]
 
-  isolateSubtitle <- newIORef ("Install into ghcup's own directory" :: Text)
   isolateRow <-
     new
       Adw.ActionRow
       [ #title := "Isolate to directory"
-      , #subtitle := "Install into ghcup's own directory"
+      , #subtitle := isolateSubtitle
       ]
   pickButton <-
     new
@@ -117,22 +122,48 @@ present window spec onInstall = do
   toolbarWidget <- Gtk.toWidget toolbarView
   dialog.setChild (Just toolbarWidget)
 
-  let syncIsolation misolate = do
-        writeIORef isolateRef misolate
-        case misolate of
+  let render = do
+        model <- readIORef modelRef
+        case urlError model of
+          Just _ -> urlRow.addCssClass "error"
+          Nothing -> urlRow.removeCssClass "error"
+        installButton.setSensitive (canInstall model)
+        case model.isolate of
           Just path -> do
             isolateRow.setSubtitle (Text.pack path)
             clearButton.setVisible True
-            setRow.setActive False
-            setRow.setSensitive False
-            setRow.setSubtitle "Isolated installs cannot be set as default"
-            forceRow.setActive False
           Nothing -> do
-            subtitle <- readIORef isolateSubtitle
-            isolateRow.setSubtitle subtitle
+            isolateRow.setSubtitle isolateSubtitle
             clearButton.setVisible False
-            setRow.setSensitive True
-            setRow.setSubtitle "Make this the active version after install"
+        let locked = setDefaultLocked model
+        setRow.setSensitive (not locked)
+        setRow.setSubtitle
+          (if locked then "Isolated installs cannot be set as default" else defaultSubtitle)
+        setRow.setActive model.setDefault
+        forceRow.setActive model.force
+
+      dispatch event = do
+        modifyIORef' modelRef (stepForm event)
+        render
+
+  void $ on urlRow #changed $ do
+    text <- urlRow.getText
+    dispatch (UrlChanged text)
+  void $ on argsRow #changed $ do
+    text <- argsRow.getText
+    dispatch (ArgsChanged text)
+  void $ on targetsRow #changed $ do
+    text <- targetsRow.getText
+    dispatch (TargetsChanged text)
+
+  void $ on setRow (PropertyNotify #active) $ \_ -> do
+    active <- setRow.getActive
+    model <- readIORef modelRef
+    when (active /= model.setDefault) $ dispatch (SetDefaultToggled active)
+  void $ on forceRow (PropertyNotify #active) $ \_ -> do
+    active <- forceRow.getActive
+    model <- readIORef modelRef
+    when (active /= model.force) $ dispatch (ForceToggled active)
 
   void $ on pickButton #clicked $ do
     fileDialog <- new Gtk.FileDialog [#title := "Isolate installation to…"]
@@ -145,51 +176,17 @@ present window spec onInstall = do
             Left _dismissed -> pure ()
             Right file -> do
               mpath <- file.getPath
-              maybe (pure ()) (\p -> syncIsolation (Just p)) mpath
+              forM_ mpath (dispatch . IsolatePicked)
       )
 
-  void $ on clearButton #clicked (syncIsolation Nothing)
-
-  let validateUrl = do
-        text <- Text.strip <$> urlRow.getText
-        let outcome
-              | Text.null text = Right Nothing
-              | otherwise = either (Left . Text.pack) (Right . Just) (uriParser (Text.unpack text))
-        writeIORef urlRef outcome
-        case outcome of
-          Left _ -> do
-            urlRow.addCssClass "error"
-            installButton.setSensitive False
-          Right _ -> do
-            urlRow.removeCssClass "error"
-            installButton.setSensitive True
-
-  void $ on urlRow #changed validateUrl
+  void $ on clearButton #clicked (dispatch IsolateCleared)
 
   void $ on cancelButton #clicked (dialog.forceClose)
 
   void $ on installButton #clicked $ do
-    murl <- readIORef urlRef
-    misolate <- readIORef isolateRef
-    setActive <- setRow.getActive
-    forceActive <- forceRow.getActive
-    argsText <- argsRow.getText
-    targetsText <- targetsRow.getText
-    case murl of
-      Left _ -> pure ()
-      Right bindistUrl -> do
-        let opts =
-              defaultInstallOptions
-                { setAsDefault = setActive
-                , forceInstall = forceActive
-                , installDir = maybe GHCupInternal IsolateDir misolate
-                , bindistUrl
-                , extraConfArgs = words (Text.unpack argsText)
-                , installTargets = case words (Text.unpack targetsText) of
-                    [] -> Nothing
-                    ws -> Just ws
-                }
-        dialog.forceClose
-        onInstall opts
+    model <- readIORef modelRef
+    forM_ (toOptions model) $ \opts -> do
+      dialog.forceClose
+      onInstall opts
 
   dialog.present (Just window)
