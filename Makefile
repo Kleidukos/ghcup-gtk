@@ -24,7 +24,7 @@ lint: ## Run the code linter (HLint)
 
 style: ## Run the code styler (stylish-haskell)
 	@fourmolu -q --mode inplace app src
-	@cabal-fmt -i *.cabal
+	@cabal-gild *.cabal
 
 help: ## Display this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.* ?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
