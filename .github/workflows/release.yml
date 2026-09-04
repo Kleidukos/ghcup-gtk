@@ -66,7 +66,8 @@ jobs:
             ruby-full
           sudo gem install fpm
           cabal update
-          cabal freeze
+          rm cabal.project.freeze
+          cabal freeze -f -development
 
       - name: Configure environment (macOS)
         if: runner.os == 'macOS'
@@ -74,7 +75,8 @@ jobs:
           brew install gtk4 libadwaita gobject-introspection pkgconf
           sudo gem install fpm
           cabal update
-          cabal freeze
+          rm cabal.project.freeze
+          cabal freeze -f -development
 
       - name: Cache
         uses: actions/cache@v6
