@@ -11,14 +11,14 @@ maintainer: hecate+github@glitchbra.in
 category: Distribution
 build-type: Simple
 data-files:
-  data/icons/funnel-symbolic.svg
-  data/style.css
+  assets/icons/funnel-symbolic.svg
+  assets/style.css
 
 extra-doc-files: CHANGELOG.md
 tested-with: ghc ==9.14.1
 
 flag development
-  description: Reload the CSS provider when data/style.css changes
+  description: Reload the CSS provider when assets/style.css changes
   default: True
   manual: True
 

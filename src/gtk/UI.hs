@@ -78,7 +78,7 @@ loadCSS = do
 #ifdef DEVELOPMENT
   liftIO (Reload.loadAndWatchCSS cssProvider)
 #else
-  cssPath <- liftIO (Paths.getDataFileName "data/style.css")
+  cssPath <- liftIO (Paths.getDataFileName "assets/style.css")
   Gtk.cssProviderLoadFromPath cssProvider cssPath
 #endif
   Gtk.styleContextAddProviderForDisplay
@@ -87,7 +87,7 @@ loadCSS = do
     (fromIntegral @Int32 @Word32 Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 {- FOURMOLU_ENABLE -}
 
--- | Make the bundled icons (data/icons) resolvable by name.
+-- | Make the bundled icons (assets/icons) resolvable by name.
 loadIcons :: (MonadIO m) => m ()
 loadIcons = do
   display <-
@@ -96,11 +96,11 @@ loadIcons = do
         Nothing -> error "Could not find Display!"
         Just d -> pure d
   theme <- Gtk.iconThemeGetForDisplay display
-  localExists <- liftIO (doesDirectoryExist "data/icons")
+  localExists <- liftIO (doesDirectoryExist "assets/icons")
   path <-
     if localExists
-      then pure "data/icons"
-      else liftIO (Paths.getDataFileName "data/icons")
+      then pure "assets/icons"
+      else liftIO (Paths.getDataFileName "assets/icons")
   theme.addSearchPath path
 
 data Runtime = Runtime

@@ -21,7 +21,7 @@ loadAndWatchCSS provider = do
 
 resolveCssPath :: IO FilePath
 resolveCssPath = do
-  let localPath = "data/style.css"
+  let localPath = "assets/style.css"
   exists <- doesFileExist localPath
   if exists then pure localPath else Paths.getDataFileName localPath
 
