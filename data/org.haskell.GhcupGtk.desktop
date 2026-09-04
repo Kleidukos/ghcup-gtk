@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Haskell Toolchain Installer
+Comment=Install GHC, Cabal, HLS and Stack
+Exec=ghcup-gtk
+Icon=system-software-install
+Terminal=false
+Categories=Development;

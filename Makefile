@@ -23,8 +23,15 @@ lint: ## Run the code linter (HLint)
 	@find app src -name "*.hs" | xargs -P $(PROCS) -I {} hlint --refactor-options="-i" --refactor {}
 
 style: ## Run the code styler (stylish-haskell)
-	@fourmolu -q --mode inplace app src
 	@cabal-gild *.cabal
+
+dist: build ## Assemble release tarball
+	@rm -rf dist-tarball && mkdir -p dist-tarball/ghcup-gtk
+	@cp $$(cabal list-bin ghcup-gtk) dist-tarball/ghcup-gtk/ghcup-gtk
+	@cp data/org.haskell.GhcupGtk.desktop data/install.sh dist-tarball/ghcup-gtk/
+	@chmod +x dist-tarball/ghcup-gtk/install.sh
+	@tar czf ghcup-gtk-$$(git describe --tags --always).tar.gz -C dist-tarball ghcup-gtk
+	@echo "Wrote ghcup-gtk-$$(git describe --tags --always).tar.gz"
 
 help: ## Display this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.* ?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
