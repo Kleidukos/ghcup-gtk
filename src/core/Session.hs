@@ -14,7 +14,7 @@ import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Vector (Vector)
 
-import Config (Config (..), ConfigUpdate, applyUpdate)
+import Config (Config (..), ConfigUpdate (..), TableFilters, TableSort, ViewMode, applyUpdate, viewMode)
 import Presentation.Path (BannerSpec, appliedBanner, pathBanner)
 import Presentation.Row (ToolRows, jobTitle, planRows)
 import Toolchain.Curation (CurationMode (..))
@@ -88,6 +88,8 @@ data Effect
   | SetIdle RowKey
   | Rerender (Map SupportedTool ToolRows)
   | SaveConfig Config
+  | SwitchRenderer ViewMode (Map SupportedTool ToolRows)
+  | SetTableState TableSort TableFilters
   | CheckPath
   | ApplyPathFix (Vector FileChange)
   | SetPathBanner (Maybe BannerSpec)
@@ -110,9 +112,16 @@ bannerFor model = case model.pathModel of
   Checked status -> pathBanner model.ghcupDirs status
   FixApplied -> Just appliedBanner
 
--- | The row plan for a model's current listings and preferences.
 rerender :: Model -> Effect
-rerender model = Rerender (planRows (Curated model.config.showOldVersions) model.listings)
+rerender model = Rerender (rowPlan model)
+
+curationMode :: Config -> CurationMode
+curationMode config
+  | config.advancedInterface = Full
+  | otherwise = Curated config.showOldVersions
+
+tableState :: Model -> Effect
+tableState model = SetTableState model.config.tableSort model.config.tableFilters
 
 step :: Event -> Model -> (Model, [Effect])
 step event model =
@@ -136,7 +145,15 @@ apply event model = case event of
     (model {phase = Loading}, [SwitchPage Loading, Enqueue RefreshListings])
   ConfigChanged update ->
     let model' = model {config = applyUpdate update model.config}
-    in (model', [SaveConfig model'.config, rerender model'])
+        echoesCurrentConfig = model'.config == model.config
+        redraw = case update of
+          SetShowOldVersions _ -> [rerender model']
+          SetAdvancedInterface _ -> [SwitchRenderer (viewMode model'.config) (rowPlan model')]
+          SetTableSort _ -> [tableState model']
+          SetTableFilters _ -> [tableState model']
+    in if echoesCurrentConfig
+         then (model, [])
+         else (model', SaveConfig model'.config : redraw)
   PathChecked status ->
     let model' = model {pathModel = Checked status}
     in (model', [SetPathBanner (bannerFor model')])
