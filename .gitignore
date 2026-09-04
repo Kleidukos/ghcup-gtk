@@ -1,0 +1,14 @@
+dist*
+.hie
+cabal.project.local*
+Session.vim
+docs/site
+.hspec-failures
+<
+.nvimrc
+.direnv/
+.envrc
+.vscode/
+hie.yaml
+tags
+tags.mtime

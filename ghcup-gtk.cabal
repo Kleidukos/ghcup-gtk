@@ -1,0 +1,94 @@
+cabal-version:   3.4
+name:            ghcup-gtk
+version:         0.1.0.0
+
+-- synopsis:
+-- description:
+license:         BSD-3-Clause
+license-file:    LICENSE
+author:          Hécate Moonlight
+maintainer:      hecate+github@glitchbra.in
+
+-- copyright:
+category:        Distribution
+build-type:      Simple
+extra-doc-files: CHANGELOG.md
+tested-with:     GHC ==9.2.4
+
+-- extra-source-files:
+
+common options
+  ghc-options:
+    -Wall -Wcompat -Widentities -Wincomplete-record-updates
+    -Wincomplete-uni-patterns -Wpartial-fields -Wredundant-constraints
+    -fhide-source-paths -Wno-unused-do-bind -fshow-hole-constraints
+    -Wno-unticked-promoted-constructors -Werror=unused-imports
+
+  default-extensions:
+    NoStarIsType
+    DataKinds
+    DeriveAnyClass
+    DerivingStrategies
+    DerivingVia
+    DuplicateRecordFields
+    LambdaCase
+    OverloadedLabels
+    OverloadedRecordDot
+    OverloadedStrings
+    PackageImports
+    PolyKinds
+    QuasiQuotes
+    RecordWildCards
+    StrictData
+    TypeFamilies
+    UndecidableInstances
+    ViewPatterns
+
+  default-language:   GHC2021
+
+library
+  import:          options
+  exposed-modules:
+    MyLib
+    UI.Compiler
+    UI.Install
+
+  -- other-modules:
+  -- other-extensions:
+  build-depends:
+    , base             ^>=4.16.3.0
+    , gi-adwaita       >=1.0       && <1.1
+    , gi-glib          ^>=2.0
+    , gi-gtk           ^>=4.0
+    , haskell-gi-base
+    , text             ^>=2.0
+
+  hs-source-dirs:  src
+
+executable ghcup-gtk
+  import:         options
+  main-is:        Main.hs
+
+  -- other-modules:
+  -- other-extensions:
+  build-depends:
+    , base             ^>=4.16.3.0
+    , ghcup-gtk
+    , gi-adwaita       >=1.0       && <1.1
+    , gi-glib          ^>=2.0
+    , gi-gtk           ^>=4.0
+    , haskell-gi-base
+
+  hs-source-dirs: app
+
+test-suite ghcup-gtk-test
+  import:         options
+
+  -- other-modules:
+  -- other-extensions:
+  type:           exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is:        Main.hs
+  build-depends:
+    , base       ^>=4.16.3.0
+    , ghcup-gtk
