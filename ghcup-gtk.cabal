@@ -49,8 +49,9 @@ common options
 library
   import:          options
   exposed-modules:
-    MyLib
+    UI
     UI.Compiler
+    UI.HeaderBar
     UI.Install
 
   -- other-modules:
@@ -58,6 +59,7 @@ library
   build-depends:
     , base             ^>=4.16.3.0
     , gi-adwaita       >=1.0       && <1.1
+    , gi-gio           ^>=2.0
     , gi-glib          ^>=2.0
     , gi-gtk           ^>=4.0
     , haskell-gi-base
