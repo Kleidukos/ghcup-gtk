@@ -34,7 +34,7 @@ dist: build ## Assemble release tarball
 	@echo "Wrote ghcup-gtk-$$(git describe --tags --always).tar.gz"
 
 package: ## Build native packages with fpm (deb/rpm/pacman on Linux, osxpkg on macOS)
-	@./scripts/package.sh
+	@./scripts/package.sh -v head
 
 help: ## Display this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.* ?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
