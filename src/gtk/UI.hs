@@ -95,7 +95,7 @@ activate forcedView app = do
   (loadedConfig, configWarning) <- runEff (runFileSystemIO Config.load)
   let config = case forcedView of
         Nothing -> loadedConfig
-        Just mode -> loadedConfig {Config.advancedInterface = mode == Config.Advanced}
+        Just mode -> loadedConfig {Config.viewMode = mode}
   shell <- Shell.build app config
   modelRef <- newIORef (Session.initialModel dirs config)
   worker <- Worker.new
@@ -163,7 +163,7 @@ reconcile rt = do
   model <- readIORef rt.modelRef
   Registry.reconcile rt.registry (viewState model)
   rt.shell.stack.setVisibleChildName (pageOf model.phase)
-  rt.shell.staleBanner.setRevealed model.stale
+  rt.shell.staleBanner.setRevealed (model.freshness == Stale)
   PathBanner.render
     rt.shell.pathBanner
     (rt.dispatch Session.PathFixConfirmed)

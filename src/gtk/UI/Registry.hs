@@ -14,7 +14,7 @@ import Data.Vector qualified as Vector
 import GHCup.Types (Tool)
 import GI.Adw qualified as Adw
 
-import Config (Config, ViewMode (..), viewMode)
+import Config (Config (..), ViewMode (..))
 import Presentation.Row (ToolRows (..))
 import Toolchain.Types (sortTools)
 import UI.ToolPanes (ToolPane (..), ToolPanes (..))
@@ -67,7 +67,7 @@ buildRenderers :: Registry -> Config -> IO (Map Tool View)
 buildRenderers registry config = do
   currentPanes <- readIORef registry.panes.panesRef
   built <- forM currentPanes $ \pane -> do
-    view <- case viewMode config of
+    view <- case config.viewMode of
       Simple ->
         ListView.build registry.window config registry.rowCallbacks registry.listCallbacks
       Advanced ->
@@ -81,7 +81,7 @@ reconcile registry new = do
   applied <- readIORef registry.appliedRef
   let tools = Vector.fromList (sortTools (Map.keys new.plan))
   panesChanged <- ToolPanes.sync registry.panes tools
-  let modeChanged = fmap (viewMode . (.config)) applied /= Just (viewMode new.config)
+  let modeChanged = fmap (.config.viewMode) applied /= Just new.config.viewMode
       needRebuild = panesChanged || modeChanged
   renderers <-
     if needRebuild

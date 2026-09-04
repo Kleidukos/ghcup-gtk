@@ -16,8 +16,8 @@ import Worker (processJob)
 
 type TestEs = '[State Int]
 
-emptyReady :: Either OpError (Listings, Bool)
-emptyReady = Right (Map.empty, False)
+emptyRelist :: Either OpError Listings
+emptyRelist = Right Map.empty
 
 -- | Run jobs through 'processJob' with a fake ghcup. Returns the emitted
 -- messages and the final value of the test counter (bumped by whichever
@@ -50,7 +50,7 @@ tests =
             let handlers =
                   idleHandlers
                     { acquire = pure (Left anError)
-                    , relist = bump >> pure emptyReady
+                    , relist = bump >> pure emptyRelist
                     }
                 (msgs, count) = run handlers [installJob]
             msgs @?= [JobDone installMutation (Left anError), ListingsFailed anError]
@@ -71,7 +71,7 @@ tests =
         "refresh"
         [ testCase "happy path emits ListingsReady" $ do
             let (msgs, _) = run idleHandlers [RefreshListings]
-            msgs @?= [ListingsReady Map.empty False]
+            msgs @?= [ListingsReady Map.empty Fresh]
         , testCase "listing failure emits ListingsFailed" $ do
             let (msgs, _) = run idleHandlers {getListings = pure (Left anError)} [RefreshListings]
             msgs @?= [ListingsFailed anError]
@@ -82,22 +82,22 @@ tests =
             let (msgs, _) = run idleHandlers [installJob]
             msgs
               @?= [ JobDone installMutation (Right ())
-                  , ListingsReady Map.empty False
+                  , Relisted Map.empty
                   ]
         , testCase "failure: one JobDone, then relist still runs and succeeds" $ do
             let handlers =
                   idleHandlers
                     { install = \_ _ _ -> pure (Left anError)
-                    , relist = bump >> pure emptyReady
+                    , relist = bump >> pure emptyRelist
                     }
                 (msgs, count) = run handlers [installJob]
-            msgs @?= [JobDone installMutation (Left anError), ListingsReady Map.empty False]
+            msgs @?= [JobDone installMutation (Left anError), Relisted Map.empty]
             count @?= 1
         , testCase "relist failure degrades to a full refresh" $ do
             let (msgs, _) = run idleHandlers {relist = pure (Left anError)} [installJob]
             msgs
               @?= [ JobDone installMutation (Right ())
-                  , ListingsReady Map.empty False
+                  , ListingsReady Map.empty Fresh
                   ]
         , testCase "relist and refresh both failing ends in ListingsFailed, never a second JobDone" $ do
             let handlers =
