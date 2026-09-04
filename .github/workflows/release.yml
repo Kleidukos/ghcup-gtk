@@ -1,0 +1,127 @@
+name: Release
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  generate-matrix:
+    name: 'Generate matrix from cabal'
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract the tested GHC versions
+        id: set-matrix
+        uses: kleidukos/get-tested@v0.1.9.1
+        with:
+          cabal-file: ghcup-gtk.cabal
+          ubuntu-version: 'latest'
+          macos-version: 'latest'
+          newest: true
+          version: 0.1.9.1
+
+  packages:
+    name: Packages with ${{ matrix.ghc }} on ${{ matrix.os }}
+    needs: generate-matrix
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Haskell
+        id: setup-haskell
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: ${{ matrix.ghc }}
+          cabal-version: 'latest'
+
+      - name: Configure environment (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            libadwaita-1-dev \
+            libcairo2-dev \
+            libfreetype-dev \
+            libgdk-pixbuf-2.0-dev \
+            libgirepository1.0-dev \
+            libglib2.0-dev \
+            libgraphene-1.0-dev \
+            libgtk-4-dev \
+            libharfbuzz-dev \
+            liblzma-dev \
+            libpango1.0-dev \
+            zlib1g-dev \
+            rpm \
+            zstd \
+            libarchive-tools \
+            ruby-full
+          sudo gem install fpm
+          cabal update
+          cabal freeze
+
+      - name: Configure environment (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install gtk4 libadwaita gobject-introspection pkgconf
+          sudo gem install fpm
+          cabal update
+          cabal freeze
+
+      - name: Cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.setup-haskell.outputs.cabal-store }}
+          key: release-${{ runner.os }}-ghc-${{ matrix.ghc }}-${{ hashFiles('**/plan.json') }}
+          restore-keys: release-${{ runner.os }}-ghc-${{ matrix.ghc }}-
+
+      - name: Build packages
+        run: ./scripts/package.sh
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: packages-${{ runner.os }}
+          path: dist-package/out/*
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: packages
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v7
+        with:
+          path: packages
+          merge-multiple: true
+
+      - name: Publish tagged release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --verify-tag \
+            packages/*
+
+      - name: Update rolling head release
+        if: github.ref == 'refs/heads/main'
+        run: |
+          git tag -f ghcup-gtk-head
+          git push -f origin ghcup-gtk-head
+          gh release view ghcup-gtk-head >/dev/null 2>&1 || \
+            gh release create ghcup-gtk-head \
+              --prerelease \
+              --title "ghcup-gtk-head" \
+              --notes "Rolling build of the latest commit on main."
+          gh release upload ghcup-gtk-head packages/* --clobber
