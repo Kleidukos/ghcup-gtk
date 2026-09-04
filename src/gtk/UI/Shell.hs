@@ -43,9 +43,8 @@ build app config = do
       [ #spinning := True
       , #halign := Gtk.AlignCenter
       , #valign := Gtk.AlignCenter
-      , #widthRequest := 48
-      , #heightRequest := 48
       ]
+  loadingSpinner.addCssClass "loading-spinner"
   offlinePage <-
     new
       Adw.StatusPage
