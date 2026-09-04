@@ -2,24 +2,28 @@
 
 Each tool pane draws its version list one of two ways: simple
 `Adw.ActionRow` list, or the "advanced interface" (a sortable, filterable
-`Gtk.ColumnView` table). The `Config.advancedInterface` preference picks
-which one exists: only the active renderer is ever built. Each pane holds
-an `Adw.Bin`; switching modes replaces every pane's child with a freshly
-built renderer and draws the plan carried by the `SwitchRenderer` effect.
-No hidden renderer, nothing to go stale.
+`Gtk.ColumnView` table). The `Config.viewMode` preference picks which one
+exists: only the active renderer is ever built. Each pane holds an
+`Adw.Bin`; when the registry sees a different view mode in an incoming
+reconcile it replaces every pane's child with a freshly built renderer and
+replays the current state onto it. No hidden renderer, nothing to go
+stale.
 
 ## The View
 
 The `View` record in `UI.View` is the whole contract: a widget, row
-replacement, sensitivity. `UI.Registry` is the only caller into a `View`;
-`UI.View.List` and `UI.View.Table` each build one and never see each other.
+replacement (`setRows`), sensitivity, and `applyConfig` for persisted view
+state. `UI.Registry` is the only caller into a `View`; `UI.View.List` and
+`UI.View.Table` each build one and never see each other.
 
 ## The registry
 
-`UI.Registry` keeps one `View` per tool plus a cache of each tool's last
-rows, so a rebuild only redraws tools whose rows changed. It also remembers
-the last sensitivity value: Session emits sensitivity only on the change
-edge, so freshly built renderers need it reapplied.
+`UI.Registry` keeps one `View` per tool plus the last `ViewState` it
+applied, and diffs each incoming state against it: a pane-set or view-mode
+change rebuilds the renderers, sensitivity is reapplied on its change
+edge, a config change fans out through `applyConfig`, and `setRows` runs
+only for tools whose rows changed. After a rebuild the whole state is
+replayed onto the fresh widgets.
 
 ## Busy state
 
@@ -43,11 +47,12 @@ special handling.
 
 ## Persisted view state
 
-The table's sort column/direction and its two filters (`hlsPoweredOnly`,
-`latestPatchOnly`) live in `config.kdl`. A header click or filter checkbox
-dispatches `ConfigChanged`, which saves the config and fans the new state
-to every tool's table via `SetTableState`.
-Re-applying state there re-fires GTK's change signal, but the echoed update
-matches the current config and the state machine drops it, so no loop. The
-`SwitchRenderer` effect carries the persisted sort and filters, so a
-freshly built table starts from them.
+The table's sort column/direction and both filter bars (`hlsPoweredOnly`,
+`latestPatchOnly`, per renderer) live in `config.kdl`. A header click or
+filter checkbox only dispatches `ConfigChanged`; the state machine saves
+the config and reconciles, and `applyConfig` applies it back to every pane
+and re-renders. Data flows one way: widget → event → model → reconcile → widget.
+Re-applying state re-fires GTK's change signal, but the echoed update
+matches the current config and the state machine drops it, so no loop. A
+freshly built renderer starts from the persisted config it was built
+with.

@@ -10,10 +10,11 @@
 ## Overview
 
 ghcup-gtk is a GTK4/libadwaita frontend for [ghcup](https://www.haskell.org/ghcup/),
-the Haskell toolchain manager: list, install, uninstall, and set default
-versions of GHC, Cabal, HLS, and Stack. All decisions live in a pure state
-machine; all slow ghcup operations run on one background worker thread; the
-GTK code renders state and forwards clicks.
+the Haskell toolchain manager: list, install, uninstall, compile from
+source, and set default versions of GHC, Cabal, HLS, and Stack. All
+decisions live in a pure state machine; all slow ghcup operations run on
+one background worker thread; the GTK code renders state and forwards
+clicks.
 
 ```
    user clicks                    GTK main thread

@@ -28,8 +28,9 @@ Two phases, distinct failure behavior:
 ### 1. Fetch metadata
 Downloads ghcup's release metadata. On network failure, retries with
 ghcup's `noNetwork = True`, which serves cached metadata from
-`~/.ghcup/cache`. The result carries `stale :: Bool` telling the UI whether
-it is looking at cached data.
+`~/.ghcup/cache`. The result carries a `Freshness` (`Fresh` or `Stale`)
+telling the UI whether it is looking at cached data; the model is the only
+place that value is stored.
 
 ### 2. List versions
 Combines the metadata with what is installed on disk.
@@ -37,13 +38,15 @@ Combines the metadata with what is installed on disk.
 UI mapping:
 
 - fresh metadata → normal list;
-- cached metadata (`stale = True`) → normal list plus "version data may be
+- cached metadata (`Stale`) → normal list plus "version data may be
   outdated" banner;
 - no metadata at all (no network, no cache) → "No Network Connection" page
   with Retry.
 
 A relist operation re-runs only phase 2 against the already-fetched
-metadata; the worker uses it after every successful mutation.
+metadata; the worker uses it after every successful mutation and reports
+it as `Relisted`, which swaps the listings without touching the model's
+freshness.
 
 ## Listing curation
 
@@ -52,13 +55,9 @@ and sorts before rendering (`Toolchain.Curation`):
 
 - drop versions with no binary distribution for this platform (unless
   installed);
-- keep only `recommended`, `latest`, and installed (unless "show older
-  versions" is enabled in preferences);
 - sort newest first.
 
-Curation runs when the state machine plans the rows (`Presentation.Row`,
-shipped in the `Rerender` effect, or in `SwitchRenderer`.
-
-The advanced interface curates with `Full`: every installable version is
-planned, "show older versions" does not apply, narrowing is left to the
-table's own filters in the widget layer.
+Curation runs when the row plan is derived from the model
+(`Presentation.Row.planRows`, re-run on every `Reconcile`). Narrowing
+beyond that (HLS-powered only, latest patch per major.minor) belongs to
+the filter bar both renderers share.
