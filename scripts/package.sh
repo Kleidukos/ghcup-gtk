@@ -5,7 +5,7 @@ set -euo pipefail
 # Usage: scripts/package.sh -v <version>|head [format...]
 #   -v: mandatory; version label used in the package file name; either
 #       a numeric version (e.g. 1.2.3) or the literal "head".
-#   formats: deb rpm pacman flatpak (Linux), osxpkg (macOS)
+#   formats: deb rpm pacman flatpak tarball (Linux), osxpkg (macOS)
 #   No format arguments: build every fpm format native to the host OS
 #   (flatpak is only built when requested explicitly, since it needs
 #   flatpak-builder and the GNOME runtime installed).
@@ -19,7 +19,7 @@ usage() {
   echo "usage: scripts/package.sh -v <version>|head [format...]"
   echo "  -v   mandatory; version label for the package file name:"
   echo "       a numeric version (e.g. 1.2.3) or \"head\""
-  echo "  formats: deb rpm pacman flatpak (Linux), osxpkg (macOS)"
+  echo "  formats: deb rpm pacman flatpak tarball (Linux), osxpkg (macOS)"
 }
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -71,7 +71,7 @@ fi
 
 for fmt in "${FORMATS[@]}"; do
   case "$OS,$fmt" in
-    Darwin,osxpkg | Linux,deb | Linux,rpm | Linux,pacman | Linux,flatpak) ;;
+    Darwin,osxpkg | Linux,deb | Linux,rpm | Linux,pacman | Linux,flatpak | Linux,tarball) ;;
     *)
       echo "error: cannot build '$fmt' on $OS" >&2
       exit 1
@@ -95,10 +95,10 @@ fi
 ARCH="$(uname -m)"
 
 # Minimum supported OS per package format. Keep in sync with the
-# runners in .github/workflows/release.yml.
+# runners in .github/workflows/ci.yml.
 min_os_for() {
   case "$1" in
-    deb) echo ubuntu-26 ;;
+    deb) echo "ubuntu-$(. /etc/os-release && echo "${VERSION_ID%%.*}")" ;;
     rpm) echo fedora-44 ;;
     pacman) echo archlinux ;;
     osxpkg) echo macos-15 ;;
@@ -190,6 +190,8 @@ else
     "${STAGING}${PREFIX}/share/applications/org.haskell.GhcupGtk.desktop"
   install_file 644 assets/org.haskell.GhcupGtk.svg \
     "${STAGING}${PREFIX}/share/icons/hicolor/scalable/apps/org.haskell.GhcupGtk.svg"
+  install_file 644 assets/org.haskell.GhcupGtk.metainfo.xml \
+    "${STAGING}${PREFIX}/share/metainfo/org.haskell.GhcupGtk.metainfo.xml"
 fi
 
 FPM_COMMON=(
@@ -236,6 +238,12 @@ for fmt in "${FORMATS[@]}"; do
   case "$fmt" in
     flatpak)
       build_flatpak "ghcup-gtk-${VERSION_LABEL}-${ARCH}.flatpak"
+      continue
+      ;;
+    tarball)
+      PKG_NAME="ghcup-gtk-${VERSION_LABEL}-linux-${ARCH}.tar.gz"
+      echo "==> tar ($PKG_NAME)"
+      tar -C "${STAGING}${PREFIX}" -czf "dist-package/out/${PKG_NAME}" .
       continue
       ;;
     osxpkg)
