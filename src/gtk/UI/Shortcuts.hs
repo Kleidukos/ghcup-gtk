@@ -6,7 +6,7 @@ import Data.Text (Text)
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
-import UI.View (dimCaption)
+import UI.View (captionLabel)
 
 -- | The shortcuts listed in the dialog, paired with the accelerators
 -- registered in 'UI.installActions'.
@@ -26,7 +26,7 @@ present parent = do
   forM_ shortcuts $ \(title, accel) -> do
     row <- new Adw.ActionRow [#title := title]
     label <- new Gtk.Label [#label := accel, #valign := Gtk.AlignCenter]
-    dimCaption label
+    captionLabel label
     row.addSuffix label
     group.add row
 

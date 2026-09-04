@@ -1,6 +1,5 @@
 module Toolchain.Curation
-  ( CurationMode (..)
-  , FamilyKey
+  ( FamilyKey
   , curate
   , familyKey
   , isLatestInFamily
@@ -18,33 +17,20 @@ import Data.Vector (Vector)
 import Data.Vector qualified as Vector
 import Data.Versions (Chunk (..), Chunks (..), Version (..))
 import GHCup.Command.List (ListResult (..))
-import GHCup.Types (Tag (..))
 
 import Toolchain.Types (Listings)
 
--- | How we curate a version list
-data CurationMode
-  = Curated Bool
-  | Full
-  deriving stock (Eq, Show)
-
-curate :: CurationMode -> Listings -> Listings
-curate mode listings =
+-- | Hide rows that cannot be installed, sort the rest newest-first.
+-- Narrowing the list further is the views' job, via their filter bars.
+curate :: Listings -> Listings
+curate listings =
   listings
-    <&> Vector.filter keep
+    <&> Vector.filter installable
     <&> Vector.toList
     <&> List.sortOn (Down . lVer)
     <&> Vector.fromList
   where
-    keep lr = installable lr && interesting lr
     installable lr = lInstalled lr || not (lNoBindist lr)
-    interesting lr = case mode of
-      Full -> True
-      Curated showOld ->
-        showOld
-          || Recommended `elem` lTag lr
-          || Latest `elem` lTag lr
-          || lInstalled lr
 
 -- | A release family: everything sharing a cross-compilation target and a Major.Minor version.
 type FamilyKey = (Maybe Text, Word, Word)

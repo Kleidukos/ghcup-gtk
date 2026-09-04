@@ -13,10 +13,9 @@ import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Vector (Vector)
 
-import Config (Config (..), ConfigUpdate (..), TableFilters, TableSort, ViewMode, applyUpdate, viewMode)
+import Config (Config (..), ConfigUpdate (..), Filters, TableSort, applyUpdate)
 import Presentation.Path (BannerSpec, appliedBanner, pathBanner)
 import Presentation.Row (ToolRows, jobTitle, planRows)
-import Toolchain.Curation (CurationMode (..))
 import Toolchain.Path (FileChange, PathStatus (..))
 import Toolchain.Types
   ( GhcupDirs
@@ -85,8 +84,9 @@ data Effect
   | ErrorToast OpError
   | Rerender (Map SupportedTool ToolRows)
   | SaveConfig Config
-  | SwitchRenderer ViewMode (Map SupportedTool ToolRows) TableSort TableFilters
-  | SetTableState TableSort TableFilters
+  | SwitchRenderer (Map SupportedTool ToolRows) Config
+  | SetTableState TableSort Filters
+  | SetListState Filters
   | CheckPath
   | ApplyPathFix (Vector FileChange)
   | SetPathBanner (Maybe BannerSpec)
@@ -109,17 +109,12 @@ bannerFor model = case model.pathModel of
   Checked status -> pathBanner model.ghcupDirs status
   FixApplied -> Just appliedBanner
 
--- | The row plan for the model's current listings and preferences.
+-- | The row plan for the model's current listings.
 rowPlan :: Model -> Map SupportedTool ToolRows
-rowPlan model = planRows (curationMode model.config) model.inFlight model.listings
+rowPlan model = planRows model.inFlight model.listings
 
 rerender :: Model -> Effect
 rerender model = Rerender (rowPlan model)
-
-curationMode :: Config -> CurationMode
-curationMode config
-  | config.advancedInterface = Full
-  | otherwise = Curated config.showOldVersions
 
 tableState :: Model -> Effect
 tableState model = SetTableState model.config.tableSort model.config.tableFilters
@@ -148,16 +143,10 @@ apply event model = case event of
     let model' = model {config = applyUpdate update model.config}
         echoesCurrentConfig = model'.config == model.config
         redraw = case update of
-          SetShowOldVersions _ -> [rerender model']
-          SetAdvancedInterface _ ->
-            [ SwitchRenderer
-                (viewMode model'.config)
-                (rowPlan model')
-                model'.config.tableSort
-                model'.config.tableFilters
-            ]
+          SetAdvancedInterface _ -> [SwitchRenderer (rowPlan model') model'.config]
           SetTableSort _ -> [tableState model']
           SetTableFilters _ -> [tableState model']
+          SetListFilters _ -> [SetListState model'.config.listFilters]
           SetWindowSize _ _ -> []
     in if echoesCurrentConfig
          then (model, [])

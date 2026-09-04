@@ -23,16 +23,23 @@ tests :: TestTree
 tests =
   testGroup
     "Config"
-    [ testCase "parses show-old-versions #true" $
-        (parseConfig "show-old-versions #true").showOldVersions @?= True
-    , testCase "parses show-old-versions #false" $
-        (parseConfig "show-old-versions #false").showOldVersions @?= False
-    , testCase "missing node → default" $
-        (parseConfig "").showOldVersions @?= False
-    , testCase "malformed document → default" $
-        (parseConfig "{{{{").showOldVersions @?= False
-    , testCase "v1-style bare bool is malformed → default" $
-        (parseConfig "show-old-versions true").showOldVersions @?= False
+    [ testGroup
+        "list filters"
+        [ testCase "parses the filters independently" $ do
+            let c = parseConfig "list-filter-hls-powered #true\nlist-filter-latest-patch #false"
+            c.listFilters @?= Filters True False
+        , testCase "malformed document → the whole default config" $
+            parseConfig "{{{{" @?= defaultConfig
+        , testCase "v1-style bare bool is malformed → default" $
+            (parseConfig "list-filter-hls-powered true").listFilters.hlsPoweredOnly @?= False
+        , testCase "fresh install shows only the latest patch per family, in both views" $ do
+            defaultConfig.listFilters @?= Filters False True
+            defaultConfig.tableFilters @?= Filters False True
+        , testCase "applyUpdate sets only the list filters" $ do
+            let c = applyUpdate (SetListFilters (Filters True False)) defaultConfig
+            c.listFilters @?= Filters True False
+            c.tableFilters @?= defaultConfig.tableFilters
+        ]
     , testGroup
         "advanced interface"
         [ testCase "parses advanced-interface #true" $
@@ -54,14 +61,14 @@ tests =
             (parseConfig "table-sort-column \"colour\"").tableSort.column @?= ByVersion
         , testCase "parses the filters independently" $ do
             let c = parseConfig "filter-hls-powered #true\nfilter-latest-patch #false"
-            c.tableFilters @?= TableFilters True False
+            c.tableFilters @?= Filters True False
         , testCase "round-trips every setting" $ do
             let c =
                   Config
-                    { showOldVersions = True
-                    , advancedInterface = True
+                    { advancedInterface = True
                     , tableSort = TableSort ByStatus Ascending
-                    , tableFilters = TableFilters True True
+                    , tableFilters = Filters True True
+                    , listFilters = Filters True False
                     , windowWidth = 1024
                     , windowHeight = 768
                     }
@@ -72,6 +79,8 @@ tests =
             -- the "old config.kdl without the new keys" case: every missing
             -- node falls back, so an upgrade changes nothing
             parseConfig "" @?= defaultConfig
+        , testCase "a retired show-old-versions node is ignored" $
+            parseConfig "show-old-versions #true" @?= defaultConfig
         , testCase "a missing direction node keeps the default direction" $
             (parseConfig "table-sort-column \"released\"").tableSort
               @?= TableSort ByReleased Descending
@@ -81,8 +90,8 @@ tests =
             sorted.tableFilters @?= defaultConfig.tableFilters
             sorted.advancedInterface @?= False
             (applyUpdate (SetAdvancedInterface True) defaultConfig).advancedInterface @?= True
-            (applyUpdate (SetTableFilters (TableFilters True False)) defaultConfig).tableFilters
-              @?= TableFilters True False
+            (applyUpdate (SetTableFilters (Filters True False)) defaultConfig).tableFilters
+              @?= Filters True False
         ]
     , testGroup
         "window size"
@@ -106,9 +115,9 @@ tests =
             config @?= defaultConfig
             warning @?= Nothing
         , testCase "good file is read" $ do
-            let files = Map.singleton configPath "show-old-versions #true"
+            let files = Map.singleton configPath "list-filter-hls-powered #true"
                 ((config, warning), _) = runFs files load
-            config.showOldVersions @?= True
+            config.listFilters.hlsPoweredOnly @?= True
             warning @?= Nothing
         , testCase "malformed file → defaults plus a warning naming the file" $ do
             let files = Map.singleton configPath "{{{{"
@@ -123,7 +132,7 @@ tests =
             config @?= defaultConfig
             isJust warning @? "expected a warning"
         , testCase "save-then-load round-trip" $ do
-            let c = defaultConfig {showOldVersions = True}
+            let c = defaultConfig {listFilters = Filters True False}
                 ((saved, (loaded, warning)), _) =
                   runFs Map.empty $ do
                     saveResult <- save c
