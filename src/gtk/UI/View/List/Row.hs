@@ -1,6 +1,5 @@
-module UI.Row
-  ( RowCallbacks (..)
-  , RowHandle (..)
+module UI.View.List.Row
+  ( RowHandle (..)
   , build
   ) where
 
@@ -11,12 +10,9 @@ import GI.Gtk qualified as Gtk
 import GI.Pango qualified as Pango
 
 import Presentation.Row (RowAction (..), RowSpec (..))
-import Toolchain.Types (Mutation, Progress (..))
+import Toolchain.Types (Progress (..))
 import UI.Dialog qualified as Dialog
-
-newtype RowCallbacks = RowCallbacks
-  { onSubmit :: Mutation -> IO ()
-  }
+import UI.View (RowCallbacks (..), dimCaption, pillLabel)
 
 data RowHandle = RowHandle
   { row :: Adw.ActionRow
@@ -30,9 +26,7 @@ build window spec callbacks = do
   row <- new Adw.ActionRow [#title := spec.title]
 
   forM_ spec.pills $ \text -> do
-    pill <- new Gtk.Label [#label := text, #valign := Gtk.AlignCenter]
-    pill.addCssClass "caption"
-    pill.addCssClass "dim-label"
+    pill <- pillLabel text
     row.addSuffix pill
 
   defaultCheck <-
@@ -62,8 +56,7 @@ build window spec callbacks = do
       , #maxWidthChars := 30
       , #ellipsize := Pango.EllipsizeModeEnd
       ]
-  phaseLabel.addCssClass "caption"
-  phaseLabel.addCssClass "dim-label"
+  dimCaption phaseLabel
   progressBar <-
     new Gtk.ProgressBar [#valign := Gtk.AlignCenter, #visible := False]
   row.addSuffix phaseLabel
