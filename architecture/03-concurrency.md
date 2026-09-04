@@ -75,8 +75,9 @@ ghcup writes log lines. The worker installs a log sink that:
   not flood the main loop;
 - forwards each surviving line as `JobProgress currentJob (Progress …)`.
 
-The UI renders these as a pulsing progress bar plus the latest log line on
-the affected row.
+The UI records each surviving line in the model and re-renders the
+affected tool's rows, which draw a pulsing progress bar plus the latest
+log line. The 100 ms throttle is therefore also the redraw rate.
 
 ## Staying alive during a job
 

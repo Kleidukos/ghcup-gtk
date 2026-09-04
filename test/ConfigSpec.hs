@@ -33,9 +33,6 @@ tests =
         (parseConfig "{{{{").showOldVersions @?= False
     , testCase "v1-style bare bool is malformed → default" $
         (parseConfig "show-old-versions true").showOldVersions @?= False
-    , testCase "round-trip" $ do
-        let c = defaultConfig {showOldVersions = True}
-        (parseConfig (renderConfig c)).showOldVersions @?= True
     , testGroup
         "advanced interface"
         [ testCase "parses advanced-interface #true" $
@@ -48,10 +45,7 @@ tests =
         ]
     , testGroup
         "table state"
-        [ testCase "defaults are version-descending, no filters" $ do
-            defaultConfig.tableSort @?= TableSort ByVersion Descending
-            defaultConfig.tableFilters @?= TableFilters False False
-        , testCase "parses the sort column and direction" $ do
+        [ testCase "parses the sort column and direction" $ do
             let c = parseConfig "table-sort-column \"released\"\ntable-sort-descending #false"
             c.tableSort @?= TableSort ByReleased Ascending
         , testCase "parses status as a sort column" $

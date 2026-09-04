@@ -102,8 +102,6 @@ interpretEffect rt = \case
   Session.RevealStaleBanner b -> rt.shell.staleBanner.setRevealed b
   Session.Toast title -> showToast rt.shell title 3
   Session.ErrorToast err -> showErrorToast rt.shell err
-  Session.SetBusy key progress -> Registry.setBusy rt.registry key progress
-  Session.SetIdle key -> Registry.setIdle rt.registry key
   Session.Rerender plan -> Registry.rebuild rt.registry (callbacks rt) plan
   Session.SaveConfig newConfig ->
     runEff (runFileSystemIO (Config.save newConfig)) >>= \case
@@ -115,9 +113,8 @@ interpretEffect rt = \case
     rt.dispatch (Session.PathFixDone result)
   Session.SetPathBanner spec ->
     PathBanner.render rt.shell.pathBanner (rt.dispatch Session.PathFixConfirmed) spec
-  Session.SwitchRenderer mode plan -> do
-    Registry.setViewMode rt.registry mode
-    Registry.rebuild rt.registry (callbacks rt) plan
+  Session.SwitchRenderer mode plan sort filters ->
+    Registry.switchTo rt.registry (callbacks rt) mode plan sort filters
   Session.SetTableState sort filters -> Registry.applyTableState rt.registry sort filters
   where
     pageOf :: Session.Phase -> Text

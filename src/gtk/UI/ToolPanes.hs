@@ -1,12 +1,11 @@
 module UI.ToolPanes
   ( ToolPane (..)
   , ToolPanes (..)
-  , addView
   , build
   , displayName
   , onToolSelected
   , selectFirst
-  , setViewMode
+  , setChild
   ) where
 
 import Control.Monad (forM, forM_, void)
@@ -17,7 +16,6 @@ import Data.Vector qualified as Vector
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 
-import Config (ViewMode (..))
 import Toolchain.Types (SupportedTool (..), supportedTools)
 
 displayName :: SupportedTool -> Text
@@ -36,18 +34,13 @@ pageName = \case
   HLS -> "hls"
   Stack -> "stack"
 
--- | Stack page identifier of a renderer inside a pane.
-viewName :: ViewMode -> Text
-viewName = \case
-  Simple -> "simple"
-  Advanced -> "table"
-
--- | One tool's widgets: its sidebar entry and the stack that holds one page
--- per renderer.
+-- | One tool's widgets: its sidebar entry and the bin that holds the
+-- active renderer. Only one renderer exists at a time; switching modes
+-- replaces the bin's child ('UI.Registry.switchTo').
 data ToolPane = ToolPane
   { tool :: SupportedTool
   , sidebarRow :: Adw.ActionRow
-  , stack :: Gtk.Stack
+  , bin :: Adw.Bin
   }
 
 data ToolPanes = ToolPanes
@@ -66,32 +59,23 @@ build = do
   panes <- forM supportedTools $ \tool -> do
     sidebarRow <- new Adw.ActionRow [#title := displayName tool]
     sidebar.append sidebarRow
-    stack <- new Gtk.Stack []
-    pages.addNamed stack (Just (pageName tool))
-    pure ToolPane {tool, sidebarRow, stack}
+    bin <- new Adw.Bin []
+    pages.addNamed bin (Just (pageName tool))
+    pure ToolPane {tool, sidebarRow, bin}
 
   pure ToolPanes {sidebar, pages, panes}
 
--- | Add a renderer's widget to a pane. Called once per renderer at startup.
--- 'Gtk.stackAddNamed' returns the 'Gtk.StackPage' it created, hence the 'void':
--- unlike the existing call sites this one is a whole function body, so
--- @-Wno-unused-do-bind@ does not cover it and the types would not match.
-addView :: ToolPane -> ViewMode -> Gtk.Widget -> IO ()
-addView pane mode widget = void $ pane.stack.addNamed widget (Just (viewName mode))
-
-setViewMode :: ToolPanes -> ViewMode -> IO ()
-setViewMode toolPanes mode =
-  forM_ toolPanes.panes $ \pane -> pane.stack.setVisibleChildName (viewName mode)
+-- | Mount a renderer in a pane, dropping (and thereby destroying) the
+-- previous one.
+setChild :: ToolPane -> Gtk.Widget -> IO ()
+setChild pane widget = pane.bin.setChild (Just widget)
 
 selectFirst :: ToolPanes -> IO ()
 selectFirst toolPanes =
   forM_ (Vector.take 1 toolPanes.panes) $ \pane ->
     toolPanes.sidebar.selectRow (Just pane.sidebarRow)
 
--- | Two stacks are in play and only one of them moves here: selecting a tool
--- switches the outer 'pages' stack to that tool's pane (as it always has), and
--- must leave the pane's inner renderer stack alone — only 'setViewMode' decides
--- which renderer a pane shows.
+-- | Selecting a tool switches the outer 'pages' stack to that tool's pane.
 onToolSelected :: ToolPanes -> (SupportedTool -> IO ()) -> IO ()
 onToolSelected toolPanes handler =
   void $ on toolPanes.sidebar #rowSelected $ \case

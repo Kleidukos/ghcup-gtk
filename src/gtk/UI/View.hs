@@ -10,7 +10,7 @@ import Data.Text (Text)
 import GI.Gtk qualified as Gtk
 
 import Presentation.Row (ToolRows)
-import Toolchain.Types (Mutation, Progress, RowKey)
+import Toolchain.Types (Mutation)
 
 newtype RowCallbacks = RowCallbacks
   { onSubmit :: Mutation -> IO ()
@@ -21,11 +21,9 @@ newtype RowCallbacks = RowCallbacks
 -- table are interchangeable and neither knows about the other.
 data View = View
   { widget :: Gtk.Widget
-  -- ^ The renderer's root widget, added to its tool pane's stack once.
+  -- ^ The renderer's root widget, mounted in its tool pane.
   , setRows :: RowCallbacks -> ToolRows -> IO ()
-  -- ^ Replace the rendered rows. Called only for the visible renderer.
-  , setBusy :: RowKey -> Progress -> IO ()
-  , setIdle :: RowKey -> IO ()
+  -- ^ Replace the rendered rows, busy state included ('RowSpec.progress').
   , setSensitive :: Bool -> IO ()
   }
 

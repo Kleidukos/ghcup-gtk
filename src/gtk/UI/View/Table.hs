@@ -10,6 +10,7 @@ import Data.IORef
 import Data.Int (Int32)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
+import Data.Maybe (isJust, isNothing)
 import Data.Ord (Down (..))
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -40,16 +41,6 @@ data Table = Table
   , applyState :: TableSort -> TableFilters -> IO ()
   }
 
--- | The widgets of one Actions cell. 'Gtk.ColumnView' recycles cells, so a
--- cell is registered on #bind and dropped on #unbind; 'setBusy' can then
--- find the row that is actually on screen.
-data ActionCell = ActionCell
-  { actionButton :: Gtk.Button
-  , phaseLabel :: Gtk.Label
-  , progressBar :: Gtk.ProgressBar
-  , box :: Gtk.Box
-  }
-
 -- | The advanced renderer: a sortable, filterable 'Gtk.ColumnView'.
 --
 -- Rows live in a 'Gtk.StringList' of 'rowKeyText' keys, with the real
@@ -64,8 +55,6 @@ build
   -> IO Table
 build window initialSort initialFilters tableCallbacks = do
   specsRef <- newIORef Map.empty
-  busyRef <- newIORef Map.empty
-  cellsRef <- newIORef Map.empty
   filtersRef <- newIORef initialFilters
   callbacksRef <- newIORef (RowCallbacks (const (pure ())))
 
@@ -89,24 +78,16 @@ build window initialSort initialFilters tableCallbacks = do
   -- Version sorts on RowSpec.rank, which counts down from the newest row, so
   -- ascending on Down rank is ascending by version. No version parsing here.
   let textColumn :: (Ord a) => SortColumn -> Text -> (RowSpec -> Text) -> (RowSpec -> a) -> IO Gtk.ColumnViewColumn
-      textColumn column title render sortKey =
-        addColumn columnView specsRef (sortColumnName column) title plainCell (bindText render) noUnbind
-          =<< fmap Just (mkSorter specsRef sortKey)
+      textColumn column title render sortKey = do
+        sorter <- mkSorter specsRef sortKey
+        addColumn columnView specsRef (sortColumnName column) title (textCell render) (Just sorter)
+  versionSorter <- mkSorter specsRef (\spec -> Down spec.rank)
   versionColumn <-
-    addColumn columnView specsRef (sortColumnName ByVersion) "Version" versionCell bindVersion noUnbind
-      =<< fmap Just (mkSorter specsRef (\spec -> Down spec.rank))
+    addColumn columnView specsRef (sortColumnName ByVersion) "Version" versionCell (Just versionSorter)
   releasedColumn <- textColumn ByReleased "Released" dayText (.releaseDay)
   statusColumn <- textColumn ByStatus "Status" (.statusLabel) (\spec -> (spec.isDefault, spec.installed))
   void $
-    addColumn
-      columnView
-      specsRef
-      "actions"
-      "Actions"
-      actionsCell
-      (bindActions window callbacksRef busyRef cellsRef)
-      (unbindActions cellsRef)
-      Nothing
+    addColumn columnView specsRef "actions" "Actions" (actionsCell window callbacksRef) Nothing
 
   let columns =
         [ (ByVersion, versionColumn)
@@ -187,22 +168,9 @@ build window initialSort initialFilters tableCallbacks = do
         writeIORef callbacksRef callbacks
         let keyed = [(rowKeyText spec.key, spec) | spec <- Vector.toList toolRows.rows]
         writeIORef specsRef (Map.fromList keyed)
-        writeIORef cellsRef Map.empty
         previous <- Gio.listModelGetNItems items
         items.splice 0 previous (Just (map fst keyed))
         syncEmptyState
-
-      setBusy key progress = do
-        let keyText = rowKeyText key
-        modifyIORef' busyRef (Map.insert keyText progress)
-        cells <- readIORef cellsRef
-        forM_ (Map.lookup keyText cells) $ \cell -> showBusy cell progress
-
-      setIdle key = do
-        let keyText = rowKeyText key
-        modifyIORef' busyRef (Map.delete keyText)
-        cells <- readIORef cellsRef
-        forM_ (Map.lookup keyText cells) showIdle
 
       setSensitive b = do
         set columnView [#sensitive := b]
@@ -219,7 +187,7 @@ build window initialSort initialFilters tableCallbacks = do
         Gtk.filterChanged rowFilter Gtk.FilterChangeDifferent
         syncEmptyState
 
-  pure Table {view = View {widget, setRows, setBusy, setIdle, setSensitive}, applyState}
+  pure Table {view = View {widget, setRows, setSensitive}, applyState}
 
 matches :: TableFilters -> RowSpec -> Bool
 matches filters spec =
@@ -266,11 +234,9 @@ addColumn
   -> Text
   -- ^ Title.
   -> (RowSpec -> IO Gtk.Widget)
-  -> (RowSpec -> Maybe Gtk.Widget -> IO ())
-  -- ^ Run when a cell is recycled away from its row.
   -> Maybe Gtk.Sorter
   -> IO Gtk.ColumnViewColumn
-addColumn columnView specsRef columnId title mkCell bindCell unbindCell sorter = do
+addColumn columnView specsRef columnId title makeCell sorter = do
   factory <- new Gtk.SignalListItemFactory []
   -- Cells are rebuilt on every bind rather than recycled: a cell may land on
   -- any row, and the table is small enough that widget churn does not matter.
@@ -304,13 +270,8 @@ versionCell spec = do
     box.append pill
   Gtk.toWidget box
 
-plainCell :: IO Gtk.Widget
-plainCell = new Gtk.Label [#xalign := 0] >>= Gtk.toWidget
-
-bindText :: (RowSpec -> Text) -> RowSpec -> Gtk.Widget -> IO ()
-bindText render spec widget = do
-  label <- unsafeCastTo Gtk.Label widget
-  set label [#label := render spec]
+textCell :: (RowSpec -> Text) -> RowSpec -> IO Gtk.Widget
+textCell render spec = new Gtk.Label [#label := render spec, #xalign := 0] >>= Gtk.toWidget
 
 dayText :: RowSpec -> Text
 dayText spec = maybe "—" (Text.pack . show) spec.releaseDay
@@ -328,21 +289,6 @@ actionsCell window callbacksRef spec = do
       , #spacing := 6
       , #halign := Gtk.AlignEnd
       ]
-  Gtk.toWidget box
-
--- | Actions cells are rebuilt on every bind rather than mutated: a cell may
--- be recycled onto any row, so there is nothing stable to mutate.
-bindActions
-  :: Adw.ApplicationWindow
-  -> IORef RowCallbacks
-  -> IORef (Map Text Progress)
-  -> IORef (Map Text ActionCell)
-  -> RowSpec
-  -> Gtk.Widget
-  -> IO ()
-bindActions window callbacksRef busyRef cellsRef spec widget = do
-  box <- unsafeCastTo Gtk.Box widget
-  drainChildren box
   callbacks <- readIORef callbacksRef
 
   when spec.installed $ do
@@ -363,15 +309,20 @@ bindActions window callbacksRef busyRef cellsRef spec widget = do
     new
       Gtk.Label
       [ #valign := Gtk.AlignCenter
-      , #visible := False
+      , #visible := isJust spec.progress
       , #maxWidthChars := 20
       , #ellipsize := Pango.EllipsizeModeEnd
       ]
-  phaseLabel.addCssClass "caption"
-  phaseLabel.addCssClass "dim-label"
-  progressBar <- new Gtk.ProgressBar [#valign := Gtk.AlignCenter, #visible := False]
+  dimCaption phaseLabel
+  progressBar <-
+    new Gtk.ProgressBar [#valign := Gtk.AlignCenter, #visible := isJust spec.progress]
   actionButton <-
-    new Gtk.Button [#label := spec.action.label, #valign := Gtk.AlignCenter]
+    new
+      Gtk.Button
+      [ #label := spec.action.label
+      , #valign := Gtk.AlignCenter
+      , #visible := isNothing spec.progress
+      ]
   void $
     on actionButton #clicked $
       Dialog.confirm window spec.action.confirmation $ \confirmed ->
@@ -381,44 +332,11 @@ bindActions window callbacksRef busyRef cellsRef spec widget = do
   box.append progressBar
   box.append actionButton
 
-  let cell = ActionCell {actionButton, phaseLabel, progressBar, box}
-      keyText = rowKeyText spec.key
-  modifyIORef' cellsRef (Map.insert keyText cell)
-  busy <- readIORef busyRef
-  maybe (showIdle cell) (showBusy cell) (Map.lookup keyText busy)
-
-showBusy :: ActionCell -> Progress -> IO ()
-showBusy cell progress = do
-  cell.actionButton.setVisible False
-  cell.progressBar.setVisible True
-  cell.phaseLabel.setVisible True
-  cell.phaseLabel.setLabel progress.phase
-  cell.progressBar.pulse
-
-showIdle :: ActionCell -> IO ()
-showIdle cell = do
-  cell.progressBar.setVisible False
-  cell.phaseLabel.setVisible False
-  cell.actionButton.setVisible True
-
--- | Data cells hold no state worth dropping when they are recycled.
-noUnbind :: RowSpec -> Maybe Gtk.Widget -> IO ()
-noUnbind _ _ = pure ()
-
--- | Drop a recycled Actions cell, so 'setBusy' can never drive the widgets of
--- a row that has scrolled away. GTK may bind a row's key onto a new cell
--- before unbinding the old one, so the delete only takes effect when the
--- unbound child is still the one the cached cell was built from.
-unbindActions :: IORef (Map Text ActionCell) -> RowSpec -> Maybe Gtk.Widget -> IO ()
-unbindActions cellsRef spec mchild = do
-  childPtr <- traverse (fmap castPtr . unsafeManagedPtrGetPtr) mchild
-  cells <- readIORef cellsRef
-  case (childPtr, Map.lookup (rowKeyText spec.key) cells) of
-    (Just cp, Just cell) -> do
-      cellPtr <- castPtr <$> unsafeManagedPtrGetPtr cell.box
-      when (cellPtr == cp) $
-        modifyIORef' cellsRef (Map.delete (rowKeyText spec.key))
-    _ -> pure ()
+  forM_ spec.progress $ \progress -> do
+    phaseLabel.setLabel progress.phase
+    case progress.fraction of
+      Just fraction -> progressBar.setFraction fraction
+      Nothing -> progressBar.pulse
 
   Gtk.toWidget box
 

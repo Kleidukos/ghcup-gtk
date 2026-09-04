@@ -46,6 +46,9 @@ data RowSpec = RowSpec
   , passesHlsFilter :: Bool
   , latestInFamily :: Bool
   , statusLabel :: Text
+  , progress :: Maybe Progress
+  -- ^ Set while a mutation is running on this row; renderers draw it as a
+  -- pulsing bar plus the latest log line.
   }
   deriving stock (Eq, Show)
 
@@ -63,21 +66,18 @@ data ToolRows = ToolRows
   }
   deriving stock (Eq, Show)
 
--- | The full row plan. Total over 'supportedTools': a tool with nothing to
--- show still gets an entry (empty rows, blank subtitle), so a rebuild
--- clears its pane and subtitle.
-planRows :: CurationMode -> Listings -> Map SupportedTool ToolRows
-planRows mode listings =
+planRows :: CurationMode -> Map RowKey Progress -> Listings -> Map SupportedTool ToolRows
+planRows mode busy listings =
   let curated = curate mode listings
   in Map.fromList
-       [ (tool, planTool tool (Map.findWithDefault Vector.empty tool curated))
+       [ (tool, planTool busy tool (Map.findWithDefault Vector.empty tool curated))
        | tool <- Vector.toList supportedTools
        ]
 
-planTool :: SupportedTool -> Vector ListResult -> ToolRows
-planTool tool toolRows =
+planTool :: Map RowKey Progress -> SupportedTool -> Vector ListResult -> ToolRows
+planTool busy tool toolRows =
   ToolRows
-    { rows = Vector.imap (rowSpec tool newest) toolRows
+    { rows = Vector.imap (rowSpec busy tool newest) toolRows
     , subtitle = case lVer <$> Vector.find lSet toolRows of
         Just v -> "Default: " <> prettyVer v
         Nothing -> ""
@@ -85,10 +85,10 @@ planTool tool toolRows =
   where
     newest = latestPerFamily toolRows
 
-rowSpec :: SupportedTool -> Map FamilyKey Version -> Int -> ListResult -> RowSpec
-rowSpec tool newest rank lr =
+rowSpec :: Map RowKey Progress -> SupportedTool -> Map FamilyKey Version -> Int -> ListResult -> RowSpec
+rowSpec busy tool newest rank lr =
   RowSpec
-    { key = keyOfListing tool lr
+    { key
     , title = prettyVer (lVer lr)
     , pills = mapMaybe pillLabel (lTag lr)
     , installed = lInstalled lr
@@ -103,7 +103,10 @@ rowSpec tool newest rank lr =
     , passesHlsFilter = passesHlsFilter tool lr
     , latestInFamily = isLatestInFamily newest lr
     , statusLabel = statusLabelOf lr
+    , progress = Map.lookup key busy
     }
+  where
+    key = keyOfListing tool lr
 
 -- | The HLS-powered notion only exists for GHC releases, so the filter must
 -- never hide another tool's rows: every non-GHC row passes.
