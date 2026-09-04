@@ -9,7 +9,7 @@ import Data.GI.Base
 import Data.IORef
 import GI.Adw qualified as Adw
 
-import Presentation
+import Presentation.Path
 import UI.Dialog qualified as Dialog
 
 data Handle = Handle

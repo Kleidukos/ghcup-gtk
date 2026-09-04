@@ -7,7 +7,7 @@ import Data.GI.Base
 import Data.Text (Text)
 import GI.Adw qualified as Adw
 
-import Presentation (Confirmation (..))
+import Presentation.Row (Confirmation (..))
 
 info :: Adw.ApplicationWindow -> Text -> Text -> IO ()
 info window heading body = do

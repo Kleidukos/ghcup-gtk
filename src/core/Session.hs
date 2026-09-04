@@ -15,7 +15,8 @@ import Data.Text (Text)
 import Data.Vector (Vector)
 
 import Config (Config (..), ConfigUpdate, applyUpdate)
-import Presentation (BannerSpec, ToolRows, appliedBanner, jobTitle, pathBanner, planRows)
+import Presentation.Path (BannerSpec, appliedBanner, pathBanner)
+import Presentation.Row (ToolRows, jobTitle, planRows)
 import Toolchain.Curation (CurationMode (..))
 import Toolchain.Path (FileChange, PathStatus (..))
 import Toolchain.Types

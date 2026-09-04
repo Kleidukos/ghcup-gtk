@@ -11,7 +11,8 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import Fixtures (dirs, listingsFor, lr914, mkLR, sampleChanges)
-import Presentation
+import Presentation.Path
+import Presentation.Row
 import Toolchain.Curation (CurationMode (..))
 import Toolchain.Path (PathStatus (..), sourceLine)
 import Toolchain.Types (Mutation (..), SupportedTool (..), keyOfMutation, reqOf, supportedTools, tvOf)

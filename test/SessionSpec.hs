@@ -6,7 +6,8 @@ import Test.Tasty.HUnit
 
 import Config (Config (..), ConfigUpdate (..), defaultConfig)
 import Fixtures (anError, dirs, installJob, installMutation, listingsFor, lr914, sampleChanges)
-import Presentation (appliedBanner, pathBanner, planRows)
+import Presentation.Path (appliedBanner, pathBanner)
+import Presentation.Row (planRows)
 import Session
 import Toolchain.Curation (CurationMode (..))
 import Toolchain.Path (PathStatus (..))

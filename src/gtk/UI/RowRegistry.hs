@@ -15,7 +15,7 @@ import Data.Vector (Vector)
 import Data.Vector qualified as Vector
 import GI.Adw qualified as Adw
 
-import Presentation (RowSpec (..), ToolRows (..))
+import Presentation.Row (RowSpec (..), ToolRows (..))
 import Toolchain.Types (Progress, RowKey, SupportedTool)
 import UI.Row (RowCallbacks, RowHandle (..))
 import UI.Row qualified as Row
