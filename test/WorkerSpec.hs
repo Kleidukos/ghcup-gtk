@@ -6,6 +6,7 @@ import Data.Text (Text)
 import Effectful
 import Effectful.Exception (throwIO)
 import Effectful.State.Static.Local
+import GHCup.Types (ChannelAlias (..), NewURLSource (..))
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -74,6 +75,23 @@ tests =
             msgs @?= [ListingsReady Map.empty Fresh]
         , testCase "listing failure emits ListingsFailed" $ do
             let (msgs, _) = run idleHandlers {getListings = pure (Left anError)} [RefreshListings]
+            msgs @?= [ListingsFailed anError]
+        ]
+    , testGroup
+        "reconfigure"
+        [ testCase "swaps sources then refetches" $ do
+            let sources = [NewGHCupURL, NewChannelAlias PrereleasesChannel]
+                handlers = idleHandlers {reconfigure = const bump}
+                (msgs, count) = run handlers [Reconfigure sources]
+            msgs @?= [ListingsReady Map.empty Fresh]
+            count @?= 1
+        , testCase "fetch failure after reconfigure emits ListingsFailed" $ do
+            let handlers =
+                  idleHandlers
+                    { reconfigure = \_ -> pure ()
+                    , getListings = pure (Left anError)
+                    }
+                (msgs, _) = run handlers [Reconfigure [NewGHCupURL]]
             msgs @?= [ListingsFailed anError]
         ]
     , testGroup

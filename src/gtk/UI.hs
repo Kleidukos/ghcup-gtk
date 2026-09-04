@@ -3,12 +3,14 @@
 
 module UI (startUI) where
 
+import Control.Applicative ((<|>))
 import Control.Monad (forM_, void, when)
 import Data.Function ((&))
 import Data.GI.Base
 import Data.IORef
 import Data.Int
 import Data.Map.Strict qualified as Map
+import Data.Maybe (isNothing)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Version (showVersion)
@@ -31,18 +33,19 @@ import Config qualified
 import Effects.FileSystem (runFileSystemIO)
 import Paths_ghcup_gtk qualified as Paths
 import Session qualified
+import Toolchain.Channels (configuredChannels, nightliesUri, parseNightlies)
 import Toolchain.GHCup qualified as GHCup
 import Toolchain.Path (applyFix, checkPath)
 import Toolchain.Types
 import UI.Dialog qualified as Dialog
 import UI.PathBanner qualified as PathBanner
+import UI.Preferences (ChannelsState (..))
 import UI.Preferences qualified as Preferences
 import UI.Registry qualified as Registry
 import UI.Shell (Shell (..))
 import UI.Shell qualified as Shell
 import UI.Shortcuts qualified as Shortcuts
 import UI.View (RowCallbacks (..))
-import UI.View.Table qualified as TableView
 import Worker qualified
 
 startUI :: IO ()
@@ -52,7 +55,7 @@ startUI = do
     new
       Adw.Application
       [ #applicationId := "org.haskell.GhcupGtk"
-      , On #activate (activate options.forcedView ?self)
+      , On #activate (activate ?self)
       , On #startup loadCSS
       , On #startup loadIcons
       ]
@@ -106,15 +109,15 @@ data Runtime = Runtime
   , dispatch :: Session.Event -> IO ()
   }
 
-activate :: Maybe Config.ViewMode -> Adw.Application -> IO ()
-activate forcedView app = do
+activate :: Adw.Application -> IO ()
+activate app = do
   dirs <- GHCup.ghcupDirs
-  (loadedConfig, configWarning) <- runEff (runFileSystemIO Config.load)
-  let config = case forcedView of
-        Nothing -> loadedConfig
-        Just mode -> loadedConfig {Config.viewMode = mode}
+  (urlSource, urlSourceWarning) <- GHCup.loadUrlSource
+  (config, configWarning) <- runEff (runFileSystemIO Config.load)
   shell <- Shell.build app config
-  modelRef <- newIORef (Session.initialModel dirs config)
+  let channelsEditable =
+        if isNothing urlSourceWarning then Session.ChannelsEditable else Session.ChannelsLocked
+  modelRef <- newIORef (Session.initialModel dirs config urlSource channelsEditable)
   worker <- Worker.new
 
   dispatchRef <- newIORef (\_ -> pure ())
@@ -123,7 +126,6 @@ activate forcedView app = do
     Registry.build
       shell.panes
       (rowCallbacks dispatchLater)
-      (tableCallbacks dispatchLater)
 
   let runtime = Runtime {app, shell, registry, worker, dirs, modelRef, dispatch}
       dispatch event = do
@@ -139,9 +141,10 @@ activate forcedView app = do
 
   writeIORef dispatchRef dispatch
 
-  Worker.start worker notify
+  Worker.start worker urlSource notify
 
   forM_ configWarning $ \warning -> showToast shell warning 5
+  forM_ urlSourceWarning $ \warning -> showToast shell warning 5
 
   installActions app shell modelRef dispatch
   on shell.retryButton #clicked $ dispatch Session.RetryClicked
@@ -175,6 +178,10 @@ interpretEffect rt = \case
   Session.ApplyPathFix changes -> do
     result <- runEff (runFileSystemIO (applyFix changes))
     rt.dispatch (Session.PathFixDone result)
+  Session.PersistChannels channels nightlies ->
+    GHCup.saveUrlSource channels nightlies >>= \case
+      Left e -> showToast rt.shell ("Could not save the ghcup config: " <> e) 5
+      Right sources -> rt.dispatch (Session.ChannelsSaved sources)
 
 reconcile :: Runtime -> IO ()
 reconcile rt = do
@@ -196,7 +203,7 @@ reconcile rt = do
 viewState :: Session.Model -> Registry.ViewState
 viewState model =
   Registry.ViewState
-    { config = model.config
+    { channels = configuredChannels model.urlSource
     , sensitive = Map.null model.inFlight
     , plan = Session.rowPlan model
     }
@@ -206,12 +213,6 @@ rowCallbacks dispatch =
   RowCallbacks
     { onSubmit = \op -> Mutate op & Session.Submitted & dispatch
     , onConfirm = dispatch . Session.ConfirmRequested
-    }
-
-tableCallbacks :: (Session.Event -> IO ()) -> TableView.TableCallbacks
-tableCallbacks dispatch =
-  TableView.TableCallbacks
-    { onSortChanged = \sort -> Config.SetTableSort sort & Session.ConfigChanged & dispatch
     }
 
 runPathCheck :: Runtime -> IO ()
@@ -241,7 +242,18 @@ installActions app shell modelRef dispatch = do
   prefsAction <- Gio.simpleActionNew "preferences" Nothing
   on prefsAction #activate $ \_ -> do
     model <- readIORef modelRef
-    Preferences.present shell.window model.config (dispatch . Session.ConfigChanged)
+    let channelsState =
+          ChannelsState
+            { channels = configuredChannels model.urlSource
+            , nightliesUrl =
+                nightliesUri model.urlSource
+                  <|> (model.config.nightliesUrl >>= parseNightlies)
+            , editable = model.channelsEditable
+            }
+    Preferences.present
+      shell.window
+      channelsState
+      (\channels nightlies -> dispatch (Session.ChannelsChanged channels nightlies))
   app.addAction prefsAction
 
   shortcutsAction <- Gio.simpleActionNew "shortcuts" Nothing

@@ -7,6 +7,7 @@ module Effects.Ghcup
   , setDefaultVersion
   , compileGhcTool
   , compileHlsTool
+  , reconfigureSources
   , runGhcupIO
   ) where
 
@@ -14,7 +15,7 @@ import Data.IORef
 import Data.Text (Text)
 import Effectful
 import Effectful.Dispatch.Dynamic
-import GHCup.Types (TargetVersion, TargetVersionReq, Tool)
+import GHCup.Types (NewURLSource, TargetVersion, TargetVersionReq, Tool)
 
 import Toolchain.GHCup (GhcupEnv)
 import Toolchain.GHCup qualified as GHCup
@@ -29,6 +30,7 @@ data Ghcup :: Effect where
   SetDefaultVersion :: Tool -> TargetVersion -> Ghcup m (Either OpError ())
   CompileGhcTool :: TargetVersion -> CompileGhcOptions -> Ghcup m (Either OpError ())
   CompileHlsTool :: TargetVersion -> CompileHlsOptions -> Ghcup m (Either OpError ())
+  ReconfigureSources :: [NewURLSource] -> Ghcup m ()
 
 type instance DispatchOf Ghcup = Dynamic
 
@@ -53,15 +55,20 @@ compileGhcTool tv opts = send (CompileGhcTool tv opts)
 compileHlsTool :: (Ghcup :> es) => TargetVersion -> CompileHlsOptions -> Eff es (Either OpError ())
 compileHlsTool tv opts = send (CompileHlsTool tv opts)
 
-runGhcupIO :: (IOE :> es) => (Text -> IO ()) -> Eff (Ghcup : es) a -> Eff es a
-runGhcupIO onLog action = do
+reconfigureSources :: (Ghcup :> es) => [NewURLSource] -> Eff es ()
+reconfigureSources = send . ReconfigureSources
+
+runGhcupIO :: (IOE :> es) => [NewURLSource] -> (Text -> IO ()) -> Eff (Ghcup : es) a -> Eff es a
+runGhcupIO urlSource onLog action = do
+  sourcesRef <- liftIO (newIORef urlSource)
   envRef <- liftIO (newIORef Nothing)
   let withEnv :: forall b. (GhcupEnv -> IO (Either OpError b)) -> IO (Either OpError b)
       withEnv op =
         readIORef envRef >>= \case
           Just env -> op env
-          Nothing ->
-            GHCup.newEnv onLog >>= \case
+          Nothing -> do
+            sources <- readIORef sourcesRef
+            GHCup.newEnv sources onLog >>= \case
               Left err -> pure (Left err)
               Right env -> writeIORef envRef (Just env) >> op env
   interpret
@@ -73,5 +80,8 @@ runGhcupIO onLog action = do
         SetDefaultVersion tool tv -> liftIO (withEnv (\env -> GHCup.setDefault env tool tv))
         CompileGhcTool tv opts -> liftIO (withEnv (\env -> GHCup.compileGhc env tv opts))
         CompileHlsTool tv opts -> liftIO (withEnv (\env -> GHCup.compileHls env tv opts))
+        ReconfigureSources sources -> liftIO $ do
+          writeIORef sourcesRef sources
+          readIORef envRef >>= mapM_ (\env -> GHCup.setUrlSource env sources)
     )
     action

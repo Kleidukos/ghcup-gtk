@@ -33,7 +33,7 @@ import Data.Text qualified as Text
 import Data.Vector (Vector)
 import Data.Versions (Version)
 import GHCup.Command.List (ListResult (..))
-import GHCup.Types (BuildSystem, InstallDir (..), TargetVersion (..), TargetVersionReq (..), Tool (..), VersionPattern, ghc, hls, tVerToText, toolPriority)
+import GHCup.Types (BuildSystem, InstallDir (..), NewURLSource, TargetVersion (..), TargetVersionReq (..), Tool (..), VersionPattern, ghc, hls, tVerToText, toolPriority)
 import Text.Read (readMaybe)
 import URI.ByteString (URI)
 
@@ -114,6 +114,7 @@ data Mutation
 
 data Job
   = RefreshListings
+  | Reconfigure [NewURLSource]
   | Mutate Mutation
   deriving stock (Eq, Show)
 

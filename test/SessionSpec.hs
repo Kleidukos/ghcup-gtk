@@ -1,20 +1,22 @@
 module SessionSpec (tests) where
 
 import Data.Map.Strict qualified as Map
-import GHCup.Types (cabal, ghc, hls)
+import Data.Set qualified as Set
+import GHCup.Types (ChannelAlias (..), NewURLSource (..), cabal, ghc, hls)
 import Test.Tasty
 import Test.Tasty.HUnit
 
 import Config
   ( Config (..)
   , ConfigUpdate (..)
-  , ViewMode (..)
   , defaultConfig
   )
-import Fixtures (anError, defaultCompileGhcOptions, defaultCompileHlsOptions, dirs, installJob, installMutation, listingsFor, lr914, sampleChanges)
+import Fixtures (anError, defaultCompileGhcOptions, defaultCompileHlsOptions, defaultNightliesUri, dirs, installJob, installMutation, listingsFor, lr914, sampleChanges)
+import Presentation.Filter (Channel (..))
 import Presentation.Path (appliedBanner, pathBanner)
 import Presentation.Row (Confirmation (..), RowAction (..), planRows)
 import Session
+import Toolchain.Channels (defaultNightliesUrl)
 import Toolchain.Path (PathStatus (..))
 import Toolchain.Types
 
@@ -25,7 +27,7 @@ installKey :: RowKey
 installKey = keyOfListing ghc lr914
 
 model0 :: Model
-model0 = initialModel dirs defaultConfig
+model0 = initialModel dirs defaultConfig [NewGHCupURL] ChannelsEditable
 
 tests :: TestTree
 tests =
@@ -134,20 +136,15 @@ tests =
                 (model, effects) = step RetryClicked offline
             effects @?= [Reconcile, Enqueue RefreshListings]
             model.phase @?= Loading
-        , testCase "advanced interface: save, then reconcile with the new config in the model" $ do
+        , testCase "a window resize saves the new config in the model, without reconciling" $ do
             let (ready, _) = step (WorkerMsg (ListingsReady sampleListings Fresh)) model0
-                newConfig = defaultConfig {viewMode = Advanced}
-                (model, effects) = step (ConfigChanged (SetViewMode Advanced)) ready
-            effects @?= [SaveConfig newConfig, Reconcile]
+                newConfig = defaultConfig {windowWidth = 1000, windowHeight = 700}
+                (model, effects) = step (ConfigChanged (SetWindowSize 1000 700)) ready
+            effects @?= [SaveConfig newConfig]
             model.config @?= newConfig
-        , testCase "a window resize saves without reconciling" $ do
+        , testCase "an echoed config update emits nothing, which is what stops a save loop" $ do
             let (ready, _) = step (WorkerMsg (ListingsReady sampleListings Fresh)) model0
-                (_, effects) = step (ConfigChanged (SetWindowSize 1000 700)) ready
-            filter (== Reconcile) effects @?= []
-        , testCase "an echoed config update emits nothing, which is what stops the sort-save-apply-sort loop" $ do
-            let (ready, _) = step (WorkerMsg (ListingsReady sampleListings Fresh)) model0
-            snd (step (ConfigChanged (SetTableSort defaultConfig.tableSort)) ready) @?= []
-            snd (step (ConfigChanged (SetViewMode Simple)) ready) @?= []
+            snd (step (ConfigChanged (SetWindowSize defaultConfig.windowWidth defaultConfig.windowHeight)) ready) @?= []
         ]
     , testGroup
         "PATH fix"
@@ -179,5 +176,44 @@ tests =
                 (model, effects) = step (PathFixDone (Left anError)) checked
             effects @?= [ErrorToast anError]
             model.pathModel @?= Checked (NeedsFixPlanned sampleChanges)
+        ]
+    , testGroup
+        "channels"
+        [ testCase "a change asks for the requested set to be persisted, without touching the model yet" $ do
+            let (model, effects) = step (ChannelsChanged (Set.singleton Prereleases) Nothing) model0
+            model @?= model0
+            effects @?= [PersistChannels (Set.singleton Prereleases) Nothing]
+        , testCase "a no-op change is dropped" $
+            step (ChannelsChanged Set.empty Nothing) model0 @?= (model0, [])
+        , testCase "a change against a locked model is dropped" $ do
+            let locked = initialModel dirs defaultConfig [NewGHCupURL] ChannelsLocked
+            step (ChannelsChanged (Set.singleton Prereleases) Nothing) locked @?= (locked, [])
+        , testCase "a successful save updates the model and reconfigures the worker" $ do
+            let sources = [NewGHCupURL, NewChannelAlias CrossChannel]
+                (model, effects) = step (ChannelsSaved sources) model0
+            model.urlSource @?= sources
+            effects @?= [Enqueue (Reconfigure sources), Reconcile]
+        , testCase "a save carrying a nightlies URI remembers it in the app config" $ do
+            let sources = [NewGHCupURL, NewURI defaultNightliesUri]
+                (model, effects) = step (ChannelsSaved sources) model0
+                config' = defaultConfig {nightliesUrl = Just defaultNightliesUrl}
+            model.config @?= config'
+            effects @?= [SaveConfig config', Enqueue (Reconfigure sources), Reconcile]
+        , testCase "a save without a nightlies URI leaves the config alone" $ do
+            let sources = [NewGHCupURL, NewChannelAlias CrossChannel]
+                (model, effects) = step (ChannelsSaved sources) model0
+            model.config @?= defaultConfig
+            effects @?= [Enqueue (Reconfigure sources), Reconcile]
+        , testCase "re-saving the same nightlies URI does not save the config again" $ do
+            let sources = [NewGHCupURL, NewURI defaultNightliesUri]
+                (remembered, _) = step (ChannelsSaved sources) model0
+                (model, effects) = step (ChannelsSaved sources) remembered
+            model.config @?= remembered.config
+            effects @?= [Enqueue (Reconfigure sources), Reconcile]
+        , testCase "a disabled nightlies channel keeps the remembered URL" $ do
+            let (remembered, _) = step (ChannelsSaved [NewGHCupURL, NewURI defaultNightliesUri]) model0
+                (model, effects) = step (ChannelsSaved [NewGHCupURL]) remembered
+            model.config.nightliesUrl @?= Just defaultNightliesUrl
+            effects @?= [Enqueue (Reconfigure [NewGHCupURL]), Reconcile]
         ]
     ]

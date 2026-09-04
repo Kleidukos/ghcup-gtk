@@ -1,9 +1,11 @@
 module Toolchain.Curation
   ( FamilyKey
+  , Stability (..)
   , curate
   , familyKey
   , isLatestInFamily
   , latestPerFamily
+  , stabilityOf
   ) where
 
 import Data.Functor
@@ -17,6 +19,7 @@ import Data.Vector (Vector)
 import Data.Vector qualified as Vector
 import Data.Versions (Chunk (..), Chunks (..), Version (..))
 import GHCup.Command.List (ListResult (..))
+import GHCup.Types (Tag (..))
 
 import Toolchain.Types (Listings)
 
@@ -32,14 +35,29 @@ curate listings =
   where
     installable lr = lInstalled lr || not (lNoBindist lr)
 
--- | A release family: everything sharing a cross-compilation target and a Major.Minor version.
-type FamilyKey = (Maybe Text, Word, Word)
+-- | A release family: everything sharing a cross-compilation target, a
+-- Major.Minor version and a stability. Stability is part of the key so a
+-- prerelease snapshot or nightly, whose version outranks the stable
+-- release, never masks it as the family's latest.
+type FamilyKey = (Maybe Text, Word, Word, Stability)
+
+data Stability
+  = StableRelease
+  | PrereleaseBuild
+  | NightlyBuild
+  deriving stock (Eq, Ord, Show)
+
+stabilityOf :: ListResult -> Stability
+stabilityOf lr
+  | Nightly `elem` lTag lr || LatestNightly `elem` lTag lr = NightlyBuild
+  | Prerelease `elem` lTag lr || LatestPrerelease `elem` lTag lr = PrereleaseBuild
+  | otherwise = StableRelease
 
 -- | 'Nothing' when the first two version chunks are not both numeric. Such a
 -- version is its own family and is never hidden by the latest-patch filter.
 familyKey :: ListResult -> Maybe FamilyKey
 familyKey lr = case _vChunks (lVer lr) of
-  Chunks (Numeric major :| Numeric minor : _) -> Just (lCross lr, major, minor)
+  Chunks (Numeric major :| Numeric minor : _) -> Just (lCross lr, major, minor, stabilityOf lr)
   _ -> Nothing
 
 -- | Newest version of each family. Rows with no family are absent, they are

@@ -9,8 +9,11 @@ module Fixtures
   , sampleChanges
   , defaultCompileGhcOptions
   , defaultCompileHlsOptions
+  , defaultNightliesUri
+  , uriOf
   ) where
 
+import Data.ByteString (ByteString)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Vector (Vector)
@@ -18,7 +21,9 @@ import Data.Vector qualified as Vector
 import Data.Versions (Version, version)
 import GHCup.Command.List (ListResult (..), RevTag (..))
 import GHCup.Types (Tag (..), Tool, ghc)
+import URI.ByteString (URI, parseURI, strictURIParserOptions)
 
+import Toolchain.Channels (defaultNightliesUrl, parseNightlies)
 import Toolchain.Path (FileChange (..), WriteMode (..))
 import Toolchain.Types
 
@@ -97,3 +102,15 @@ sampleChanges =
     [ FileChange "/home/u/.ghcup/env" "export PATH=..." CreateOrReplace
     , FileChange "/home/u/.zshrc" "source env # ghcup-env" FilteredAppend
     ]
+
+uriOf :: ByteString -> URI
+uriOf raw =
+  case parseURI strictURIParserOptions raw of
+    Right uri -> uri
+    Left err -> error (show err)
+
+defaultNightliesUri :: URI
+defaultNightliesUri =
+  case parseNightlies defaultNightliesUrl of
+    Just uri -> uri
+    Nothing -> error "the default nightlies URL must parse"
