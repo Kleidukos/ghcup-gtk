@@ -14,6 +14,11 @@ data-files: data/style.css
 extra-doc-files: CHANGELOG.md
 tested-with: ghc ==9.14.1
 
+flag development
+  description: Reload the CSS provider when data/style.css changes
+  default: True
+  manual: True
+
 -- extra-source-files:
 common options
   ghc-options:
@@ -68,7 +73,6 @@ library core
     effectful-core ^>=2.6,
     filepath,
     ghcup ^>=0.2.6,
-    text-display,
     kdl-hs ^>=1.1,
     mtl,
     pretty,
@@ -76,6 +80,7 @@ library core
     scientific,
     stm,
     text ^>=2.1,
+    text-display,
     time,
     variant,
     vector,
@@ -102,12 +107,16 @@ library
 
   other-modules: Paths_ghcup_gtk
   autogen-modules: Paths_ghcup_gtk
+
+  if flag(development)
+    cpp-options: -DDEVELOPMENT
+    hs-source-dirs: src/dev
+    other-modules: Development.Reload
   build-depends:
     base,
     containers,
     directory,
     effectful-core,
-    text-display,
     ghcup,
     ghcup-gtk:core,
     gi-adwaita ^>=1.0,
@@ -119,6 +128,7 @@ library
     gi-pango ^>=1.0,
     haskell-gi-base,
     text,
+    text-display,
     time,
     vector,
 

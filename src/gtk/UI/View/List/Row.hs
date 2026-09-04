@@ -4,9 +4,9 @@ module UI.View.List.Row
   ) where
 
 import Control.Monad (forM_, when)
-import Data.Text.Display
 import Data.GI.Base
 import Data.Maybe (isJust, isNothing)
+import Data.Text.Display
 import GI.Adw qualified as Adw
 import GI.Gtk qualified as Gtk
 import GI.Pango qualified as Pango

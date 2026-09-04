@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ImplicitParams #-}
 
 module UI (main) where
@@ -16,6 +17,9 @@ import GI.GLib qualified as GLib
 import GI.Gdk qualified as Gdk
 import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
+#ifdef DEVELOPMENT
+import Development.Reload qualified as Reload
+#endif
 import System.Environment (getArgs, getProgName)
 import System.IO (hPutStrLn, stderr)
 
@@ -50,6 +54,7 @@ main = do
   progName <- getProgName
   void (app.run $ Just $ progName : args)
 
+{- FOURMOLU_DISABLE -}
 loadCSS :: (MonadIO m) => m ()
 loadCSS = do
   display <-
@@ -57,13 +62,18 @@ loadCSS = do
       >>= \case
         Nothing -> error "Could not find Display!"
         Just d -> pure d
-  cssPath <- liftIO (Paths.getDataFileName "data/style.css")
   cssProvider <- Gtk.cssProviderNew
+#ifdef DEVELOPMENT
+  liftIO (Reload.loadAndWatchCSS cssProvider)
+#else
+  cssPath <- liftIO (Paths.getDataFileName "data/style.css")
   Gtk.cssProviderLoadFromPath cssProvider cssPath
+#endif
   Gtk.styleContextAddProviderForDisplay
     display
     cssProvider
     (fromIntegral @Int32 @Word32 Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+{- FOURMOLU_ENABLE -}
 
 data Runtime = Runtime
   { app :: Adw.Application
