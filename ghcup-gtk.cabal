@@ -112,6 +112,8 @@ library
     text,
     vector,
 
+  pkgconfig-depends: libadwaita-1 >=1.5
+
 executable ghcup-gtk
   import: options
   -- -threaded is load-bearing: the GTK main loop is a blocking foreign

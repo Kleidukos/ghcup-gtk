@@ -249,15 +249,13 @@ installActions app shell modelRef dispatch = do
   on aboutAction #activate $ \_ -> do
     about <-
       new
-        Adw.AboutWindow
-        [ #transientFor := shell.window
-        , #applicationName := "ghcup-gtk"
+        Adw.AboutDialog
+        [ #applicationName := "ghcup-gtk"
         , #version := "0.1.0.0"
         , #developerName := "Hécate Moonlight"
         , #comments := "A GTK4 frontend for the ghcup toolchain manager"
         , #website := "https://www.haskell.org/ghcup/"
-        , #licenseType := Gtk.LicenseBsd3
-        , #modal := True
+        , #licenseType := Gtk.LicenseGpl30Only
         ]
-    about.present
+    about.present (Just shell.window)
   app.addAction aboutAction
