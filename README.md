@@ -6,5 +6,8 @@
 
 Please do read https://github.com/haskell-gi/haskell-gi/#installation for systems dependencies.
 
-
 Type `make run` to compile and start the application
+
+## Screenshots
+
+![Screenshot](./screenshots/screenshot1.png)
