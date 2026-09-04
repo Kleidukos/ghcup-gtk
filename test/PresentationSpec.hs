@@ -154,6 +154,12 @@ tests =
                 specs = ghcRows (Curated True) [lr914, dflt, inst]
             -- newest-first: 9.14.1 (neither), 9.10.3 (default), 9.8.4 (installed)
             ((.statusLabel) <$> Vector.toList specs) @?= ["", "default", "installed"]
+        , testCase "non-GHC tools always count as hls-powered" $ do
+            let cabalRow = mkLR "3.14.1.0" [Latest] False False
+                specs = case Map.lookup Cabal (planRows (Curated True) (listingsFor Cabal [cabalRow])) of
+                  Just toolRows -> toolRows.rows
+                  Nothing -> error "planRows lost the cabal entry"
+            ((.passesHlsFilter) <$> Vector.toList specs) @?= [True]
         ]
     ]
   where
