@@ -76,7 +76,7 @@ tests =
                 spec.confirmation @?= pathFixConfirmation sampleChanges
               other -> assertFailure ("expected a fix-offer banner, got: " <> show other)
         , testCase "applied banner asks for a restart" $
-            appliedBanner @?= BannerSpec "Done — restart your terminal" Nothing
+            appliedBanner @?= BannerSpec "Done – restart your terminal" Nothing
         ]
     , testGroup
         "planRows"
