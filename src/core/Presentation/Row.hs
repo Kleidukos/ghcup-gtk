@@ -31,8 +31,6 @@ data Confirmation = Confirmation
   }
   deriving stock (Eq, Show)
 
--- | Everything a rendered version row shows and can do, as data: the
--- widget layer only draws labels and routes clicks.
 data RowSpec = RowSpec
   { key :: RowKey
   , title :: Text
@@ -59,7 +57,6 @@ data RowAction = RowAction
   }
   deriving stock (Eq, Show)
 
--- | One tool's pane: its rows (curated, sorted) and its sidebar subtitle.
 data ToolRows = ToolRows
   { rows :: Vector RowSpec
   , subtitle :: Text
@@ -108,8 +105,6 @@ rowSpec busy tool newest rank lr =
   where
     key = keyOfListing tool lr
 
--- | The HLS-powered notion only exists for GHC releases, so the filter must
--- never hide another tool's rows: every non-GHC row passes.
 passesHlsFilter :: SupportedTool -> ListResult -> Bool
 passesHlsFilter tool lr = tool /= GHC || hlsPowered lr
 
@@ -137,7 +132,6 @@ installConfirmation tool lr =
     , destructive = False
     }
 
--- | Toast copy for a finished mutation.
 jobTitle :: Mutation -> Text
 jobTitle = \case
   Install tool (TargetVersionReq tv _) -> done tool tv "installed"

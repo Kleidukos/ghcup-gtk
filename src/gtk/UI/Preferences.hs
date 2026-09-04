@@ -1,4 +1,4 @@
-module UI.PreferencesWindow (present) where
+module UI.Preferences (present) where
 
 import Control.Monad (void)
 import Data.GI.Base
@@ -48,9 +48,9 @@ present parent config onChanged = do
   page.add interfaceGroup
   page.add displayGroup
 
-  window <- new Adw.PreferencesWindow [#transientFor := parent, #modal := True]
-  window.add page
-  window.present
+  dialog <- new Adw.PreferencesDialog []
+  dialog.add page
+  dialog.present (Just parent)
 
 oldVersionsSubtitle :: Bool -> Text
 oldVersionsSubtitle advanced

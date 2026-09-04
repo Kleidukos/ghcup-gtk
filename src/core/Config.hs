@@ -20,6 +20,7 @@ module Config
 
 import Data.Either (fromRight)
 import Data.Maybe (fromMaybe)
+import Data.Scientific qualified as Scientific
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Effectful
@@ -29,7 +30,6 @@ import System.FilePath ((</>))
 
 import Effects.FileSystem
 
--- | Which column the advanced interface's table is sorted by.
 data SortColumn = ByVersion | ByReleased | ByStatus
   deriving stock (Eq, Show)
 
@@ -48,7 +48,6 @@ data TableFilters = TableFilters
   }
   deriving stock (Eq, Show)
 
--- | Which renderer a tool pane shows. Derived from 'advancedInterface'.
 data ViewMode = Simple | Advanced
   deriving stock (Eq, Ord, Show)
 
@@ -56,9 +55,9 @@ data Config = Config
   { showOldVersions :: Bool
   , advancedInterface :: Bool
   , tableSort :: TableSort
-  -- ^ Advanced interface only. View state, persisted so a restart keeps it.
   , tableFilters :: TableFilters
-  -- ^ Advanced interface only.
+  , windowWidth :: Int
+  , windowHeight :: Int
   }
   deriving stock (Eq, Show)
 
@@ -69,6 +68,8 @@ defaultConfig =
     , advancedInterface = False
     , tableSort = TableSort ByVersion Descending
     , tableFilters = TableFilters False False
+    , windowWidth = 760
+    , windowHeight = 560
     }
 
 viewMode :: Config -> ViewMode
@@ -82,6 +83,7 @@ data ConfigUpdate
   | SetAdvancedInterface Bool
   | SetTableSort TableSort
   | SetTableFilters TableFilters
+  | SetWindowSize Int Int
   deriving stock (Eq, Show)
 
 applyUpdate :: ConfigUpdate -> Config -> Config
@@ -90,6 +92,7 @@ applyUpdate update config = case update of
   SetAdvancedInterface b -> config {advancedInterface = b}
   SetTableSort sort -> config {tableSort = sort}
   SetTableFilters filters -> config {tableFilters = filters}
+  SetWindowSize width height -> config {windowWidth = width, windowHeight = height}
 
 parseConfigEither :: Text -> Either Text Config
 parseConfigEither input = configOf <$> KDL.parse input
@@ -111,14 +114,24 @@ parseConfigEither input = configOf <$> KDL.parse input
               { hlsPoweredOnly = bool "filter-hls-powered" defaultConfig.tableFilters.hlsPoweredOnly doc
               , latestPatchOnly = bool "filter-latest-patch" defaultConfig.tableFilters.latestPatchOnly doc
               }
+        , windowWidth = int "window-width" defaultConfig.windowWidth doc
+        , windowHeight = int "window-height" defaultConfig.windowHeight doc
         }
 
     sortColumn doc = sortColumnFromName =<< stringArg "table-sort-column" doc
 
     bool name fallback doc = fromMaybe fallback (boolArg name doc)
 
+    int name fallback doc = fromMaybe fallback (intArg name doc)
+
     boolArg name doc = case KDL.getArgAt name doc of
       Just KDL.Value {data_ = KDL.Bool b} -> Just b
+      _ -> Nothing
+
+    intArg name doc = case KDL.getArgAt name doc of
+      Just KDL.Value {data_ = KDL.Number n} -> do
+        value <- Scientific.toBoundedInteger n
+        if value > 0 then Just value else Nothing
       _ -> Nothing
 
     stringArg name doc = case KDL.getArgAt name doc of
@@ -139,12 +152,12 @@ renderConfig config =
           , boolNode "table-sort-descending" (config.tableSort.direction == Descending)
           , boolNode "filter-hls-powered" config.tableFilters.hlsPoweredOnly
           , boolNode "filter-latest-patch" config.tableFilters.latestPatchOnly
+          , intNode "window-width" config.windowWidth
+          , intNode "window-height" config.windowHeight
           ]
       , ext = KDL.def
       }
 
--- | The one place the persisted column names live: the KDL round-trip and the
--- table's column ids both go through this pair.
 sortColumnName :: SortColumn -> Text
 sortColumnName = \case
   ByVersion -> "version"
@@ -163,6 +176,9 @@ boolNode name value = node name (KDL.Bool value)
 
 stringNode :: Text -> Text -> KDL.Node
 stringNode name value = node name (KDL.String value)
+
+intNode :: Text -> Int -> KDL.Node
+intNode name value = node name (KDL.Number (fromIntegral value))
 
 node :: Text -> KDL.ValueData -> KDL.Node
 node name value =

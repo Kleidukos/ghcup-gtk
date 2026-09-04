@@ -62,6 +62,8 @@ tests =
                     , advancedInterface = True
                     , tableSort = TableSort ByStatus Ascending
                     , tableFilters = TableFilters True True
+                    , windowWidth = 1024
+                    , windowHeight = 768
                     }
             parseConfig (renderConfig c) @?= c
         , testCase "round-trips the defaults" $
@@ -81,6 +83,21 @@ tests =
             (applyUpdate (SetAdvancedInterface True) defaultConfig).advancedInterface @?= True
             (applyUpdate (SetTableFilters (TableFilters True False)) defaultConfig).tableFilters
               @?= TableFilters True False
+        ]
+    , testGroup
+        "window size"
+        [ testCase "parses both dimensions" $ do
+            let c = parseConfig "window-width 1024\nwindow-height 768"
+            (c.windowWidth, c.windowHeight) @?= (1024, 768)
+        , testCase "missing nodes → defaults" $ do
+            (parseConfig "").windowWidth @?= 760
+            (parseConfig "").windowHeight @?= 560
+        , testCase "a non-positive or non-integral dimension falls back" $ do
+            (parseConfig "window-width -3").windowWidth @?= 760
+            (parseConfig "window-width 12.5").windowWidth @?= 760
+        , testCase "applyUpdate sets both dimensions" $ do
+            let c = applyUpdate (SetWindowSize 800 600) defaultConfig
+            (c.windowWidth, c.windowHeight) @?= (800, 600)
         ]
     , testGroup
         "load/save (pure filesystem)"
