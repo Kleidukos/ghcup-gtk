@@ -11,9 +11,6 @@ import UI.View (View (..))
 import UI.View.List.Row (RowHandle (..))
 import UI.View.List.Row qualified as Row
 
--- | The simple renderer: a boxed list of 'Adw.ActionRow's in a clamp. The
--- clamp lives here rather than in 'UI.ToolPanes' because the advanced table
--- wants the full pane width.
 build :: Adw.ApplicationWindow -> IO View
 build window = do
   listBox <- new Gtk.ListBox [#selectionMode := Gtk.SelectionModeNone]
