@@ -112,6 +112,16 @@ jobs:
           path: packages
           merge-multiple: true
 
+      - name: Sign packages
+        uses: thomasdesr/minisign-action@68f9ff8e1074691a178b8ceb098d3d056aac54a3 # v1.4
+        with:
+          args: -Sm packages/*
+          minisign_key: ${{ secrets.MINISIGN_SECRET_KEY }}
+          password: ${{ secrets.MINISIGN_PASSWORD }}
+
+      - name: Add public key to release assets
+        run: cp release/ghcup-gtk-release.pub packages/
+
       - name: Publish tagged release
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
