@@ -62,9 +62,11 @@ library core
     Effects.Ghcup
     Effects.HostEnv
     Effects.Notify
+    Presentation.Banner
     Presentation.CompileForm
     Presentation.CompileForm.Ghc
     Presentation.CompileForm.Hls
+    Presentation.Failure
     Presentation.Filter
     Presentation.InstallForm
     Presentation.Path
@@ -110,12 +112,12 @@ library
   -- cabal-gild: discover src/gtk
   exposed-modules:
     UI
+    UI.Banner
     UI.CompileOptionsDialog
     UI.Dialog
     UI.HeaderBar
     UI.InstallOptionsDialog
     UI.OptionsDialog
-    UI.PathBanner
     UI.Preferences
     UI.Registry
     UI.Shell
@@ -152,6 +154,7 @@ library
     text,
     text-display,
     time,
+    transformers,
     typed-process-effectful,
     uri-bytestring,
     vector,

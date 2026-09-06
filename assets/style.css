@@ -43,3 +43,19 @@
 .install-options-content {
   margin: 12px;
 }
+
+.app-banner {
+  --banner-color: #7d7d83;
+}
+
+.app-banner > box {
+  background-color: color-mix(in srgb, var(--banner-color) 30%, var(--window-bg-color));
+  color: var(--window-fg-color);
+  padding: 12px;
+  margin: 12px 12px 0 12px;
+  border-radius: 12px;
+}
+
+.app-banner.failure-banner {
+  --banner-color: var(--error-bg-color);
+}

@@ -17,6 +17,8 @@ module Toolchain.Types
   , keyOfListing
   , keyOfMutation
   , rowKeyText
+  , jobLogName
+  , jobLogHeader
   , Progress (..)
   , progressOf
   , OpError (..)
@@ -30,6 +32,7 @@ import Data.Map.Strict (Map)
 import Data.Maybe (fromMaybe, isJust, listToMaybe, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Data.Time (ZonedTime, defaultTimeLocale, formatTime)
 import Data.Vector (Vector)
 import Data.Versions (Version)
 import GHCup.Command.List (ListResult (..))
@@ -145,6 +148,23 @@ keyOfMutation mutation =
 rowKeyText :: RowKey -> Text
 rowKeyText (RowKey (tool, ver)) = toolText tool <> ":" <> ver
 
+jobLogName :: Mutation -> FilePath
+jobLogName mutation =
+  let RowKey (Tool name, ver) = keyOfMutation mutation
+  in "ghcup-gtk-" <> name <> "-" <> Text.unpack ver <> ".log"
+
+jobLogHeader :: ZonedTime -> Mutation -> Text
+jobLogHeader stamp mutation =
+  Text.unwords ["#", timestamp, verb, rowKeyText (keyOfMutation mutation)] <> "\n"
+  where
+    timestamp = Text.pack (formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%S%z" stamp)
+    verb = case mutation of
+      Install {} -> "install"
+      Uninstall {} -> "uninstall"
+      SetDefault {} -> "set"
+      CompileGhc {} -> "compile"
+      CompileHls {} -> "compile"
+
 data Progress = Progress
   { phase :: Text
   , fraction :: Maybe Double
@@ -168,6 +188,7 @@ fractionOf line =
 data OpError = OpError
   { title :: Text
   , details :: Text
+  , logFile :: Maybe FilePath
   }
   deriving stock (Eq, Show)
 

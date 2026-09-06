@@ -7,6 +7,8 @@ module Session
   , Effect (..)
   , initialModel
   , bannerFor
+  , failureBannerFor
+  , staleBannerFor
   , rowPlan
   , step
   ) where
@@ -22,8 +24,10 @@ import GHCup.Types (NewURLSource, Tool)
 import URI.ByteString (URI)
 
 import Config (Config (..), ConfigUpdate (..), applyUpdate)
+import Presentation.Banner (BannerSpec (..))
+import Presentation.Failure (failureBanner)
 import Presentation.Filter (Channel)
-import Presentation.Path (BannerSpec, appliedBanner, pathBanner)
+import Presentation.Path (appliedBanner, pathBanner)
 import Presentation.Row (Confirmation, RowAction (..), ToolRows, jobTitle, planRows)
 import Toolchain.Channels (BaseChannel, applyUrlSource, configuredChannels, nightliesUri, uriText)
 import Toolchain.Path (FileChange, PathStatus (..))
@@ -32,6 +36,7 @@ import Toolchain.Types
   , GhcupDirs
   , Job (..)
   , Listings
+  , Mutation
   , OpError
   , Progress (Progress)
   , RowKey
@@ -76,6 +81,7 @@ data Model = Model
   -- ^ ghcup's url-source list, the source of truth for channels
   , channelsEditable :: ChannelsEditability
   -- ^ 'ChannelsLocked' when the ghcup config was not readable at startup
+  , lastFailure :: Maybe (Mutation, OpError)
   }
   deriving stock (Eq, Show)
 
@@ -96,6 +102,7 @@ data Event
     PathFixConfirmed
   | -- | The PATH fix was applied (or failed)
     PathFixDone (Either OpError ())
+  | FailureDismissed
   | -- | The user changed the channel toggles in the preferences
     ChannelsChanged (Set Channel) (Maybe URI)
   | -- | The user changed the url-source base radio
@@ -131,6 +138,7 @@ initialModel ghcupDirs config urlSource channelsEditable =
     , freshness = Fresh
     , urlSource
     , channelsEditable
+    , lastFailure = Nothing
     }
 
 bannerFor :: Model -> Maybe BannerSpec
@@ -138,6 +146,14 @@ bannerFor model = case model.pathModel of
   Unchecked -> Nothing
   Checked status -> pathBanner model.ghcupDirs status
   FixApplied -> Just appliedBanner
+
+failureBannerFor :: Model -> Maybe BannerSpec
+failureBannerFor model = uncurry failureBanner <$> model.lastFailure
+
+staleBannerFor :: Model -> Maybe BannerSpec
+staleBannerFor model = case model.freshness of
+  Fresh -> Nothing
+  Stale -> Just BannerSpec {title = "Version data may be outdated – network unreachable", actions = []}
 
 -- | The row plan for the model's current listings.
 rowPlan :: Model -> Map Tool ToolRows
@@ -155,7 +171,7 @@ step event model = case event of
     | Map.member (keyOfMutation mutation) model.inFlight -> (model, [])
   Submitted job@(Mutate mutation) ->
     let key = keyOfMutation mutation
-        model' = model {inFlight = Map.insert key (Progress "" Nothing) model.inFlight}
+        model' = model {inFlight = Map.insert key (Progress "" Nothing) model.inFlight, lastFailure = Nothing}
     in (model', [Hold, Enqueue job, Reconcile])
   Submitted job -> (model, [Enqueue job])
   ConfirmRequested action ->
@@ -176,6 +192,7 @@ step event model = case event of
   PathFixDone (Right ()) ->
     (model {pathModel = FixApplied}, [Reconcile])
   PathFixDone (Left err) -> (model, [ErrorToast err])
+  FailureDismissed -> (model {lastFailure = Nothing}, [Reconcile])
   WorkerMsg msg -> case msg of
     ListingsReady listings freshness ->
       (model {listings, phase = Ready, freshness}, [Reconcile])
@@ -192,13 +209,13 @@ step event model = case event of
     JobProgress _ _ -> (model, [])
     JobDone mutation result ->
       let key = keyOfMutation mutation
-          (model', release)
+          (settled, release)
             | Map.member key model.inFlight =
                 (model {inFlight = Map.delete key model.inFlight}, [Release])
             | otherwise = (model, [])
-          outcome = case result of
-            Right () -> [Toast (jobTitle mutation), CheckPath]
-            Left err -> [ErrorToast err]
+          (model', outcome) = case result of
+            Right () -> (settled, [Toast (jobTitle mutation), CheckPath])
+            Left err -> (settled {lastFailure = Just (mutation, err)}, [ErrorToast err])
       in (model', release <> (Reconcile : outcome))
   ChannelsChanged channels nightlies ->
     persistUrlSource Nothing channels nightlies model

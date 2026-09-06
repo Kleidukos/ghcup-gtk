@@ -49,7 +49,7 @@ dirs :: GhcupDirs
 dirs = GhcupDirs {ghcupBinDir = "/home/u/.ghcup/bin", ghcupBaseDir = "/home/u/.ghcup"}
 
 anError :: OpError
-anError = OpError "boom" "details"
+anError = OpError "boom" "details" Nothing
 
 installMutation :: Mutation
 installMutation = Install ghc (reqOf lr914) defaultInstallOptions

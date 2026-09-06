@@ -2,12 +2,14 @@ module UI.Dialog
   ( info
   , confirm
   , pickFolder
+  , openFile
   ) where
 
 import Control.Exception (try)
-import Control.Monad (forM_)
+import Control.Monad (forM_, void)
 import Data.GI.Base
 import Data.Text (Text)
+import Data.Text qualified as Text
 import GI.Adw qualified as Adw
 import GI.Gio qualified as Gio
 import GI.Gtk qualified as Gtk
@@ -59,4 +61,20 @@ pickFolder window title onPicked = do
             forM_ (toMaybeFile picked) $ \file -> do
               mpath <- file.getPath
               forM_ mpath onPicked
+    )
+
+openFile :: Adw.ApplicationWindow -> FilePath -> IO ()
+openFile window path = do
+  file <- Gio.fileNewForPath path
+  launcher <- new Gtk.FileLauncher [#file := file]
+  launcher.launch
+    (Just window)
+    (Nothing @Gio.Cancellable)
+    ( Just $ \_ asyncResult -> do
+        result <-
+          try @GError $
+            Gtk.catchDialogError (void $ launcher.launchFinish asyncResult) (\_ _ -> pure ())
+        case result of
+          Left err -> gerrorMessage err >>= info window ("Could not open " <> Text.pack path)
+          Right () -> pure ()
     )

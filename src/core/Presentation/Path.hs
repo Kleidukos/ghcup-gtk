@@ -1,47 +1,19 @@
 module Presentation.Path
-  ( BannerSpec (..)
-  , BannerAction (..)
-  , InstructionsSpec (..)
-  , OfferFixSpec (..)
-  , appliedBanner
+  ( appliedBanner
   , pathBanner
   , pathFixConfirmation
   ) where
 
 import Data.Function
 import Data.Functor
-import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Vector (Vector)
 import Data.Vector qualified as Vector
 
+import Presentation.Banner
 import Presentation.Row (Confirmation (..))
 import Toolchain.Path (FileChange (..), PathStatus (..), WriteMode (..), sourceLine)
 import Toolchain.Types (GhcupDirs)
-
-data BannerSpec = BannerSpec
-  { title :: Text
-  , action :: Maybe BannerAction
-  }
-  deriving stock (Eq, Show)
-
-data BannerAction
-  = ShowInfo InstructionsSpec
-  | ConfirmFix OfferFixSpec
-  deriving stock (Eq, Show)
-
-data InstructionsSpec = InstructionsSpec
-  { buttonLabel :: Text
-  , dialogHeading :: Text
-  , dialogBody :: Text
-  }
-  deriving stock (Eq, Show)
-
-data OfferFixSpec = OfferFixSpec
-  { buttonLabel :: Text
-  , confirmation :: Confirmation
-  }
-  deriving stock (Eq, Show)
 
 pathFixConfirmation :: Vector FileChange -> Confirmation
 pathFixConfirmation changes =
@@ -74,36 +46,36 @@ pathBanner dirs = \case
     Just
       BannerSpec
         { title = "Restart your terminal or session for the tools to be available"
-        , action = Nothing
+        , actions = []
         }
   NeedsFixManual ->
     Just
       BannerSpec
         { title = notFoundTitle
-        , action =
-            Just $
-              ShowInfo
+        , actions =
+            [ ShowInfo
                 InstructionsSpec
                   { buttonLabel = "How to fix…"
                   , dialogHeading = "Add ghcup to your PATH"
                   , dialogBody =
                       "Add this line to your shell configuration file:\n\n" <> sourceLine dirs
                   }
+            ]
         }
   NeedsFixPlanned changes ->
     Just
       BannerSpec
         { title = notFoundTitle
-        , action =
-            Just $
-              ConfirmFix
+        , actions =
+            [ ConfirmFix
                 OfferFixSpec
                   { buttonLabel = "Fix…"
                   , confirmation = pathFixConfirmation changes
                   }
+            ]
         }
   where
     notFoundTitle = "Installed tools won't be found in your terminal"
 
 appliedBanner :: BannerSpec
-appliedBanner = BannerSpec {title = "Done – restart your terminal", action = Nothing}
+appliedBanner = BannerSpec {title = "Done – restart your terminal", actions = []}

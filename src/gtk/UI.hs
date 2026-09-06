@@ -41,8 +41,8 @@ import Toolchain.Channels (configuredBase, configuredChannels, nightliesUri, par
 import Toolchain.GHCup qualified as GHCup
 import Toolchain.Path (applyFix, checkPath)
 import Toolchain.Types
+import UI.Banner qualified as Banner
 import UI.Dialog qualified as Dialog
-import UI.PathBanner qualified as PathBanner
 import UI.Preferences (ChannelsState (..))
 import UI.Preferences qualified as Preferences
 import UI.Registry qualified as Registry
@@ -196,12 +196,15 @@ reconcile rt = do
   model <- readIORef rt.modelRef
   Registry.reconcile rt.registry (viewState model)
   rt.shell.stack.setVisibleChildName (pageOf model.phase)
-  rt.shell.staleBanner.setRevealed (model.freshness == Stale)
-  PathBanner.render
-    rt.shell.pathBanner
-    (rt.dispatch Session.PathFixConfirmed)
-    (Session.bannerFor model)
+  Banner.render rt.shell.failureBanner callbacks (Session.failureBannerFor model)
+  Banner.render rt.shell.pathBanner callbacks (Session.bannerFor model)
+  Banner.render rt.shell.staleBanner callbacks (Session.staleBannerFor model)
   where
+    callbacks =
+      Banner.Callbacks
+        { onFixConfirmed = rt.dispatch Session.PathFixConfirmed
+        , onDismiss = rt.dispatch Session.FailureDismissed
+        }
     pageOf :: Session.Phase -> Text
     pageOf = \case
       Session.Loading -> "loading"

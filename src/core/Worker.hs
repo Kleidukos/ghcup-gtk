@@ -60,7 +60,7 @@ processJob setCurrent job = do
   try @SomeException (runJob setCurrent job) >>= \case
     Right () -> pure ()
     Left e ->
-      let err = OpError "Unexpected error" (Text.pack (show e))
+      let err = OpError "Unexpected error" (Text.pack (show e)) Nothing
       in emit $ case job of
            Mutate mutation -> JobDone mutation (Left err)
            RefreshListings -> ListingsFailed err
@@ -99,4 +99,4 @@ attempt :: Eff es (Either OpError a) -> Eff es (Either OpError a)
 attempt op =
   try @SomeException op >>= \case
     Right result -> pure result
-    Left e -> pure (Left (OpError "Could not refresh listings" (Text.pack (show e))))
+    Left e -> pure (Left (OpError "Could not refresh listings" (Text.pack (show e)) Nothing))

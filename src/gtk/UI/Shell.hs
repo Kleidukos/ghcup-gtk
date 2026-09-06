@@ -11,17 +11,18 @@ import GI.Gtk qualified as Gtk
 
 import Config (Config (..))
 import Presentation.Row ()
+import UI.Banner qualified as Banner
 import UI.HeaderBar
-import UI.PathBanner qualified as PathBanner
 import UI.ToolPanes qualified as ToolPanes
 
 data Shell = Shell
   { window :: Adw.ApplicationWindow
   , toastOverlay :: Adw.ToastOverlay
   , stack :: Gtk.Stack
-  , staleBanner :: Adw.Banner
+  , staleBanner :: Banner.Handle
   , panes :: ToolPanes.ToolPanes
-  , pathBanner :: PathBanner.Handle
+  , pathBanner :: Banner.Handle
+  , failureBanner :: Banner.Handle
   , retryButton :: Gtk.Button
   }
 
@@ -63,16 +64,14 @@ build app config = do
   stack.addNamed panes.pages (Just "list")
   stack.setVisibleChildName "loading"
 
-  staleBanner <-
-    new
-      Adw.Banner
-      [ #title := "Version data may be outdated – network unreachable"
-      , #revealed := False
-      ]
   contentBox <- new Gtk.Box [#orientation := Gtk.OrientationVertical]
-  pathBanner <- PathBanner.build window
+  failureBanner <- Banner.build window
+  failureBanner.widget.addCssClass "failure-banner"
+  pathBanner <- Banner.build window
+  staleBanner <- Banner.build window
+  contentBox.append failureBanner.widget
   contentBox.append pathBanner.widget
-  contentBox.append staleBanner
+  contentBox.append staleBanner.widget
   contentBox.append stack
 
   contentHeader <- new Adw.HeaderBar []
@@ -103,7 +102,7 @@ build app config = do
   toastOverlay <- new Adw.ToastOverlay [#child := splitView]
   set window [#content := toastOverlay]
 
-  pure Shell {window, toastOverlay, stack, staleBanner, panes, pathBanner, retryButton}
+  pure Shell {window, toastOverlay, stack, staleBanner, panes, pathBanner, failureBanner, retryButton}
 
 navPage :: Text -> Text -> Adw.HeaderBar -> Gtk.Widget -> IO Adw.NavigationPage
 navPage title tag header content = do

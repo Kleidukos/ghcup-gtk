@@ -11,6 +11,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import Fixtures (dirs, listingsFor, lr914, mkLR, sampleChanges)
+import Presentation.Banner
 import Presentation.Filter
 import Presentation.Path
 import Presentation.Row
@@ -59,10 +60,10 @@ tests =
         , testCase "already fixed asks for a restart, no button" $
             pathBanner dirs FixedAwaitingRestart
               @?= Just
-                (BannerSpec "Restart your terminal or session for the tools to be available" Nothing)
+                (BannerSpec "Restart your terminal or session for the tools to be available" [])
         , testCase "unknown shell gets copy-paste instructions with the exact source line" $
             case pathBanner dirs NeedsFixManual of
-              Just (BannerSpec title (Just (ShowInfo spec))) -> do
+              Just (BannerSpec title [ShowInfo spec]) -> do
                 title @?= "Installed tools won't be found in your terminal"
                 spec.buttonLabel @?= "How to fix…"
                 spec.dialogHeading @?= "Add ghcup to your PATH"
@@ -70,13 +71,13 @@ tests =
               other -> assertFailure ("expected an instructions banner, got: " <> show other)
         , testCase "known shell gets the fix offer carrying the confirmation" $
             case pathBanner dirs (NeedsFixPlanned sampleChanges) of
-              Just (BannerSpec title (Just (ConfirmFix spec))) -> do
+              Just (BannerSpec title [ConfirmFix spec]) -> do
                 title @?= "Installed tools won't be found in your terminal"
                 spec.buttonLabel @?= "Fix…"
                 spec.confirmation @?= pathFixConfirmation sampleChanges
               other -> assertFailure ("expected a fix-offer banner, got: " <> show other)
         , testCase "applied banner asks for a restart" $
-            appliedBanner @?= BannerSpec "Done – restart your terminal" Nothing
+            appliedBanner @?= BannerSpec "Done – restart your terminal" []
         ]
     , testGroup
         "planRows"

@@ -192,7 +192,7 @@ applyFix changes = go (Vector.toList changes)
       [] -> pure (Right ())
       c : rest ->
         apply c >>= \case
-          Left e -> pure (Left (OpError "Could not update shell configuration" e))
+          Left e -> pure (Left (OpError "Could not update shell configuration" e Nothing))
           Right () -> go rest
 
     apply c = case c.mode of

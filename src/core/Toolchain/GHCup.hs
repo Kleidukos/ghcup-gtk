@@ -15,7 +15,7 @@ module Toolchain.GHCup
   , ghcupDirs
   ) where
 
-import Control.Exception (SomeException, try)
+import Control.Exception (IOException, SomeException, handle, try)
 import Control.Monad (void)
 import Control.Monad.Reader (lift, runReaderT)
 import Control.Monad.Trans.Resource (runResourceT)
@@ -27,6 +27,8 @@ import Data.Maybe (isNothing)
 import Data.Set (Set)
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Data.Text.IO.Utf8 qualified as Text.IO
+import Data.Time (getZonedTime)
 import Data.Variant.Excepts
 import Data.Vector qualified as Vector
 import Data.Yaml qualified as Yaml
@@ -38,12 +40,14 @@ import GHCup.Command.Rm (rmToolVersion)
 import GHCup.Command.Set (setToolVersion)
 import GHCup.Download (getDownloadsF)
 import GHCup.Errors
+import GHCup.Prelude (recycleFile)
 import GHCup.Query.GHCupDirs (fromGHCupPath, getAllDirs, getConfigFilePath, ghcupConfigFile)
 import GHCup.Query.Metadata (getDownloadInfoE')
 import GHCup.Query.System (platformRequest)
 import GHCup.Setup (ensureDirectories)
 import GHCup.Types
 import GHCup.Types.JSON ()
+import System.FilePath ((</>))
 import Text.PrettyPrint.HughesPJClass (Pretty, prettyShow)
 import URI.ByteString (URI)
 
@@ -58,7 +62,7 @@ newtype GhcupEnv = GhcupEnv
   }
 
 renderErr :: Text -> String -> OpError
-renderErr title = OpError title . Text.pack
+renderErr title details = OpError title (Text.pack details) Nothing
 
 -- | Collapse a ghcup variant error into an 'OpError' under one title.
 toOpError :: (Pretty (V es)) => Text -> VEither es a -> Either OpError a
@@ -68,6 +72,27 @@ toOpError title = \case
 
 runIn :: GhcupEnv -> (AppState -> IO r) -> IO r
 runIn env act = readIORef env.appStateRef >>= act
+
+withJobLog :: GhcupEnv -> Mutation -> (AppState -> IO (Either OpError a)) -> IO (Either OpError a)
+withJobLog env mutation act = runIn env $ \appState -> do
+  let path = fromGHCupPath appState.dirs.logsDir </> jobLogName mutation
+      append = quietly . Text.IO.appendFile path
+      logged = appState {loggerConfig = appState.loggerConfig {fileOutter = append}} :: AppState
+  getZonedTime >>= append . flip jobLogHeader mutation
+  outcome <- handle (pure . Left . unexpected) (act logged)
+  case outcome of
+    Left err -> do
+      append (err.details <> "\n")
+      pure (Left err {logFile = Just path})
+    Right a -> do
+      quietly (runReaderT (recycleFile path) appState)
+      pure (Right a)
+  where
+    unexpected :: SomeException -> OpError
+    unexpected = renderErr "Unexpected error" . show
+
+    quietly :: IO () -> IO ()
+    quietly = handle @IOException (const (pure ()))
 
 ghcupDirs :: IO GhcupDirs
 ghcupDirs = do
@@ -214,7 +239,7 @@ bindistTarDir = \case
   _ -> Nothing
 
 install :: GhcupEnv -> Tool -> TargetVersionReq -> InstallOptions -> IO (Either OpError ())
-install env tool tvr opts = runIn env $ \appState -> do
+install env tool tvr opts = withJobLog env (Install tool tvr opts) $ \appState -> do
   let effectiveState = case opts.bindistUrl of
         Nothing -> appState
         Just _ -> appState {settings = appState.settings {noVerify = True}} :: AppState
@@ -287,7 +312,7 @@ install env tool tvr opts = runIn env $ \appState -> do
       | otherwise -> pure (Right ())
 
 compileGhc :: GhcupEnv -> TargetVersion -> CompileGhcOptions -> IO (Either OpError ())
-compileGhc env tv opts = runIn env $ \appState -> do
+compileGhc env tv opts = withJobLog env (CompileGhc tv opts) $ \appState -> do
   let ghcVer = case opts.gitRef of
         Just ref -> CompileGHC.GitDist (GitBranch ref Nothing)
         Nothing -> CompileGHC.SourceDist tv._tvVersion
@@ -346,7 +371,7 @@ compileGhc env tv opts = runIn env $ \appState -> do
     (toOpError "GHC compilation failed" result)
 
 compileHls :: GhcupEnv -> TargetVersion -> CompileHlsOptions -> IO (Either OpError ())
-compileHls env tv opts = runIn env $ \appState -> do
+compileHls env tv opts = withJobLog env (CompileHls tv opts) $ \appState -> do
   let hlsVer = case opts.gitRef of
         Just ref -> CompileHLS.GitDist (GitBranch ref Nothing)
         Nothing -> CompileHLS.SourceDist tv._tvVersion
@@ -397,14 +422,14 @@ setAfterCompile appState setCompile tool = \case
     | otherwise -> pure (Right ())
 
 uninstall :: GhcupEnv -> Tool -> TargetVersion -> IO (Either OpError ())
-uninstall env tool tv = runIn env $ \appState ->
+uninstall env tool tv = withJobLog env (Uninstall tool tv) $ \appState ->
   liftE (rmToolVersion tool tv)
     & runE @'[NotInstalled, UninstallFailed, ParseError, MalformedInstallInfo]
     & flip runReaderT appState
     <&> toOpError "Uninstall failed"
 
 setDefault :: GhcupEnv -> Tool -> TargetVersion -> IO (Either OpError ())
-setDefault env tool tv = runIn env $ \appState -> do
+setDefault env tool tv = withJobLog env (SetDefault tool tv) $ \appState -> do
   result <-
     liftE (setToolVersion tool tv)
       & runE @'[ParseError, NotInstalled]
