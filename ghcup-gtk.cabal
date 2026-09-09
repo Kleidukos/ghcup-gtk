@@ -164,8 +164,6 @@ library
 
 executable ghcup-gtk
   import: options
-  -- -threaded is load-bearing: the GTK main loop is a blocking foreign
-  -- call; without OS threads the worker thread would never run
   ghc-options: -threaded
   main-is: Main.hs
   build-depends:
