@@ -3,3 +3,7 @@ import: cabal.project
 documentation: False
 
 flags: -development
+
+optimization: 2
+
+executable-stripping: True
